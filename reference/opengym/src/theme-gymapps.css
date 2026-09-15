@@ -1,0 +1,106 @@
+/* ============================================================================
+   GymApps — tema, di atas design system openGym
+   ----------------------------------------------------------------------------
+   File terpisah dan diimpor SETELAH index.css supaya index.css tetap identik
+   dengan upstream: perbaikan openGym bisa di-cherry-pick tanpa konflik, dan
+   seluruh perbedaan visual GymApps ada di satu tempat yang bisa dibaca sekali.
+
+   Nilainya diambil dari desain Pen (12 artboard, `REFRENSI/Liftoff Apps` sebagai
+   acuan gaya). Yang diubah hanya token dan beberapa aturan tata letak — struktur
+   komponen tidak disentuh, sesuai spec §8.
+   ========================================================================== */
+
+:root {
+  /* --- permukaan ---------------------------------------------------------
+     openGym memakai hitam murni. Liftoff (dan desain Pen) memakai navy sangat
+     gelap: kartu masih terbaca sebagai kartu di gym yang terang, dan layar
+     OLED tetap hemat. */
+  --bg:        #080B12;
+  --bg-el:     #0E1220;   /* latar bersarang: preview, tabel di dalam kartu */
+  --surface:   #141925;   /* kartu, baris grup, tab bar */
+  --surface-2: #1C2231;   /* input, kontrol, kartu sekunder */
+  --surface-3: #252C3D;   /* track segmented, switch mati */
+
+  /* --- teks --------------------------------------------------------------
+     NFR-11 minta kontras ≥ 4,5:1 di tema gelap. --label-2 (#8C95A8 di atas
+     #141925) ≈ 6,4:1. --label-4 di bawah ambang itu, jadi hanya untuk elemen
+     dekoratif yang tidak membawa informasi. */
+  --label:     #F2F5FA;
+  --label-2:   #8C95A8;
+  --label-3:   #7C869B;
+  --label-4:   #5A6275;
+
+  /* --- garis ------------------------------------------------------------- */
+  --sep:       #252C3D;
+  --sep-op:    rgba(37,44,61,.72);
+
+  /* --- palet status ------------------------------------------------------
+     --green dipakai baris set yang tercentang (FR-D3). */
+  --blue:#5AC8FA; --green:#4ADE80; --red:#F0554E; --orange:#F5A623;
+  --yellow:#F5C518; --teal:#40C8E0; --indigo:#7C8CF8; --pink:#FF6B8A;
+  --purple:#B18CF2; --mint:#63E6E2; --brown:#AC8E68; --grey:#8C95A8;
+
+  /* --- aksen -------------------------------------------------------------
+     Biru langit Liftoff, default yang ditetapkan PRD §14. Teks di atas aksen
+     harus gelap: #5AC8FA terlalu terang untuk label putih. */
+  --acc:      #5AC8FA;
+  --acc-2:    #2E93C6;
+  --on-acc:   #04121C;
+  --acc-soft: rgba(90,200,250,.12);
+  --acc-line: rgba(90,200,250,.38);
+
+  /* --- geometri ----------------------------------------------------------
+     Kartu besar Liftoff lebih membulat dari default openGym. */
+  --r-sm:9px; --r:12px; --r-lg:16px; --r-xl:20px; --r-card:16px;
+}
+
+/* Baris set yang selesai: hijau gelap dengan angka tetap putih, bukan hijau
+   penuh — pembacaan angka saat latihan lebih penting daripada penandaan.
+   Referensi: `03_Workout_Logger_Tracker/Rest.jpg`. */
+:root {
+  --done-bg:  #16321C;
+  --done-ink: #4ADE80;
+}
+
+/* Tema terang tetap tersedia (FR-H2). Hanya aksen dan status yang disamakan
+   dengan aplikasi; permukaan dibiarkan milik openGym. */
+:root[data-theme="light"] {
+  --acc:      #0E8FD0;   /* #5AC8FA gagal kontras di atas putih */
+  --acc-2:    #0A6E9F;
+  --on-acc:   #FFFFFF;
+  --acc-soft: rgba(14,143,208,.10);
+  --acc-line: rgba(14,143,208,.32);
+  --green:#1BA85A; --red:#D93C2E; --orange:#C27803;
+  --done-bg:  #E6F6EA;
+  --done-ink: #1BA85A;
+}
+
+/* ---------------------------------------------------------------- tab bar --
+   Lima tab datar, tanpa tombol bundar di tengah (`04 Home.png`). openGym masih
+   membawa aturan `.start` untuk FAB-nya; tab bar ini tidak memakainya lagi.
+   Ikon tab yang tidak aktif harus ikut redup: aturan openGym menahannya di
+   --label penuh sehingga lima ikon putih tampak semuanya aktif. */
+#tabbar{
+  background:var(--surface);
+  border-top:1px solid var(--sep);
+  padding:10px 4px calc(12px + var(--sab));
+  align-items:center;
+}
+#tabbar button{gap:4px;font-size:10px;font-weight:600;color:var(--label-4)}
+#tabbar button .icn{font-size:24px;color:inherit;opacity:1}
+#tabbar button.on{color:var(--acc)}
+
+/* Sesi berjalan: tab Workout berdenyut oranye, satu-satunya jalan kembali ke
+   logger setelah FAB dihapus. */
+#tabbar button.rec{color:var(--orange)}
+#tabbar button.rec .icn{color:inherit}
+
+/* ------------------------------------------------------------------ aksen --
+   Aksen adalah preset yang bisa diganti pengguna (FR-H2), dan openGym
+   menuliskannya lewat `:root[data-accent="…"]` — spesifisitasnya di atas `:root`
+   biasa, jadi warna GymApps harus ikut jalur yang sama, bukan ditimpa paksa.
+   Default profil baru diubah ke `sky` di useStore.js; di sini hanya tintanya
+   yang dibetulkan: #5AC8FA terlalu terang untuk label putih (kontras ~1,9:1),
+   openGym memakai #fff karena --blue miliknya jauh lebih gelap. */
+:root[data-accent="sky"]{ --acc:var(--blue); --acc-2:#2E93C6; --on-acc:#04121C }
+:root[data-theme="light"][data-accent="sky"]{ --acc:#0E8FD0; --acc-2:#0A6E9F; --on-acc:#FFFFFF }

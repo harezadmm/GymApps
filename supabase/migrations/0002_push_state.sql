@@ -1,0 +1,36 @@
+-- Push dengan cek revisi, meniru `baseRev` openGym (spec §4.2).
+--
+-- Klien mengirim revisi yang terakhir dilihatnya. Kalau server sudah lebih
+-- maju, push ditolak dan dokumen server dikembalikan supaya klien bisa
+-- menjalankan sync-merge.js lalu push ulang. Ini yang membuat FR-A4
+-- (dua perangkat offline, tidak ada data hilang) bisa dipenuhi.
+
+create or replace function public.push_state(p_base_rev bigint, p_state jsonb)
+returns table (ok boolean, rev bigint, state jsonb)
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare cur_rev bigint;
+begin
+  select s.rev into cur_rev from public.user_state s where s.user_id = auth.uid();
+
+  if cur_rev is null then
+    insert into public.user_state(user_id, rev, state) values (auth.uid(), 1, p_state);
+    return query select true, 1::bigint, p_state;
+
+  elsif p_base_rev is null or p_base_rev = cur_rev then
+    update public.user_state
+       set rev = cur_rev + 1, state = p_state, updated_at = now()
+     where user_id = auth.uid();
+    return query select true, cur_rev + 1, p_state;
+
+  else
+    -- konflik: kembalikan versi server, klien merge lalu push ulang
+    return query select false, s.rev, s.state
+                 from public.user_state s where s.user_id = auth.uid();
+  end if;
+end $$;
+
+revoke all on function public.push_state(bigint, jsonb) from public;
+grant execute on function public.push_state(bigint, jsonb) to authenticated;

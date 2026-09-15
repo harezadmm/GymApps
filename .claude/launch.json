@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "gymapps-demo",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--workspace", "frontend", "--", "--port", "5173", "--strictPort"],
+      "env": { "VITE_DEMO": "1" },
+      "port": 5173
+    }
+  ]
+}

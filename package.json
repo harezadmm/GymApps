@@ -1,0 +1,11 @@
+{
+  "name": "gymapps-tooling",
+  "private": true,
+  "version": "0.2.0",
+  "description": "Hanya perkakas. Aplikasinya Flutter di app/ — lihat docs/PRD.md dan docs/superpowers/specs/.",
+  "license": "AGPL-3.0-or-later",
+  "workspaces": ["reference/opengym"],
+  "scripts": {
+    "reference:test": "npm test --workspace reference/opengym"
+  }
+}
