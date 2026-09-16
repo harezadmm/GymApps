@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/strings.dart';
 import 'core/theme.dart';
+import 'data/account_store.dart';
 import 'features/auth/login_screen.dart';
 import 'features/auth/register_screen.dart';
 import 'features/history/history_screen.dart';
@@ -72,7 +73,10 @@ class _GymAppState extends State<GymApp> {
 }
 
 /// Urutan layar dari login sampai akhir.
-enum AppStage { login, register, program, equipment, home }
+/// `booting` ada karena memeriksa akun tersimpan itu asinkron. Tanpa tahap
+/// ini, layar masuk berkedip sesaat sebelum diganti Home untuk orang yang
+/// sebenarnya sudah masuk.
+enum AppStage { booting, login, register, program, equipment, home }
 
 /// Mengatur perpindahan antar tahap.
 ///
@@ -90,19 +94,39 @@ class AppFlow extends StatefulWidget {
 }
 
 class _AppFlowState extends State<AppFlow> {
-  AppStage _stage = AppStage.login;
+  AppStage _stage = AppStage.booting;
   ProgramTemplate? _program;
+
+  final AccountStore _accounts = LocalAccountStore();
+
+  @override
+  void initState() {
+    super.initState();
+    _restore();
+  }
+
+  /// Orang yang sudah masuk tidak perlu masuk lagi tiap membuka aplikasi.
+  Future<void> _restore() async {
+    final account = await _accounts.signedIn();
+    if (!mounted) return;
+    setState(() => _stage = account == null ? AppStage.login : AppStage.home);
+  }
 
   @override
   Widget build(BuildContext context) {
     return switch (_stage) {
+      // Latar polos, bukan spinner: pemeriksaannya selesai dalam hitungan
+      // milidetik, dan spinner yang berkelip lebih mengganggu daripada jeda.
+      AppStage.booting => Scaffold(backgroundColor: context.gym.bg),
       AppStage.login => LoginScreen(
+          store: _accounts,
           onSignedIn: () => setState(() => _stage = AppStage.program),
           onCreateAccount: () => setState(() => _stage = AppStage.register),
         ),
       // Akun baru selalu lewat onboarding; akun lama juga, sampai lapisan
       // penyimpanan bisa menjawab "program orang ini sudah dipilih belum".
       AppStage.register => RegisterScreen(
+          store: _accounts,
           onRegistered: () => setState(() => _stage = AppStage.program),
           onSignInInstead: () => setState(() => _stage = AppStage.login),
         ),
@@ -122,7 +146,10 @@ class _AppFlowState extends State<AppFlow> {
           programName: _program?.name ?? 'Push / Pull / Legs',
           language: widget.language,
           onLanguageChanged: widget.onLanguageChanged,
-          onSignOut: () => setState(() => _stage = AppStage.login),
+          onSignOut: () async {
+            await _accounts.signOut();
+            if (mounted) setState(() => _stage = AppStage.login);
+          },
         ),
     };
   }

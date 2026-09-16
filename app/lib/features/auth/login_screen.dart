@@ -3,14 +3,21 @@ library;
 
 import 'package:flutter/material.dart';
 
+import '../../data/account_store.dart';
 import '../../core/strings.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
 import 'field.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key, required this.onSignedIn, required this.onCreateAccount});
+  const LoginScreen({
+    super.key,
+    required this.store,
+    required this.onSignedIn,
+    required this.onCreateAccount,
+  });
 
+  final AccountStore store;
   final VoidCallback onSignedIn;
   final VoidCallback onCreateAccount;
 
@@ -19,9 +26,40 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _email = TextEditingController(text: 'hariz@example.com');
-  final _password = TextEditingController(text: 'gymapps123');
+  final _email = TextEditingController();
+  final _password = TextEditingController();
   bool _obscure = true;
+  bool _busy = false;
+  String? _error;
+
+  Future<void> _submit() async {
+    if (_busy) return;
+    final t = context.t;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+
+    final result = await widget.store.signIn(
+      email: _email.text.trim(),
+      password: _password.text,
+    );
+    if (!mounted) return;
+    setState(() => _busy = false);
+
+    switch (result) {
+      case SignInOk():
+        widget.onSignedIn();
+      case SignInError(reason: final r):
+        // Tiga kegagalan, tiga pesan berbeda. "Gagal masuk" saja membuat orang
+        // mencoba kata sandi berulang kali padahal akunnya memang belum ada.
+        setState(() => _error = switch (r) {
+              SignInFailure.noAccount => t.noAccountYet,
+              SignInFailure.wrongEmail => t.wrongEmail,
+              SignInFailure.wrongPassword => t.wrongPassword,
+            });
+    }
+  }
 
   @override
   void dispose() {
@@ -66,6 +104,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   controller: _email,
                   icon: Icons.mail_outline,
                   keyboardType: TextInputType.emailAddress,
+                  hint: 'nama@email.com',
+                  textInputAction: TextInputAction.next,
                 ),
                 const SizedBox(height: 16),
                 SectionLabel(context.t.password),
@@ -74,6 +114,9 @@ class _LoginScreenState extends State<LoginScreen> {
                   controller: _password,
                   icon: Icons.lock_outline,
                   obscure: _obscure,
+                  error: _error,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _submit(),
                   suffix: IconButton(
                     onPressed: () => setState(() => _obscure = !_obscure),
                     icon: Icon(_obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined,
@@ -82,7 +125,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
                 const SizedBox(height: 22),
-                GymButton(label: context.t.signIn, onPressed: widget.onSignedIn),
+                GymButton(label: context.t.signIn, onPressed: _busy ? null : _submit),
                 const SizedBox(height: 16),
                 Center(
                   child: TextButton(

@@ -13,6 +13,7 @@ library;
 
 import 'package:flutter/material.dart';
 
+import '../../data/account_store.dart';
 import '../../core/strings.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
@@ -23,8 +24,14 @@ import 'field.dart';
 const minPasswordLength = 8;
 
 class RegisterScreen extends StatefulWidget {
-  const RegisterScreen({super.key, required this.onRegistered, required this.onSignInInstead});
+  const RegisterScreen({
+    super.key,
+    required this.store,
+    required this.onRegistered,
+    required this.onSignInInstead,
+  });
 
+  final AccountStore store;
   final VoidCallback onRegistered;
   final VoidCallback onSignInInstead;
 
@@ -39,6 +46,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   bool _obscure = true;
   bool _obscureConfirm = true;
+
+  /// Menahan tombol saat PBKDF2 berjalan. 50 ribu putaran memakan waktu yang
+  /// cukup terasa, dan tanpa ini orang menekan tombolnya dua kali.
+  bool _busy = false;
 
   String? _emailError;
   String? _passwordError;
@@ -56,7 +67,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   /// Satu-satunya bukti sebuah email nyata adalah email yang terkirim ke sana.
   static final _emailPattern = RegExp(r'^[^@\s]+@[^@\s.]+\.[^@\s]+$');
 
-  void _submit() {
+  Future<void> _submit() async {
+    if (_busy) return;
     final t = context.t;
     final email = _email.text.trim();
 
@@ -74,8 +86,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
           : null;
     });
 
-    if (_emailError == null && _passwordError == null && _confirmError == null) {
-      widget.onRegistered();
+    if (_emailError != null || _passwordError != null || _confirmError != null) return;
+
+    setState(() => _busy = true);
+    final result = await widget.store.signUp(email: email, password: _password.text);
+    if (!mounted) return;
+    setState(() => _busy = false);
+
+    switch (result) {
+      case SignUpOk():
+        widget.onRegistered();
+      case SignUpError(reason: SignUpFailure.emailTaken):
+        setState(() => _emailError = t.emailTaken);
     }
   }
 
@@ -159,7 +181,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
                 const SizedBox(height: 22),
 
-                GymButton(label: t.signUp, onPressed: _submit),
+                GymButton(label: t.signUp, onPressed: _busy ? null : _submit),
                 const SizedBox(height: 16),
                 Center(
                   child: TextButton(

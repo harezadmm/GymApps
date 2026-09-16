@@ -60,6 +60,19 @@ class Strings {
         'The two passwords do not match.',
         'Kedua kata sandi tidak sama.',
       );
+  String get emailTaken => _(
+        'An account already exists on this device. Sign in instead.',
+        'Sudah ada akun di perangkat ini. Masuk saja.',
+      );
+  String get noAccountYet => _(
+        'No account on this device yet. Create one first.',
+        'Belum ada akun di perangkat ini. Buat dulu.',
+      );
+  String get wrongEmail => _(
+        'No account with that email on this device.',
+        'Tidak ada akun dengan email itu di perangkat ini.',
+      );
+  String get wrongPassword => _('Wrong password.', 'Kata sandi salah.');
   String get signUpOffline => _(
         'Creating an account needs a connection once. After that everything works offline.',
         'Membuat akun butuh koneksi sekali. Setelah itu semuanya jalan offline.',
