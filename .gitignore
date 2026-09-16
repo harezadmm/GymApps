@@ -25,3 +25,6 @@ app/.flutter-plugins-dependencies
 app/ios/Pods/
 app/ios/.symlinks/
 REFRENSI/
+
+# Kredensial lokal — jangan pernah di-commit
+.secrets/

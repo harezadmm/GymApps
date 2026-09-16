@@ -1,0 +1,27 @@
+project_id = "mqmerxygzddikgsvhbcx"
+
+[auth]
+enabled = true
+# Dipakai hanya untuk tautan di email; aplikasinya native, jadi tidak ada situs.
+site_url = "https://gymapps.local"
+
+[auth.email]
+enable_signup = true
+
+# **Konfirmasi email dimatikan dengan sengaja.**
+#
+# GymApps menjanjikan bisa dipakai sejak detik pertama (FR-A3): orang mendaftar
+# sambil berdiri di depan rak, lalu langsung mencatat set. Memaksa mereka
+# membuka inbox dulu berarti sesi pertama tercatat tanpa sesi Supabase, dan
+# `WorkoutStore` tidak akan punya apa pun untuk didorong.
+#
+# Yang dikorbankan: alamat email tidak dibuktikan nyata. Untuk aplikasi ini
+# bisa diterima — email dipakai sebagai identitas login, bukan sebagai saluran
+# pemberitahuan, dan tidak ada apa pun yang dikirim ke sana.
+enable_confirmations = false
+
+# Disebut eksplisit supaya `config push` tidak menurunkannya ke default CLI.
+# Keduanya tidak terpakai selama konfirmasi mati, tapi rate limit yang longgar
+# bukan sesuatu yang pantas berubah sebagai efek samping.
+max_frequency = "1m0s"
+otp_length = 8

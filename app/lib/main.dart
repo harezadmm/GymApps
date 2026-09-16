@@ -5,6 +5,7 @@ import 'core/strings.dart';
 import 'core/theme.dart';
 import 'data/account_store.dart';
 import 'data/backend.dart';
+import 'data/synced_account_store.dart';
 import 'data/workout_store.dart';
 import 'features/auth/login_screen.dart';
 import 'features/auth/register_screen.dart';
@@ -124,7 +125,21 @@ class _AppFlowState extends State<AppFlow> {
   AppStage _stage = AppStage.booting;
   ProgramTemplate? _program;
 
-  final AccountStore _accounts = LocalAccountStore();
+  /// Akun selalu punya sisi lokal. Kalau Supabase dikonfigurasi, sisi itu
+  /// dibungkus supaya masuk dan mendaftar juga menghasilkan sesi server —
+  /// tanpa sesi itu, `SupabaseBackend` menolak setiap dorongan dan sinkronnya
+  /// diam tanpa pernah mengeluh.
+  late final AccountStore _accounts = supabaseConfigured
+      ? SyncedAccountStore(
+          local: LocalAccountStore(),
+          auth: Supabase.instance.client.auth,
+          // Riwayat yang sudah tercatat offline harus naik begitu sesi ada,
+          // bukan menunggu latihan berikutnya selesai.
+          onSignedIn: () {
+            if (mounted) WorkoutScope.read(context).syncNow();
+          },
+        )
+      : LocalAccountStore();
 
   @override
   void initState() {

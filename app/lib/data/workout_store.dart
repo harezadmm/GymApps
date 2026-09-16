@@ -205,6 +205,18 @@ class WorkoutScope extends InheritedNotifier<WorkoutStore> {
     assert(scope?.notifier != null, 'WorkoutScope tidak ada di atas widget ini');
     return scope!.notifier!;
   }
+
+  /// Ambil store tanpa ikut berlangganan perubahannya.
+  ///
+  /// Untuk pemanggil yang hanya ingin *menyuruh* store melakukan sesuatu dan
+  /// tidak menggambar apa pun dari isinya — misalnya memicu sinkron setelah
+  /// masuk. Memakai [of] di sana akan menandai widget-nya bergantung pada
+  /// setiap perubahan riwayat tanpa alasan.
+  static WorkoutStore read(BuildContext context) {
+    final scope = context.getInheritedWidgetOfExactType<WorkoutScope>();
+    assert(scope?.notifier != null, 'WorkoutScope tidak ada di atas widget ini');
+    return scope!.notifier!;
+  }
 }
 
 extension WorkoutStoreX on BuildContext {
