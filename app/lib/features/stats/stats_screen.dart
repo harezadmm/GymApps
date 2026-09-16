@@ -14,6 +14,8 @@ import '../../core/theme.dart';
 import '../../core/widgets.dart';
 import '../../data/demo.dart';
 import '../../data/exercise_catalog.dart';
+import '../../data/workout_store.dart';
+import '../../domain/models.dart';
 import '../../domain/muscle_volume.dart';
 
 class StatsScreen extends StatefulWidget {
@@ -38,26 +40,39 @@ class _StatsScreenState extends State<StatsScreen> {
   void initState() {
     super.initState();
     _catalog = ExerciseCatalog.load();
-    _recompute();
+  }
+
+  /// Dipanggil ulang setiap kali riwayat berubah, bukan sekali di initState:
+  /// menyelesaikan satu sesi harus langsung terlihat di sini, dan `_recompute`
+  /// perlu `context` yang belum aman dibaca saat initState.
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _recompute(context.workouts.workouts);
   }
 
   int get _days => switch (_range) { 'Last 7 days' => 7, 'Last 90 days' => 90, _ => 30 };
 
-  Future<void> _recompute() async {
+  Future<void> _recompute(List<Workout> history) async {
     final catalog = await _catalog;
-    // Jangkar waktu diambil dari sesi terakhir, bukan dari hari ini: kalau
-    // dipatok ke sekarang, riwayat contoh yang berumur beberapa hari akan
-    // jatuh di luar jendela dan seluruh layar tampak kosong tanpa alasan.
-    final dates = demoHistory.map((w) => DateTime.tryParse(w.date)).nonNulls.toList()..sort();
+    // Jangkar waktu diambil dari sesi terakhir, bukan dari hari ini: orang yang
+    // libur seminggu tidak boleh membuka layar ini dan melihat semuanya nol.
+    final dates = history.map((w) => DateTime.tryParse(w.date)).nonNulls.toList()..sort();
     if (dates.isEmpty) {
-      if (mounted) setState(() => _ready = true);
+      if (mounted) {
+        setState(() {
+          _now = const {};
+          _before = const {};
+          _ready = true;
+        });
+      }
       return;
     }
     final end = dates.last.add(const Duration(days: 1));
     final start = end.subtract(Duration(days: _days));
     final prevStart = start.subtract(Duration(days: _days));
-    final now = volumeByMuscle(demoHistory, catalog, since: start, until: end);
-    final before = volumeByMuscle(demoHistory, catalog, since: prevStart, until: start);
+    final now = volumeByMuscle(history, catalog, since: start, until: end);
+    final before = volumeByMuscle(history, catalog, since: prevStart, until: start);
     if (!mounted) return;
     setState(() {
       _now = now;
@@ -98,7 +113,7 @@ class _StatsScreenState extends State<StatsScreen> {
                   ],
                   onChanged: (v) {
                     setState(() => _range = v ?? _range);
-                    _recompute();
+                    _recompute(context.workouts.workouts);
                   },
                 ),
               ),

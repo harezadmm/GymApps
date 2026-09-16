@@ -8,6 +8,7 @@ import '../../core/strings.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
 import '../../data/demo.dart';
+import '../../data/workout_store.dart';
 import '../library/library_screen.dart';
 import '../session/session_screen.dart';
 import 'routine_editor_screen.dart';
@@ -89,7 +90,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       builder: (_) => SessionScreen(
         routineName: routineName,
         exercises: demoExercises(),
-        history: demoHistory,
+        history: context.workouts.workouts,
       ),
     ));
   }

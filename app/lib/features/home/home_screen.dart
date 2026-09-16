@@ -10,6 +10,7 @@ import '../../core/strings.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
 import '../../data/demo.dart';
+import '../../data/workout_store.dart';
 import '../session/session_screen.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -166,7 +167,7 @@ class _NextSessionCard extends StatelessWidget {
                 builder: (_) => SessionScreen(
                   routineName: demoRoutineName,
                   exercises: demoExercises(),
-                  history: demoHistory,
+                  history: context.workouts.workouts,
                 ),
               ),
             ),
@@ -195,7 +196,7 @@ class _NextSessionCard extends StatelessWidget {
                       builder: (_) => SessionScreen(
                         routineName: 'Freestyle',
                         exercises: demoExercises(),
-                        history: demoHistory,
+                        history: context.workouts.workouts,
                       ),
                     ),
                   ),

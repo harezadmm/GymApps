@@ -280,11 +280,23 @@ class Strings {
   // ── History ─────────────────────────────────────────────────────────────
   String get history => _('History', 'Riwayat');
   String get activity => _('Activity', 'Aktivitas');
-  String sessionsThisYear(int n) => _('$n sessions this year', '$n sesi tahun ini');
+  // Jamaknya baru terlihat setelah angkanya nyata: sesi pertama seseorang
+  // tidak boleh disambut dengan "1 sessions".
+  String sessionsThisYear(int n) =>
+      _('$n session${n == 1 ? '' : 's'} this year', '$n sesi tahun ini');
   String get all => _('All', 'Semua');
   String noSessionsOf(String filter) =>
       _('No $filter sessions logged yet', 'Belum ada sesi $filter tercatat');
   String setsSuffix(int n) => _('$n sets', '$n set');
+  // Kosong karena belum pernah latihan itu keadaan yang berbeda dari kosong
+  // karena filternya terlalu sempit — dan jawabannya juga berbeda.
+  String get noSessionsYet =>
+      _('No sessions saved yet', 'Belum ada sesi tersimpan');
+  String get noSessionsYetHint => _(
+        'Finish a workout and it shows up here.',
+        'Selesaikan satu latihan, dan hasilnya muncul di sini.',
+      );
+  String get freestyleSession => _('Freestyle', 'Bebas');
 
   // ── Library ─────────────────────────────────────────────────────────────
   String get searchExercise => _('Search exercise', 'Cari gerakan');

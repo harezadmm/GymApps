@@ -146,6 +146,55 @@ class ExerciseConfig {
       heavyBodyPart: heavyBodyPart,
     );
   }
+
+  /// Kunci pendek dan field bawaan dihilangkan. Satu sesi bisa punya belasan
+  /// entri, dan seluruh riwayat dikirim sebagai satu dokumen ke Supabase —
+  /// yang tidak ditulis tidak perlu diangkut.
+  Map<String, dynamic> toJson() => {
+        'id': exerciseId,
+        if (policy != null) 'pol': policy!.name,
+        if (mode != LogMode.reps) 'mode': mode.name,
+        if (sets != 3) 'n': sets,
+        if (reps != 10) 'r': reps,
+        if (repsMin != null) 'rMin': repsMin,
+        if (repsMax != null) 'rMax': repsMax,
+        if (weight != 0) 'w': weight,
+        if (seconds != 0) 'sec': seconds,
+        if (increment != null) 'inc': increment,
+        if (restSeconds != null) 'rest': restSeconds,
+        if (deloadFactor != null) 'dl': deloadFactor,
+        if (bodyweight) 'bw': true,
+        if (heavyBodyPart) 'heavy': true,
+      };
+
+  factory ExerciseConfig.fromJson(Map<String, dynamic> j) => ExerciseConfig(
+        exerciseId: j['id'] as String? ?? '',
+        // Nama policy yang tidak dikenal jatuh ke null, bukan melempar: satu
+        // policy baru di versi berikutnya tidak boleh membuat riwayat lama
+        // tidak bisa dibaca sama sekali.
+        policy: _byName(ProgressionPolicy.values, j['pol']),
+        mode: _byName(LogMode.values, j['mode']) ?? LogMode.reps,
+        sets: (j['n'] as num?)?.toInt() ?? 3,
+        reps: (j['r'] as num?)?.toInt() ?? 10,
+        repsMin: (j['rMin'] as num?)?.toInt(),
+        repsMax: (j['rMax'] as num?)?.toInt(),
+        weight: (j['w'] as num?)?.toDouble() ?? 0,
+        seconds: (j['sec'] as num?)?.toInt() ?? 0,
+        increment: (j['inc'] as num?)?.toDouble(),
+        restSeconds: (j['rest'] as num?)?.toInt(),
+        deloadFactor: (j['dl'] as num?)?.toDouble(),
+        bodyweight: j['bw'] == true,
+        heavyBodyPart: j['heavy'] == true,
+      );
+}
+
+/// Cari anggota enum berdasarkan namanya; null kalau tidak ada yang cocok.
+T? _byName<T extends Enum>(List<T> values, Object? name) {
+  if (name is! String) return null;
+  for (final v in values) {
+    if (v.name == name) return v;
+  }
+  return null;
 }
 
 /// Satu gerakan di dalam satu sesi yang sudah selesai.
@@ -162,14 +211,64 @@ class WorkoutEntry {
   /// Rutinitas deload ditandai "excluded from progression" (FR-B10): sesinya
   /// tidak boleh jadi dasar target berikutnya.
   final bool excluded;
+
+  Map<String, dynamic> toJson() => {
+        'id': exerciseId,
+        'sets': [for (final s in sets) s.toJson()],
+        if (target != null) 'target': target!.toJson(),
+        if (excluded) 'excl': true,
+      };
+
+  factory WorkoutEntry.fromJson(Map<String, dynamic> j) => WorkoutEntry(
+        exerciseId: j['id'] as String? ?? '',
+        sets: [
+          for (final s in (j['sets'] as List? ?? const []))
+            SetRow.fromJson(Map<String, dynamic>.from(s as Map)),
+        ],
+        target: j['target'] == null
+            ? null
+            : ExerciseConfig.fromJson(Map<String, dynamic>.from(j['target'] as Map)),
+        excluded: j['excl'] == true,
+      );
 }
 
 class Workout {
-  const Workout({required this.date, required this.entries});
+  const Workout({
+    required this.date,
+    required this.entries,
+    this.routine,
+    this.durationSeconds,
+  });
 
   /// `YYYY-MM-DD`.
   final String date;
   final List<WorkoutEntry> entries;
+
+  /// Nama rutinitas yang dijalankan, kalau sesinya berasal dari rutinitas.
+  /// Nullable karena sesi bebas tidak punya nama, dan karena riwayat yang
+  /// ditulis sebelum kolom ini ada tetap harus bisa dibaca.
+  final String? routine;
+
+  /// Lama sesi. Tidak bisa dihitung ulang dari set — istirahat, ganti alat, dan
+  /// antre di rak tidak meninggalkan jejak apa pun di data.
+  final int? durationSeconds;
+
+  Map<String, dynamic> toJson() => {
+        'date': date,
+        if (routine != null) 'routine': routine,
+        if (durationSeconds != null) 'dur': durationSeconds,
+        'entries': [for (final e in entries) e.toJson()],
+      };
+
+  factory Workout.fromJson(Map<String, dynamic> j) => Workout(
+        date: j['date'] as String? ?? '',
+        routine: j['routine'] as String?,
+        durationSeconds: (j['dur'] as num?)?.toInt(),
+        entries: [
+          for (final e in (j['entries'] as List? ?? const []))
+            WorkoutEntry.fromJson(Map<String, dynamic>.from(e as Map)),
+        ],
+      );
 }
 
 enum ProgressionPolicy { off, linear, greyskull, double_, hit, time }

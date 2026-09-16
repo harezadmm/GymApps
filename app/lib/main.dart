@@ -4,6 +4,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/strings.dart';
 import 'core/theme.dart';
 import 'data/account_store.dart';
+import 'data/backend.dart';
+import 'data/workout_store.dart';
 import 'features/auth/login_screen.dart';
 import 'features/auth/register_screen.dart';
 import 'features/history/history_screen.dart';
@@ -55,17 +57,42 @@ class _GymAppState extends State<GymApp> {
   /// dan itu ikut store Supabase nanti bersama setelan lain.
   AppLanguage _lang = AppLanguage.english;
 
+  /// Satu store untuk seluruh aplikasi, dibuat di akar supaya riwayatnya tidak
+  /// ikut dibuang saat tab berpindah atau layar sesi ditutup.
+  ///
+  /// Backend dipasang hanya kalau kredensialnya ada saat build. Tanpa itu store
+  /// tetap bekerja penuh secara lokal — yang hilang cuma sinkron antar perangkat.
+  late final WorkoutStore _store =
+      WorkoutStore(supabaseConfigured ? SupabaseBackend(Supabase.instance.client) : null);
+
+  @override
+  void initState() {
+    super.initState();
+    // Tidak di-await: store memberi tahu sendiri lewat notifier begitu
+    // riwayatnya selesai dibaca, dan layar sudah tahu cara menunggu.
+    _store.load();
+  }
+
+  @override
+  void dispose() {
+    _store.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
-    return AppStrings(
-      strings: Strings(_lang),
-      child: MaterialApp(
-        title: 'GymApps',
-        debugShowCheckedModeBanner: false,
-        theme: buildGymTheme(),
-        home: AppFlow(
-          language: _lang,
-          onLanguageChanged: (l) => setState(() => _lang = l),
+    return WorkoutScope(
+      store: _store,
+      child: AppStrings(
+        strings: Strings(_lang),
+        child: MaterialApp(
+          title: 'GymApps',
+          debugShowCheckedModeBanner: false,
+          theme: buildGymTheme(),
+          home: AppFlow(
+            language: _lang,
+            onLanguageChanged: (l) => setState(() => _lang = l),
+          ),
         ),
       ),
     );

@@ -11,6 +11,7 @@ import 'package:flutter/services.dart';
 import '../../core/strings.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
+import '../../data/workout_store.dart';
 import '../../domain/models.dart';
 import '../../domain/progression.dart';
 import 'finish_screen.dart';
@@ -110,12 +111,29 @@ class _SessionScreenState extends State<SessionScreen> {
     _openRestScreen(ex);
   }
 
-  /// Selesai: tunjukkan ringkasannya dulu, baru tutup sesinya. Menutup begitu
-  /// saja akan membuang satu-satunya kesempatan menampilkan rekor dan target
-  /// berikutnya selagi orangnya masih memperhatikan.
+  /// Selesai: simpan, tunjukkan ringkasannya, baru tutup sesinya. Menutup
+  /// begitu saja akan membuang satu-satunya kesempatan menampilkan rekor dan
+  /// target berikutnya selagi orangnya masih memperhatikan.
+  ///
+  /// Simpan lebih dulu, sebelum ringkasan dibuka: kalau aplikasi mati saat
+  /// ringkasan terbuka, yang hilang cuma tampilan, bukan latihannya.
   Future<void> _finish() async {
     _rest.skip();
     _elapsed.stop();
+
+    // Riwayat untuk ringkasan diambil dari snapshot sebelum sesi ini masuk —
+    // kalau tidak, setiap sesi akan memecahkan rekornya sendiri.
+    await context.workouts.addWorkout(Workout(
+      date: _isoDate(),
+      routine: widget.routineName,
+      durationSeconds: _elapsed.elapsed.inSeconds,
+      entries: [
+        for (final ex in widget.exercises)
+          WorkoutEntry(exerciseId: ex.config.exerciseId, target: ex.config, sets: ex.sets),
+      ],
+    ));
+    if (!mounted) return;
+
     await Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => FinishScreen(
         routineName: widget.routineName,
@@ -127,6 +145,15 @@ class _SessionScreenState extends State<SessionScreen> {
       ),
     ));
     if (mounted) Navigator.of(context).pop();
+  }
+
+  /// `YYYY-MM-DD` untuk disimpan. Berbeda dari [_dateLabel], yang untuk dibaca
+  /// manusia: satu dipakai mengurutkan dan mencocokkan, satunya ditampilkan.
+  static String _isoDate() {
+    final now = DateTime.now();
+    final m = now.month.toString().padLeft(2, '0');
+    final d = now.day.toString().padLeft(2, '0');
+    return '${now.year}-$m-$d';
   }
 
   static String _dateLabel() {
