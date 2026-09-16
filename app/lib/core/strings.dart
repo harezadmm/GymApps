@@ -320,6 +320,12 @@ class Strings {
   String get profile => _('Profile', 'Profil');
   String get syncedNow => _('Synced just now', 'Baru saja tersinkron');
   String get syncOff => _('Sync off — local only', 'Sync mati — lokal saja');
+  String get syncing => _('Syncing…', 'Menyinkronkan…');
+  // Kegagalan sinkron disebut apa adanya, dan disertai kalimat yang menjawab
+  // pertanyaan pertama orang: "latihan saya hilang tidak?"
+  String get syncFailed =>
+      _('Sync failed — saved on this device', 'Sync gagal — tersimpan di HP ini');
+  String get syncPending => _('Not synced yet', 'Belum tersinkron');
   String get training => _('Training', 'Latihan');
   String get units => _('Units', 'Satuan');
   String get restPauseRest => _('Rest-pause rest', 'Istirahat rest-pause');

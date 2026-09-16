@@ -10,7 +10,8 @@ import 'package:flutter/material.dart';
 import '../../core/strings.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
-import '../../main.dart' show supabaseConfigured;
+import '../../data/workout_store.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({
@@ -18,11 +19,17 @@ class ProfileScreen extends StatefulWidget {
     required this.language,
     required this.onLanguageChanged,
     required this.onSignOut,
+    required this.email,
   });
 
   final AppLanguage language;
   final ValueChanged<AppLanguage> onLanguageChanged;
   final VoidCallback onSignOut;
+
+  /// Email akun yang sedang masuk. null hanya selagi pemeriksaannya berjalan;
+  /// sebelumnya di sini ada alamat contoh yang di-hardcode, dan itu berarti
+  /// setiap orang melihat email orang lain di layar akunnya sendiri.
+  final String? email;
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -30,6 +37,21 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   bool _keepAwake = true;
+
+  /// Versi dibaca dari bundle, bukan ditulis tangan. Nomor yang di-hardcode
+  /// pasti basi pada rilis berikutnya, dan laporan bug yang menyebut versi
+  /// salah lebih buruk daripada tidak menyebut versi sama sekali.
+  late final Future<String> _version =
+      PackageInfo.fromPlatform().then((i) => 'v${i.version}+${i.buildNumber}');
+
+  /// Dua huruf pertama dari email, untuk avatar. Bukan nama — aplikasi ini
+  /// tidak pernah menanyakannya, dan menebaknya dari alamat akan salah lebih
+  /// sering daripada benar.
+  static String _initials(String? email) {
+    final local = (email ?? '').split('@').first;
+    if (local.isEmpty) return '—';
+    return local.substring(0, local.length >= 2 ? 2 : 1).toUpperCase();
+  }
 
   void _todo(String what) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -92,7 +114,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   color: c.accent.withValues(alpha: 0.22),
                   shape: BoxShape.circle,
                 ),
-                child: Text('HZ',
+                child: Text(_initials(widget.email),
                     style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: c.accent)),
               ),
               const SizedBox(width: 14),
@@ -100,29 +122,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('hariz@example.com', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontSize: 15)),
+                    Text(widget.email ?? '…',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(fontSize: 15)),
                     const SizedBox(height: 3),
-                    Row(
-                      children: [
-                        Icon(
-                          supabaseConfigured ? Icons.cloud_done_outlined : Icons.cloud_off_outlined,
-                          size: 14,
-                          color: supabaseConfigured ? c.doneInk : c.text2,
-                        ),
-                        const SizedBox(width: 6),
-                        // Jangan tulis "Synced 2 min ago" kalau Supabase-nya
-                        // belum diisi — status sinkron palsu adalah bohong yang
-                        // baru ketahuan saat ganti HP.
-                        Text(
-                          supabaseConfigured ? t.syncedNow : t.syncOff,
-                          style: TextStyle(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w600,
-                            color: supabaseConfigured ? c.doneInk : c.text2,
+                    // Status sinkron dibaca dari store, bukan dari konstanta
+                    // build. Kredensial yang terpasang tidak sama dengan sinkron
+                    // yang berhasil, dan bedanya baru ketahuan saat ganti HP —
+                    // saat itu sudah terlambat.
+                    Builder(builder: (context) {
+                      final store = context.workouts;
+                      final (label, tone, icon) = switch (store.syncStatus) {
+                        _ when !store.hasBackend => (t.syncOff, c.text2, Icons.cloud_off_outlined),
+                        SyncStatus.syncing => (t.syncing, c.text2, Icons.cloud_sync_outlined),
+                        SyncStatus.synced => (t.syncedNow, c.doneInk, Icons.cloud_done_outlined),
+                        SyncStatus.failed => (t.syncFailed, c.warn, Icons.cloud_off_outlined),
+                        SyncStatus.idle => (t.syncPending, c.text2, Icons.cloud_queue),
+                      };
+                      return Row(
+                        children: [
+                          Icon(icon, size: 14, color: tone),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(label,
+                                style: TextStyle(
+                                    fontSize: 12.5, fontWeight: FontWeight.w600, color: tone)),
                           ),
-                        ),
-                      ],
-                    ),
+                        ],
+                      );
+                    }),
                   ],
                 ),
               ),
@@ -204,7 +231,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
               onTap: _pickLanguage,
             ),
             SettingsTile(
-                icon: Icons.info_outline, label: t.aboutApp, value: 'v1.0.0', onTap: () => _todo(t.aboutApp)),
+                icon: Icons.info_outline,
+                label: t.aboutApp,
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    FutureBuilder<String>(
+                      future: _version,
+                      // Kosong selagi dibaca, bukan placeholder — angka versi
+                      // yang salah sekejap tetap sempat terbaca dan dilaporkan.
+                      builder: (context, snap) => Text(snap.data ?? '',
+                          style: TextStyle(fontSize: 13.5, color: c.text2)),
+                    ),
+                    const SizedBox(width: 8),
+                    Icon(Icons.chevron_right, size: 18, color: c.text3),
+                  ],
+                ),
+                onTap: () => _todo(t.aboutApp)),
           ],
         ),
         const SizedBox(height: 20),

@@ -125,6 +125,10 @@ class _AppFlowState extends State<AppFlow> {
   AppStage _stage = AppStage.booting;
   ProgramTemplate? _program;
 
+  /// Akun yang sedang masuk. Dipegang di sini supaya layar Profil menampilkan
+  /// email yang sebenarnya, bukan alamat contoh.
+  Account? _account;
+
   /// Akun selalu punya sisi lokal. Kalau Supabase dikonfigurasi, sisi itu
   /// dibungkus supaya masuk dan mendaftar juga menghasilkan sesi server —
   /// tanpa sesi itu, `SupabaseBackend` menolak setiap dorongan dan sinkronnya
@@ -151,7 +155,21 @@ class _AppFlowState extends State<AppFlow> {
   Future<void> _restore() async {
     final account = await _accounts.signedIn();
     if (!mounted) return;
-    setState(() => _stage = account == null ? AppStage.login : AppStage.home);
+    setState(() {
+      _account = account;
+      _stage = account == null ? AppStage.login : AppStage.home;
+    });
+  }
+
+  /// Dipanggil setelah masuk atau mendaftar berhasil — store-nya sudah tahu
+  /// siapa yang masuk, tinggal dibaca ulang.
+  Future<void> _enter(AppStage next) async {
+    final account = await _accounts.signedIn();
+    if (!mounted) return;
+    setState(() {
+      _account = account;
+      _stage = next;
+    });
   }
 
   @override
@@ -162,14 +180,14 @@ class _AppFlowState extends State<AppFlow> {
       AppStage.booting => Scaffold(backgroundColor: context.gym.bg),
       AppStage.login => LoginScreen(
           store: _accounts,
-          onSignedIn: () => setState(() => _stage = AppStage.program),
+          onSignedIn: () => _enter(AppStage.program),
           onCreateAccount: () => setState(() => _stage = AppStage.register),
         ),
       // Akun baru selalu lewat onboarding; akun lama juga, sampai lapisan
       // penyimpanan bisa menjawab "program orang ini sudah dipilih belum".
       AppStage.register => RegisterScreen(
           store: _accounts,
-          onRegistered: () => setState(() => _stage = AppStage.program),
+          onRegistered: () => _enter(AppStage.program),
           onSignInInstead: () => setState(() => _stage = AppStage.login),
         ),
       AppStage.program => ProgramPickerScreen(
@@ -188,9 +206,15 @@ class _AppFlowState extends State<AppFlow> {
           programName: _program?.name ?? 'Push / Pull / Legs',
           language: widget.language,
           onLanguageChanged: widget.onLanguageChanged,
+          email: _account?.email,
           onSignOut: () async {
             await _accounts.signOut();
-            if (mounted) setState(() => _stage = AppStage.login);
+            if (mounted) {
+              setState(() {
+                _account = null;
+                _stage = AppStage.login;
+              });
+            }
           },
         ),
     };
@@ -206,12 +230,14 @@ class HomeShell extends StatefulWidget {
     required this.language,
     required this.onLanguageChanged,
     required this.onSignOut,
+    required this.email,
   });
 
   final String programName;
   final AppLanguage language;
   final ValueChanged<AppLanguage> onLanguageChanged;
   final VoidCallback onSignOut;
+  final String? email;
 
   @override
   State<HomeShell> createState() => _HomeShellState();
@@ -250,6 +276,7 @@ class _HomeShellState extends State<HomeShell> {
               language: widget.language,
               onLanguageChanged: widget.onLanguageChanged,
               onSignOut: widget.onSignOut,
+              email: widget.email,
             ),
           ],
         ),
