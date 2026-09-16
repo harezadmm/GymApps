@@ -16,6 +16,7 @@ import 'package:flutter/material.dart';
 import '../../data/account_store.dart';
 import '../../core/strings.dart';
 import '../../core/theme.dart';
+import '../../main.dart' show supabaseConfigured;
 import '../../core/widgets.dart';
 import 'field.dart';
 
@@ -193,9 +194,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
                 const SizedBox(height: 10),
 
-                // Perbedaannya dengan layar masuk disebut di sini: mendaftar
-                // adalah satu-satunya langkah yang benar-benar butuh sinyal.
-                NoteBanner(icon: Icons.cloud_queue, text: t.signUpOffline, tone: c.text2),
+                // Dulu di sini tertulis "membuat akun butuh koneksi sekali".
+                // Itu tidak lagi benar: akunnya dibuat lokal lebih dulu, dan
+                // sisi servernya menyusul saat ada sinyal.
+                NoteBanner(
+                  icon: supabaseConfigured ? Icons.cloud_sync_outlined : Icons.cloud_off_outlined,
+                  text: supabaseConfigured ? t.signUpSyncs : t.signUpLocalOnly,
+                  tone: c.text2,
+                ),
               ],
             ),
           ),

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../data/account_store.dart';
 import '../../core/strings.dart';
 import '../../core/theme.dart';
+import '../../main.dart' show supabaseConfigured;
 import '../../core/widgets.dart';
 import 'field.dart';
 
@@ -154,10 +155,20 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.cloud_off_outlined, size: 17, color: c.text2),
+                      // Ikon awan dicoret dulu terpasang mati di sini. Setelah
+                      // sinkron benar-benar jalan, gambar itu justru menyatakan
+                      // kebalikan dari yang terjadi.
+                      Icon(
+                        supabaseConfigured ? Icons.cloud_sync_outlined : Icons.cloud_off_outlined,
+                        size: 17,
+                        color: c.text2,
+                      ),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: Text(context.t.offlineNote,
+                        child: Text(
+                            supabaseConfigured
+                                ? context.t.offlineNoteSyncs
+                                : context.t.offlineNoteLocalOnly,
                             style: TextStyle(fontSize: 12.5, color: c.text2)),
                       ),
                     ],

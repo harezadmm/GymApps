@@ -73,13 +73,25 @@ class Strings {
         'Tidak ada akun dengan email itu di perangkat ini.',
       );
   String get wrongPassword => _('Wrong password.', 'Kata sandi salah.');
-  String get signUpOffline => _(
-        'Creating an account needs a connection once. After that everything works offline.',
-        'Membuat akun butuh koneksi sekali. Setelah itu semuanya jalan offline.',
+  // Empat kalimat berikut berpasangan: yang pertama dipakai kalau build ini
+  // punya Supabase, yang kedua kalau tidak. Sebelumnya cuma ada satu versi
+  // yang menyebut offline saja, dan setelah sinkron benar-benar jalan kalimat
+  // itu membuat orang mengira datanya tidak pernah naik ke mana-mana.
+  String get signUpSyncs => _(
+        'Works without signal too. Your account reaches the cloud once you are online.',
+        'Bisa tanpa sinyal juga. Akunmu sampai ke cloud begitu ada koneksi.',
       );
-  String get offlineNote => _(
-        'Everything works offline after the first sign-in.',
-        'Semuanya jalan offline setelah sekali masuk.',
+  String get signUpLocalOnly => _(
+        'This account stays on this device. No server is configured.',
+        'Akun ini tinggal di HP ini saja. Tidak ada server yang dipasang.',
+      );
+  String get offlineNoteSyncs => _(
+        'Logging works without signal. Sessions go up as soon as you are online.',
+        'Mencatat tetap jalan tanpa sinyal. Sesimu naik begitu ada koneksi.',
+      );
+  String get offlineNoteLocalOnly => _(
+        'Everything stays on this device. No server is configured.',
+        'Semuanya tinggal di HP ini. Tidak ada server yang dipasang.',
       );
   String get showPassword => _('Show password', 'Tampilkan kata sandi');
   String get hidePassword => _('Hide password', 'Sembunyikan kata sandi');
