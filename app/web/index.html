@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+
+  <!--
+    viewport-fit=cover  : layar penuh sampai ke balik poni iPhone; Flutter
+                          membaca safe-area lewat MediaQuery, jadi kontennya
+                          tidak tertimpa.
+    user-scalable=no    : tangan berkeringat di gym mudah memicu pinch-zoom
+                          tanpa sengaja. Zoom di sini tidak menambah apa pun —
+                          Flutter menggambar ulang, bukan memperbesar teks.
+  -->
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+
+  <meta name="description" content="Pencatat latihan gym: target beban dihitung dari sesi terakhirmu.">
+
+  <!-- Warnanya sama dengan GymColors.bg supaya bilah status ponsel menyatu
+       dengan aplikasi, bukan memotongnya dengan pita biru. -->
+  <meta name="theme-color" content="#080B12">
+
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <!-- black-translucent: konten naik ke belakang bilah status. Dipasangkan
+       dengan viewport-fit=cover di atas. -->
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="GymApps">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <link rel="icon" type="image/png" href="favicon.png"/>
+
+  <title>GymApps</title>
+  <link rel="manifest" href="manifest.json">
+
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      background: #080B12;
+      overscroll-behavior: none;
+    }
+    body {
+      /* Flutter menangani seleksi teksnya sendiri. Tanpa ini, tekan-lama di
+         mana pun memunculkan menu seleksi Safari di atas UI. */
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* Flutter web menunda gambar pertama sampai CanvasKit dan aset (2,4 MB)
+       selesai diunduh. Tanpa layar ini, yang terlihat beberapa detik pertama
+       adalah putih polos di aplikasi yang seluruhnya gelap. */
+    #boot {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 18px;
+      background: #080B12;
+      font: 500 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: #8C95A8;
+      transition: opacity .25s ease;
+    }
+    #boot.done { opacity: 0; pointer-events: none; }
+
+    #boot .mark {
+      width: 54px;
+      height: 54px;
+      border-radius: 14px;
+      background: #5AC8FA;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #boot .mark svg { width: 30px; height: 30px; }
+
+    #boot .bar {
+      width: 132px;
+      height: 3px;
+      border-radius: 999px;
+      background: #1C2231;
+      overflow: hidden;
+    }
+    #boot .bar i {
+      display: block;
+      height: 100%;
+      width: 40%;
+      border-radius: 999px;
+      background: #5AC8FA;
+      animation: slide 1.1s ease-in-out infinite;
+    }
+    @keyframes slide {
+      0%   { transform: translateX(-100%); }
+      100% { transform: translateX(330%); }
+    }
+
+    /* Hormati setelan "kurangi gerak" — batangnya berhenti, tapi layarnya
+       tetap ada supaya tidak jadi putih. */
+    @media (prefers-reduced-motion: reduce) {
+      #boot .bar i { animation: none; width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div id="boot">
+    <div class="mark">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#04121C" stroke-width="2.4"
+           stroke-linecap="round" aria-hidden="true">
+        <path d="M4 8v8M8 6v12M16 6v12M20 8v8M8 12h8"/>
+      </svg>
+    </div>
+    <div class="bar"><i></i></div>
+    <div>Memuat GymApps…</div>
+  </div>
+
+  <script>
+    // Flutter memanggil ini begitu bingkai pertama benar-benar tergambar.
+    window.addEventListener('flutter-first-frame', function () {
+      var b = document.getElementById('boot');
+      if (!b) return;
+      b.classList.add('done');
+      setTimeout(function () { b.remove(); }, 300);
+    });
+  </script>
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>

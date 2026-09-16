@@ -1,0 +1,38 @@
+{
+    "name": "GymApps — pencatat latihan",
+    "short_name": "GymApps",
+    "start_url": ".",
+    "scope": ".",
+    "display": "standalone",
+    "background_color": "#080B12",
+    "theme_color": "#080B12",
+    "description": "Pencatat latihan gym: target beban dihitung dari sesi terakhirmu.",
+    "orientation": "portrait-primary",
+    "categories": ["health", "fitness"],
+    "lang": "id",
+    "prefer_related_applications": false,
+    "icons": [
+        {
+            "src": "icons/Icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "icons/Icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        },
+        {
+            "src": "icons/Icon-maskable-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "maskable"
+        },
+        {
+            "src": "icons/Icon-maskable-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "maskable"
+        }
+    ]
+}
