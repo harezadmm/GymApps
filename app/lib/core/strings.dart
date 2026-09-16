@@ -36,6 +36,34 @@ class Strings {
   String get password => _('Password', 'Kata sandi');
   String get signIn => _('SIGN IN', 'MASUK');
   String get forgotPassword => _('Forgot password?', 'Lupa kata sandi?');
+
+  // ── Daftar akun ─────────────────────────────────────────────────────
+  String get createAccount => _('Create account', 'Buat akun');
+  String get createAccountSub => _(
+        'One account keeps your sessions on every device you train with.',
+        'Satu akun menjaga sesimu ada di semua perangkat yang kamu pakai.',
+      );
+  String get confirmPassword => _('Confirm password', 'Ulangi kata sandi');
+  String get signUp => _('CREATE ACCOUNT', 'BUAT AKUN');
+  String get haveAccount => _('Already have an account? Sign in', 'Sudah punya akun? Masuk');
+  String get noAccount => _("Don't have an account? Create one", 'Belum punya akun? Buat sekarang');
+  String get emailRequired => _('Enter your email address.', 'Masukkan alamat emailmu.');
+  String get emailInvalid => _(
+        "That doesn't look like an email address.",
+        'Itu sepertinya bukan alamat email.',
+      );
+  String passwordTooShort(int n) => _(
+        'Password needs at least $n characters.',
+        'Kata sandi minimal $n karakter.',
+      );
+  String get passwordMismatch => _(
+        'The two passwords do not match.',
+        'Kedua kata sandi tidak sama.',
+      );
+  String get signUpOffline => _(
+        'Creating an account needs a connection once. After that everything works offline.',
+        'Membuat akun butuh koneksi sekali. Setelah itu semuanya jalan offline.',
+      );
   String get offlineNote => _(
         'Everything works offline after the first sign-in.',
         'Semuanya jalan offline setelah sekali masuk.',

@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/strings.dart';
 import 'core/theme.dart';
 import 'features/auth/login_screen.dart';
+import 'features/auth/register_screen.dart';
 import 'features/history/history_screen.dart';
 import 'features/home/home_screen.dart';
 import 'features/onboarding/onboarding_screens.dart';
@@ -71,7 +72,7 @@ class _GymAppState extends State<GymApp> {
 }
 
 /// Urutan layar dari login sampai akhir.
-enum AppStage { login, program, equipment, home }
+enum AppStage { login, register, program, equipment, home }
 
 /// Mengatur perpindahan antar tahap.
 ///
@@ -95,7 +96,16 @@ class _AppFlowState extends State<AppFlow> {
   @override
   Widget build(BuildContext context) {
     return switch (_stage) {
-      AppStage.login => LoginScreen(onSignedIn: () => setState(() => _stage = AppStage.program)),
+      AppStage.login => LoginScreen(
+          onSignedIn: () => setState(() => _stage = AppStage.program),
+          onCreateAccount: () => setState(() => _stage = AppStage.register),
+        ),
+      // Akun baru selalu lewat onboarding; akun lama juga, sampai lapisan
+      // penyimpanan bisa menjawab "program orang ini sudah dipilih belum".
+      AppStage.register => RegisterScreen(
+          onRegistered: () => setState(() => _stage = AppStage.program),
+          onSignInInstead: () => setState(() => _stage = AppStage.login),
+        ),
       AppStage.program => ProgramPickerScreen(
           onBack: () => setState(() => _stage = AppStage.login),
           onContinue: (t) => setState(() {

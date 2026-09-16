@@ -6,11 +6,13 @@ import 'package:flutter/material.dart';
 import '../../core/strings.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
+import 'field.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key, required this.onSignedIn});
+  const LoginScreen({super.key, required this.onSignedIn, required this.onCreateAccount});
 
   final VoidCallback onSignedIn;
+  final VoidCallback onCreateAccount;
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -60,7 +62,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 26),
                 SectionLabel(context.t.email),
                 const SizedBox(height: 8),
-                _Field(
+                GymField(
                   controller: _email,
                   icon: Icons.mail_outline,
                   keyboardType: TextInputType.emailAddress,
@@ -68,7 +70,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 16),
                 SectionLabel(context.t.password),
                 const SizedBox(height: 8),
-                _Field(
+                GymField(
                   controller: _password,
                   icon: Icons.lock_outline,
                   obscure: _obscure,
@@ -82,6 +84,13 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 22),
                 GymButton(label: context.t.signIn, onPressed: widget.onSignedIn),
                 const SizedBox(height: 16),
+                Center(
+                  child: TextButton(
+                    onPressed: widget.onCreateAccount,
+                    child: Text(context.t.noAccount,
+                        style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: c.accent)),
+                  ),
+                ),
                 Center(
                   child: TextButton(
                     onPressed: () {},
@@ -120,45 +129,3 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 }
 
-class _Field extends StatelessWidget {
-  const _Field({
-    required this.controller,
-    required this.icon,
-    this.obscure = false,
-    this.suffix,
-    this.keyboardType,
-  });
-
-  final TextEditingController controller;
-  final IconData icon;
-  final bool obscure;
-  final Widget? suffix;
-  final TextInputType? keyboardType;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.gym;
-    OutlineInputBorder border(Color colour) => OutlineInputBorder(
-          borderRadius: BorderRadius.circular(GymRadius.card),
-          borderSide: BorderSide(color: colour),
-        );
-
-    return TextField(
-      controller: controller,
-      obscureText: obscure,
-      keyboardType: keyboardType,
-      autocorrect: false,
-      style: TextStyle(fontSize: 15, color: c.text),
-      decoration: InputDecoration(
-        prefixIcon: Icon(icon, size: 19, color: c.text2),
-        suffixIcon: suffix,
-        filled: true,
-        fillColor: c.surface,
-        contentPadding: const EdgeInsets.symmetric(vertical: 16),
-        border: border(c.border),
-        enabledBorder: border(c.border),
-        focusedBorder: border(c.accent),
-      ),
-    );
-  }
-}

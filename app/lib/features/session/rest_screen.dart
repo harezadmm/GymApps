@@ -194,9 +194,13 @@ class _Dial extends StatelessWidget {
       child: Stack(
         alignment: Alignment.center,
         children: [
-          CustomPaint(
-            size: const Size.square(260),
-            painter: _RingPainter(progress: progress, track: c.surface2, ink: c.accent),
+          // Cincin ini menggambar ulang tiap detik. Tanpa batas repaint,
+          // seluruh layar ikut digambar ulang bersamanya.
+          RepaintBoundary(
+            child: CustomPaint(
+              size: const Size.square(260),
+              painter: _RingPainter(progress: progress, track: c.surface2, ink: c.accent),
+            ),
           ),
           Column(
             mainAxisSize: MainAxisSize.min,

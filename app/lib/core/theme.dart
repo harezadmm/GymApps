@@ -66,7 +66,7 @@ class GymColors extends ThemeExtension<GymColors> {
     border: Color(0xFF252C3D),
     text: Color(0xFFF2F5FA),
     text2: Color(0xFF8C95A8),
-    text3: Color(0xFF5A6275),
+    text3: Color(0xFF7A8192),
     accent: Color(0xFF5AC8FA),
     accentInk: Color(0xFF04121C),
     accentSoft: Color(0x1F5AC8FA),

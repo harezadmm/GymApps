@@ -478,6 +478,10 @@ class SquareIconButton extends StatelessWidget {
         onTap: onPressed,
         borderRadius: BorderRadius.circular(GymRadius.small),
         child: Container(
+          // Kotak yang terlihat tetap 42 seperti artboard Pen, tapi area
+          // sentuhnya 44 lewat padding di pembungkusnya (lihat di bawah) —
+          // 42 di bawah ambang minimum, dan tangan berkeringat di gym adalah
+          // kasus pakai yang sebenarnya, bukan teori.
           width: 42,
           height: 42,
           alignment: Alignment.center,
