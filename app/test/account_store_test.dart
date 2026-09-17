@@ -18,6 +18,8 @@ class _MemorySecrets implements SecretStore {
 
   @override
   Future<void> delete(String key) async => _data.remove(key);
+
+  Iterable<String> get values => _data.values;
 }
 
 void main() {
@@ -60,6 +62,67 @@ void main() {
         await store.signUp(email: 'a@b.co', password: 'barbel123');
       });
       expect((await store.signedIn())?.createdAt, fixed);
+    });
+  });
+
+  group('lebih dari satu akun di perangkat yang sama', () {
+    // Bug yang terlihat di simulator: HP yang sudah punya akun A menolak
+    // pendaftaran akun B dengan pesan "akun sudah ada", padahal email B
+    // belum pernah dipakai.
+    test('email kedua boleh mendaftar saat email pertama sudah ada', () async {
+      await store.signUp(email: 'a@contoh.com', password: 'barbel123');
+      final r = await store.signUp(email: 'b@contoh.com', password: 'lainnya9');
+      expect(r, isA<SignUpOk>());
+      expect((await store.signedIn())?.email, 'b@contoh.com');
+    });
+
+    test('kedua akun tetap bisa masuk dengan kata sandinya sendiri', () async {
+      await store.signUp(email: 'a@contoh.com', password: 'barbel123');
+      await store.signUp(email: 'b@contoh.com', password: 'lainnya9');
+      await store.signOut();
+
+      expect(await store.signIn(email: 'a@contoh.com', password: 'barbel123'), isA<SignInOk>());
+      expect(await store.signIn(email: 'b@contoh.com', password: 'lainnya9'), isA<SignInOk>());
+      final silang = await store.signIn(email: 'a@contoh.com', password: 'lainnya9');
+      expect((silang as SignInError).reason, SignInFailure.wrongPassword);
+    });
+
+    test('menghapus satu akun tidak ikut menghapus yang lain', () async {
+      await store.signUp(email: 'a@contoh.com', password: 'barbel123');
+      await store.signUp(email: 'b@contoh.com', password: 'lainnya9');
+      await store.erase(); // yang sedang masuk: b
+      expect(await store.signIn(email: 'a@contoh.com', password: 'barbel123'), isA<SignInOk>());
+      final b = await store.signIn(email: 'b@contoh.com', password: 'lainnya9');
+      expect((b as SignInError).reason, SignInFailure.wrongEmail);
+    });
+  });
+
+  group('migrasi dari tata letak satu-akun', () {
+    test('akun v1.3 tetap masuk tanpa mendaftar ulang', () async {
+      // Tulis persis seperti store lama menulisnya, lalu buka dengan store
+      // baru. Hash-nya diambil dari store baru supaya PBKDF2-nya sama.
+      final secrets = _MemorySecrets();
+      final probe = LocalAccountStore(secrets: secrets, random: Random(7));
+      await probe.signUp(email: 'lama@contoh.com', password: 'barbel123');
+      final hash = await secrets.read('accounts.lama@contoh.com.passwordHash');
+      final prefs = await SharedPreferences.getInstance();
+      final salt = prefs.getString('accounts.lama@contoh.com.salt');
+
+      SharedPreferences.setMockInitialValues({
+        'account.email': 'lama@contoh.com',
+        'account.salt': salt!,
+        'account.createdAt': '2026-09-16T10:00:00.000Z',
+        'account.signedIn': true,
+      });
+      final legacySecrets = _MemorySecrets();
+      await legacySecrets.write('account.passwordHash', hash!);
+      final s = LocalAccountStore(secrets: legacySecrets, random: Random(7));
+
+      expect((await s.signedIn())?.email, 'lama@contoh.com');
+      await s.signOut();
+      expect(await s.signIn(email: 'lama@contoh.com', password: 'barbel123'), isA<SignInOk>());
+      expect(await legacySecrets.read('account.passwordHash'), isNull,
+          reason: 'kunci lama harus dibersihkan setelah dipindahkan');
     });
   });
 
@@ -127,7 +190,7 @@ void main() {
     final prefs = await SharedPreferences.getInstance();
     final semua = [
       ...prefs.getKeys().map((k) => prefs.get(k).toString()),
-      await secrets.read('account.passwordHash') ?? '',
+      ...secrets.values,
     ].join('|');
 
     expect(semua.contains(secret), isFalse);

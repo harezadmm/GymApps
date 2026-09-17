@@ -70,8 +70,10 @@ class SyncedAccountStore implements AccountStore {
 
   @override
   Future<void> erase() async {
-    await signOut();
+    // Lokal dulu: erase() menghapus akun yang *sedang masuk*, dan signOut()
+    // melepas penunjuk itu. Dibalik, tidak ada yang terhapus.
     await local.erase();
+    await signOut();
   }
 
   /// Dapatkan sesi Supabase untuk kredensial yang **sudah** lolos di lokal.

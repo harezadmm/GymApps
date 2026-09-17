@@ -61,8 +61,8 @@ class Strings {
         'Kedua kata sandi tidak sama.',
       );
   String get emailTaken => _(
-        'An account already exists on this device. Sign in instead.',
-        'Sudah ada akun di perangkat ini. Masuk saja.',
+        'This email already has an account on this device. Sign in instead.',
+        'Email ini sudah punya akun di perangkat ini. Masuk saja.',
       );
   String get noAccountYet => _(
         'No account on this device yet. Create one first.',

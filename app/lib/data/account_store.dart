@@ -128,28 +128,69 @@ class LocalAccountStore implements AccountStore {
   final SecretStore _secrets;
   final Random _random;
 
-  static const _kEmail = 'account.email';
-  static const _kSalt = 'account.salt';
-  static const _kCreated = 'account.createdAt';
-  static const _kSignedIn = 'account.signedIn';
-  static const _kHash = 'account.passwordHash';
+  /// Beberapa akun per perangkat, dikunci per email. Dulu cuma satu slot,
+  /// dan itu membuat orang kedua yang mendaftar di HP yang sama ditolak
+  /// dengan pesan "akun sudah ada" — padahal emailnya belum pernah dipakai.
+  static const _kEmails = 'accounts.emails';
+  static const _kCurrent = 'accounts.current';
+  static String _kSalt(String email) => 'accounts.$email.salt';
+  static String _kCreated(String email) => 'accounts.$email.createdAt';
+  static String _kHash(String email) => 'accounts.$email.passwordHash';
+
+  /// Kunci lama dari masa satu-akun. Dibaca sekali untuk dipindahkan, lalu
+  /// dihapus — orang yang sudah mendaftar di v1.3 tidak boleh disuruh
+  /// mendaftar ulang hanya karena tata letak penyimpanannya berubah.
+  static const _legacyEmail = 'account.email';
+  static const _legacySalt = 'account.salt';
+  static const _legacyCreated = 'account.createdAt';
+  static const _legacySignedIn = 'account.signedIn';
+  static const _legacyHash = 'account.passwordHash';
 
   /// Email dinormalkan sebelum dibandingkan. Orang mengetik alamat yang sama
   /// dengan kapitalisasi berbeda tiap hari, dan menolak mereka karena itu
   /// adalah kegagalan yang terasa seperti bug.
   static String normalise(String email) => email.trim().toLowerCase();
 
-  @override
-  Future<Account?> signedIn() async {
+  Future<SharedPreferences> _prefs() async {
     final prefs = await SharedPreferences.getInstance();
-    if (prefs.getBool(_kSignedIn) != true) return null;
-    return _stored(prefs);
+    await _migrate(prefs);
+    return prefs;
   }
 
-  Account? _stored(SharedPreferences prefs) {
-    final email = prefs.getString(_kEmail);
-    final created = prefs.getString(_kCreated);
-    if (email == null || created == null) return null;
+  Future<void> _migrate(SharedPreferences prefs) async {
+    final email = prefs.getString(_legacyEmail);
+    if (email == null) return;
+    final salt = prefs.getString(_legacySalt);
+    final created = prefs.getString(_legacyCreated);
+    final hash = await _secrets.read(_legacyHash);
+    if (salt != null && created != null && hash != null) {
+      await prefs.setString(_kSalt(email), salt);
+      await prefs.setString(_kCreated(email), created);
+      await _secrets.write(_kHash(email), hash);
+      await prefs.setStringList(_kEmails, {..._emails(prefs), email}.toList());
+      if (prefs.getBool(_legacySignedIn) == true) {
+        await prefs.setString(_kCurrent, email);
+      }
+    }
+    for (final k in [_legacyEmail, _legacySalt, _legacyCreated, _legacySignedIn]) {
+      await prefs.remove(k);
+    }
+    await _secrets.delete(_legacyHash);
+  }
+
+  List<String> _emails(SharedPreferences prefs) => prefs.getStringList(_kEmails) ?? const [];
+
+  @override
+  Future<Account?> signedIn() async {
+    final prefs = await _prefs();
+    final email = prefs.getString(_kCurrent);
+    if (email == null) return null;
+    return _stored(prefs, email);
+  }
+
+  Account? _stored(SharedPreferences prefs, String email) {
+    final created = prefs.getString(_kCreated(email));
+    if (created == null) return null;
     return Account(
       email: email,
       createdAt: DateTime.tryParse(created) ?? clock.now(),
@@ -158,16 +199,10 @@ class LocalAccountStore implements AccountStore {
 
   @override
   Future<SignUpResult> signUp({required String email, required String password}) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _prefs();
     final wanted = normalise(email);
 
-    // Satu akun per perangkat untuk sekarang. Beberapa akun baru masuk akal
-    // setelah ada server yang bisa memisahkan datanya.
-    final existing = prefs.getString(_kEmail);
-    if (existing != null && existing != wanted) {
-      return const SignUpError(SignUpFailure.emailTaken);
-    }
-    if (existing == wanted) {
+    if (_emails(prefs).contains(wanted)) {
       return const SignUpError(SignUpFailure.emailTaken);
     }
 
@@ -175,26 +210,25 @@ class LocalAccountStore implements AccountStore {
     final hash = _derive(password, salt);
     final now = clock.now();
 
-    await prefs.setString(_kEmail, wanted);
-    await prefs.setString(_kSalt, salt);
-    await prefs.setString(_kCreated, now.toIso8601String());
-    await prefs.setBool(_kSignedIn, true);
-    await _secrets.write(_kHash, hash);
+    await prefs.setString(_kSalt(wanted), salt);
+    await prefs.setString(_kCreated(wanted), now.toIso8601String());
+    await _secrets.write(_kHash(wanted), hash);
+    await prefs.setStringList(_kEmails, [..._emails(prefs), wanted]);
+    await prefs.setString(_kCurrent, wanted);
 
     return SignUpOk(Account(email: wanted, createdAt: now));
   }
 
   @override
   Future<SignInResult> signIn({required String email, required String password}) async {
-    final prefs = await SharedPreferences.getInstance();
-    final stored = prefs.getString(_kEmail);
-    final salt = prefs.getString(_kSalt);
-    final hash = await _secrets.read(_kHash);
+    final prefs = await _prefs();
+    final emails = _emails(prefs);
+    if (emails.isEmpty) return const SignInError(SignInFailure.noAccount);
 
-    if (stored == null || salt == null || hash == null) {
-      return const SignInError(SignInFailure.noAccount);
-    }
-    if (normalise(email) != stored) {
+    final wanted = normalise(email);
+    final salt = prefs.getString(_kSalt(wanted));
+    final hash = await _secrets.read(_kHash(wanted));
+    if (!emails.contains(wanted) || salt == null || hash == null) {
       return const SignInError(SignInFailure.wrongEmail);
     }
     // Perbandingan waktu-tetap. Berlebihan untuk hash di perangkat sendiri,
@@ -203,25 +237,28 @@ class LocalAccountStore implements AccountStore {
       return const SignInError(SignInFailure.wrongPassword);
     }
 
-    await prefs.setBool(_kSignedIn, true);
-    return SignInOk(_stored(prefs)!);
+    await prefs.setString(_kCurrent, wanted);
+    return SignInOk(_stored(prefs, wanted)!);
   }
 
   @override
   Future<void> signOut() async {
-    final prefs = await SharedPreferences.getInstance();
-    // Hanya menurunkan bendera. Akunnya tetap ada supaya orang bisa masuk
+    final prefs = await _prefs();
+    // Hanya melepas penunjuk. Akunnya tetap ada supaya orang bisa masuk
     // lagi — keluar bukan berarti menghapus diri sendiri.
-    await prefs.setBool(_kSignedIn, false);
+    await prefs.remove(_kCurrent);
   }
 
   @override
   Future<void> erase() async {
-    final prefs = await SharedPreferences.getInstance();
-    for (final k in [_kEmail, _kSalt, _kCreated, _kSignedIn]) {
-      await prefs.remove(k);
-    }
-    await _secrets.delete(_kHash);
+    final prefs = await _prefs();
+    final email = prefs.getString(_kCurrent);
+    if (email == null) return;
+    await prefs.remove(_kSalt(email));
+    await prefs.remove(_kCreated(email));
+    await prefs.remove(_kCurrent);
+    await _secrets.delete(_kHash(email));
+    await prefs.setStringList(_kEmails, _emails(prefs).where((e) => e != email).toList());
   }
 
   String _newSalt() {
