@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'core/motion.dart';
 import 'core/strings.dart';
 import 'core/theme.dart';
 import 'data/account_store.dart';
@@ -251,11 +252,14 @@ class _HomeShellState extends State<HomeShell> {
     final c = context.gym;
     final t = context.t;
     final destinations = <NavigationDestination>[
-      NavigationDestination(icon: const Icon(Icons.fitness_center), label: t.workout),
+      // Setiap tab punya pasangan garis/isi: yang aktif "terisi", sisanya
+      // garis. Stats pakai grafik, bukan monitor jantung — ini beban dan
+      // e1RM, bukan detak.
+      NavigationDestination(icon: const Icon(Icons.fitness_center_outlined), selectedIcon: const Icon(Icons.fitness_center), label: t.workout),
       NavigationDestination(
           icon: const Icon(Icons.home_outlined), selectedIcon: const Icon(Icons.home), label: t.home),
-      NavigationDestination(icon: const Icon(Icons.monitor_heart_outlined), label: t.stats),
-      NavigationDestination(icon: const Icon(Icons.history), label: t.history),
+      NavigationDestination(icon: const Icon(Icons.insights_outlined), selectedIcon: const Icon(Icons.insights), label: t.stats),
+      NavigationDestination(icon: const Icon(Icons.history_outlined), selectedIcon: const Icon(Icons.history), label: t.history),
       NavigationDestination(
           icon: const Icon(Icons.person_outline), selectedIcon: const Icon(Icons.person), label: t.profile),
     ];
@@ -265,7 +269,7 @@ class _HomeShellState extends State<HomeShell> {
         bottom: false,
         // IndexedStack, bukan mengganti anaknya: posisi gulir dan tab terpilih
         // di dalam tiap layar bertahan saat berpindah-pindah.
-        child: IndexedStack(
+        child: FadeIndexedStack(
           index: _tab,
           children: [
             const WorkoutScreen(),
@@ -285,7 +289,11 @@ class _HomeShellState extends State<HomeShell> {
         decoration: BoxDecoration(border: Border(top: BorderSide(color: c.border))),
         child: NavigationBar(
           selectedIndex: _tab,
-          onDestinationSelected: (i) => setState(() => _tab = i),
+          onDestinationSelected: (i) {
+            if (i == _tab) return;
+            GymHaptics.tap();
+            setState(() => _tab = i);
+          },
           destinations: destinations,
         ),
       ),

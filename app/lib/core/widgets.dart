@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 
 export 'format.dart' show formatWeight;
 
+import 'motion.dart';
 import 'theme.dart';
 
 /// Kartu standar: surface, border tipis, radius besar.
@@ -127,14 +128,28 @@ class GymButton extends StatelessWidget {
       GymButtonTone.danger => (c.danger.withValues(alpha: 0.16), c.danger),
     };
 
-    return SizedBox(
-      width: expand ? double.infinity : null,
-      height: height,
-      child: Material(
-        color: onPressed == null ? bg.withValues(alpha: 0.4) : bg,
-        borderRadius: BorderRadius.circular(_radius),
-        child: InkWell(
-          onTap: onPressed,
+    return PressScale(
+      enabled: onPressed != null,
+      child: SizedBox(
+        width: expand ? double.infinity : null,
+        height: height,
+        // AnimatedContainer, bukan Material berwarna: warna mati/hidupnya
+        // berubah lembut saat form jadi valid, tidak melompat.
+        child: AnimatedContainer(
+          duration: GymMotion.of(context, GymMotion.quick),
+          decoration: BoxDecoration(
+            color: onPressed == null ? bg.withValues(alpha: 0.4) : bg,
+            borderRadius: BorderRadius.circular(_radius),
+          ),
+          child: Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+          onTap: onPressed == null
+              ? null
+              : () {
+                  if (tone == GymButtonTone.primary) GymHaptics.confirm();
+                  onPressed!();
+                },
           borderRadius: BorderRadius.circular(_radius),
           child: Padding(
             // Tanpa padding ini tombol yang tidak melebar menyusut persis
@@ -155,6 +170,8 @@ class GymButton extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
+          ),
             ),
           ),
         ),
@@ -191,31 +208,59 @@ class SegmentedTabs extends StatelessWidget {
         borderRadius: BorderRadius.circular(GymRadius.control),
         border: Border.all(color: c.border),
       ),
-      child: Row(
-        children: [
-          for (final (i, label) in labels.indexed)
-            Expanded(
-              child: Material(
-                color: i == index ? c.accent : Colors.transparent,
-                borderRadius: BorderRadius.circular(GymRadius.segment),
-                child: InkWell(
-                  onTap: () => onChanged(i),
+      // Satu pil yang bergeser ke segmen terpilih. Mata mengikuti benda yang
+      // pindah lebih mudah daripada dua kotak yang bertukar warna.
+      child: LayoutBuilder(builder: (context, box) {
+        final w = box.maxWidth / labels.length;
+        return Stack(
+          children: [
+            AnimatedPositioned(
+              duration: GymMotion.of(context, GymMotion.normal),
+              curve: GymMotion.curve,
+              left: index * w,
+              top: 0,
+              bottom: 0,
+              width: w,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: c.accent,
                   borderRadius: BorderRadius.circular(GymRadius.segment),
-                  child: Center(
-                    child: Text(
-                      label,
-                      style: TextStyle(
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w700,
-                        color: i == index ? c.accentInk : c.text2,
-                      ),
-                    ),
-                  ),
                 ),
               ),
             ),
-        ],
-      ),
+            Row(
+              children: [
+                for (final (i, label) in labels.indexed)
+                  Expanded(
+                    child: Material(
+                      type: MaterialType.transparency,
+                      child: InkWell(
+                        onTap: () {
+                          if (i == index) return;
+                          GymHaptics.tap();
+                          onChanged(i);
+                        },
+                        borderRadius: BorderRadius.circular(GymRadius.segment),
+                        child: Center(
+                          child: AnimatedDefaultTextStyle(
+                            duration: GymMotion.of(context, GymMotion.normal),
+                            curve: GymMotion.curve,
+                            style: TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w700,
+                              color: i == index ? c.accentInk : c.text2,
+                            ),
+                            child: Text(label),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        );
+      }),
     );
   }
 }
@@ -239,25 +284,34 @@ class FilterChips extends StatelessWidget {
         separatorBuilder: (_, _) => const SizedBox(width: 8),
         itemBuilder: (context, i) {
           final on = i == index;
-          return Material(
-            color: on ? c.accent : c.surface,
-            borderRadius: BorderRadius.circular(GymRadius.pill),
-            child: InkWell(
-              onTap: () => onChanged(i),
+          return AnimatedContainer(
+            duration: GymMotion.of(context, GymMotion.quick),
+            curve: GymMotion.curve,
+            decoration: BoxDecoration(
+              color: on ? c.accent : c.surface,
               borderRadius: BorderRadius.circular(GymRadius.pill),
-              child: Container(
-                alignment: Alignment.center,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(GymRadius.pill),
-                  border: Border.all(color: on ? Colors.transparent : c.border),
-                ),
-                child: Text(
-                  labels[i],
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: on ? c.accentInk : c.text,
+              border: Border.all(color: on ? c.accent : c.border),
+            ),
+            child: Material(
+              type: MaterialType.transparency,
+              child: InkWell(
+                onTap: () {
+                  if (on) return;
+                  GymHaptics.tap();
+                  onChanged(i);
+                },
+                borderRadius: BorderRadius.circular(GymRadius.pill),
+                child: Container(
+                  alignment: Alignment.center,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: AnimatedDefaultTextStyle(
+                    duration: GymMotion.of(context, GymMotion.quick),
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: on ? c.accentInk : c.text,
+                    ),
+                    child: Text(labels[i]),
                   ),
                 ),
               ),
@@ -378,7 +432,10 @@ class SelectRow extends StatelessWidget {
     final c = context.gym;
     final off = dimWhenOff && !selected;
     return InkWell(
-      onTap: onTap,
+      onTap: () {
+        GymHaptics.tap();
+        onTap();
+      },
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
         child: Row(
@@ -425,16 +482,23 @@ class _Tick extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.gym;
-    return Container(
+    return AnimatedContainer(
+      duration: GymMotion.of(context, GymMotion.quick),
+      curve: GymMotion.curve,
       width: 26,
       height: 26,
       decoration: BoxDecoration(
         color: selected ? c.accent : Colors.transparent,
         shape: square ? BoxShape.rectangle : BoxShape.circle,
         borderRadius: square ? BorderRadius.circular(7) : null,
-        border: Border.all(color: selected ? Colors.transparent : c.text3, width: 1.5),
+        border: Border.all(color: selected ? c.accent : c.text3, width: 1.5),
       ),
-      child: selected ? Icon(Icons.check, size: 17, color: c.accentInk) : null,
+      child: AnimatedScale(
+        scale: selected ? 1 : 0,
+        duration: GymMotion.of(context, GymMotion.quick),
+        curve: GymMotion.curve,
+        child: Icon(Icons.check, size: 17, color: c.accentInk),
+      ),
     );
   }
 }
@@ -471,7 +535,10 @@ class SquareIconButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.gym;
-    return Material(
+    return PressScale(
+      enabled: onPressed != null,
+      scale: 0.92,
+      child: Material(
       color: c.surface,
       borderRadius: BorderRadius.circular(GymRadius.small),
       child: InkWell(
@@ -491,6 +558,7 @@ class SquareIconButton extends StatelessWidget {
           ),
           child: Icon(icon, size: 20, color: tone ?? c.text2),
         ),
+      ),
       ),
     );
   }

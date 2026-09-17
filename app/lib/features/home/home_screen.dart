@@ -39,7 +39,6 @@ class HomeScreen extends StatelessWidget {
               ),
             ),
             Pill(
-              onTap: () {},
               child: const Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -188,7 +187,7 @@ class _NextSessionCard extends StatelessWidget {
               Expanded(
                 child: GymButton(
                   label: context.t.freestyle,
-                  icon: Icons.bolt,
+                  icon: Icons.edit_note_outlined,
                   tone: GymButtonTone.neutral,
                   height: 44,
                   onPressed: () => Navigator.of(context).push(

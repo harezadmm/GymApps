@@ -8,6 +8,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../core/motion.dart';
 import '../../core/strings.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
@@ -629,7 +630,9 @@ class _SetRowTile extends StatelessWidget {
     final c = context.gym;
     final done = set.done;
 
-    return Container(
+    return AnimatedContainer(
+      duration: GymMotion.of(context, GymMotion.quick),
+      curve: GymMotion.curve,
       height: 46,
       padding: const EdgeInsets.symmetric(horizontal: 4),
       decoration: BoxDecoration(
@@ -660,12 +663,23 @@ class _SetRowTile extends StatelessWidget {
               checked: done,
               label: context.t.markSetDone(label),
               child: InkWell(
-                onTap: () => onToggled(!done),
+                onTap: () {
+                  // Getar hanya saat menandai selesai — itu momen "tercatat".
+                  // Membatalkan centang tidak perlu dirayakan.
+                  if (!done) GymHaptics.confirm();
+                  onToggled(!done);
+                },
                 borderRadius: BorderRadius.circular(GymRadius.pill),
-                child: Icon(
-                  done ? Icons.check_circle : Icons.circle_outlined,
-                  size: 24,
-                  color: done ? c.doneInk : c.text3,
+                child: AnimatedSwitcher(
+                  duration: GymMotion.of(context, GymMotion.quick),
+                  switchInCurve: Curves.easeOutBack,
+                  transitionBuilder: (child, anim) => ScaleTransition(scale: anim, child: child),
+                  child: Icon(
+                    done ? Icons.check_circle : Icons.circle_outlined,
+                    key: ValueKey(done),
+                    size: 24,
+                    color: done ? c.doneInk : c.text3,
+                  ),
                 ),
               ),
             ),

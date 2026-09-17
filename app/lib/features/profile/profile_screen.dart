@@ -7,6 +7,7 @@ library;
 
 import 'package:flutter/material.dart';
 
+import '../../core/motion.dart';
 import '../../core/strings.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
@@ -138,16 +139,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         SyncStatus.failed => (t.syncFailed, c.warn, Icons.cloud_off_outlined),
                         SyncStatus.idle => (t.syncPending, c.text2, Icons.cloud_queue),
                       };
-                      return Row(
-                        children: [
-                          Icon(icon, size: 14, color: tone),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(label,
-                                style: TextStyle(
-                                    fontSize: 12.5, fontWeight: FontWeight.w600, color: tone)),
-                          ),
-                        ],
+                      final syncing = store.hasBackend && store.syncStatus == SyncStatus.syncing;
+                      return FadeSwap(
+                        alignment: Alignment.centerLeft,
+                        child: Row(
+                          key: ValueKey(label),
+                          children: [
+                            if (syncing)
+                              SpinIcon(icon, size: 14, color: tone)
+                            else
+                              Icon(icon, size: 14, color: tone),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(label,
+                                  style: TextStyle(
+                                      fontSize: 12.5, fontWeight: FontWeight.w600, color: tone)),
+                            ),
+                          ],
+                        ),
                       );
                     }),
                   ],

@@ -7,6 +7,7 @@ import '../../data/account_store.dart';
 import '../../core/strings.dart';
 import '../../core/theme.dart';
 import '../../main.dart' show supabaseConfigured;
+import '../../core/motion.dart';
 import '../../core/widgets.dart';
 import 'field.dart';
 
@@ -89,7 +90,8 @@ class _LoginScreenState extends State<LoginScreen> {
                     color: c.accent,
                     borderRadius: BorderRadius.circular(GymRadius.card),
                   ),
-                  child: Icon(Icons.fitness_center, size: 28, color: c.accentInk),
+                  alignment: Alignment.center,
+                  child: PlateMark(size: 32, color: c.accentInk, groove: c.accent),
                 ),
                 const SizedBox(height: 18),
                 Text('GymApps', style: Theme.of(context).textTheme.displaySmall),

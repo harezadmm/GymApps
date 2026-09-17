@@ -12,8 +12,10 @@ import '../../core/charts.dart';
 import '../../core/strings.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
+import '../../data/demo.dart';
 import '../../data/workout_store.dart';
 import '../../domain/models.dart';
+import '../session/session_screen.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -43,8 +45,19 @@ class _HistoryScreenState extends State<HistoryScreen> {
         ScreenHeader(
           title: context.t.history,
           actions: [
-            SquareIconButton(icon: Icons.calendar_month_outlined, onPressed: () {}),
-            SquareIconButton(icon: Icons.add, tone: c.accent, onPressed: () {}),
+            // Kalender bulanan belum ada — kotak aktivitas di bawah sudah
+            // menjawab "kapan saja aku latihan". Tombol + mencatat sesi baru.
+            SquareIconButton(
+              icon: Icons.add,
+              tone: c.accent,
+              onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => SessionScreen(
+                  routineName: 'Freestyle',
+                  exercises: demoExercises(),
+                  history: store.workouts,
+                ),
+              )),
+            ),
           ],
         ),
         GymCard(

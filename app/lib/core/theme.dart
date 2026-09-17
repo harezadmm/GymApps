@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 import 'package:flutter/material.dart';
 
 /// Token desain GymApps, diambil dari artboard Pen di `REFRENSI/export/`.
@@ -213,6 +214,12 @@ ThemeData buildGymTheme() {
     canvasColor: c.bg,
     splashFactory: InkSparkle.splashFactory,
     extensions: const [c],
+    // iOS memakai geser bawaannya (ibu jari sudah hafal gerak kembali dari
+    // tepi). Android memakai fade-forward Material 3, yang ikut predictive back.
+    pageTransitionsTheme: const PageTransitionsTheme(builders: {
+      TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+      TargetPlatform.android: FadeForwardsPageTransitionsBuilder(),
+    }),
     textTheme: const TextTheme(
       displaySmall: TextStyle(fontSize: 34, fontWeight: FontWeight.w700, color: Color(0xFFF2F5FA)),
       headlineMedium: TextStyle(fontSize: 26, fontWeight: FontWeight.w700, color: Color(0xFFF2F5FA)),
@@ -224,7 +231,10 @@ ThemeData buildGymTheme() {
     ),
     navigationBarTheme: NavigationBarThemeData(
       backgroundColor: c.surface,
-      indicatorColor: Colors.transparent,
+      // Pil redup di belakang ikon aktif: Material menganimasikannya sendiri
+      // saat tab berpindah, jadi perpindahan tab punya "benda" yang bergerak.
+      indicatorColor: c.accentSoft,
+      indicatorShape: const StadiumBorder(),
       elevation: 0,
       height: 72,
       labelTextStyle: WidgetStateProperty.resolveWith((s) => TextStyle(

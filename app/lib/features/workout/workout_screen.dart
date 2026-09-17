@@ -4,6 +4,7 @@ library;
 import 'package:flutter/material.dart';
 
 import '../../core/format.dart';
+import '../../core/motion.dart';
 import '../../core/strings.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
@@ -104,7 +105,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         ScreenHeader(
           title: context.t.workout,
           actions: [
-            SquareIconButton(icon: Icons.folder_outlined, onPressed: () {}),
             SquareIconButton(icon: Icons.add, tone: c.accent, onPressed: _newRoutine),
           ],
         ),
@@ -114,7 +114,15 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
           onChanged: (i) => setState(() => _tab = i),
         ),
         const SizedBox(height: 16),
-        if (_tab == 0) ..._tracker(context) else ..._plan(context),
+        // Isi tab memudar saat berganti, dan Column-nya diberi key supaya
+        // AnimatedSwitcher tahu ini isi yang berbeda, bukan isi lama diubah.
+        FadeSwap(
+          child: Column(
+            key: ValueKey(_tab),
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: _tab == 0 ? _tracker(context) : _plan(context),
+          ),
+        ),
       ],
     );
   }
@@ -147,7 +155,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                   MaterialPageRoute(builder: (_) => const ExerciseLibraryScreen()),
                 ),
                 borderRadius: BorderRadius.circular(GymRadius.small),
-                child: SizedBox(width: 42, height: 42, child: Icon(Icons.fitness_center, size: 20, color: c.accent)),
+                child: SizedBox(width: 42, height: 42, child: Icon(Icons.menu_book_outlined, size: 20, color: c.accent)),
               ),
             ),
           ],
@@ -160,7 +168,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         children: [
           Expanded(
             child: _StartCard(
-              icon: Icons.bolt,
+              icon: Icons.edit_note_outlined,
               title: context.t.startEmpty,
               detail: context.t.freestyleLog,
               onTap: () => _openSession('Freestyle'),
@@ -440,7 +448,8 @@ class _StartCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.gym;
-    return Material(
+    return PressScale(
+      child: Material(
       color: c.surface,
       borderRadius: BorderRadius.circular(GymRadius.card),
       child: InkWell(
@@ -465,6 +474,7 @@ class _StartCard extends StatelessWidget {
           ),
         ),
       ),
+      ),
     );
   }
 }
@@ -481,13 +491,15 @@ class _RoutineRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.gym;
-    return Material(
+    return PressScale(
+      child: Material(
       color: c.surface,
       borderRadius: BorderRadius.circular(GymRadius.card),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(GymRadius.card),
-        child: Container(
+        child: AnimatedContainer(
+          duration: GymMotion.of(context, GymMotion.normal),
           padding: const EdgeInsets.fromLTRB(16, 13, 6, 13),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(GymRadius.card),
@@ -534,6 +546,7 @@ class _RoutineRow extends StatelessWidget {
             ],
           ),
         ),
+      ),
       ),
     );
   }
