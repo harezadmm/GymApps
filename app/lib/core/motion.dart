@@ -6,8 +6,6 @@
 /// perhatian itu.
 library;
 
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -180,59 +178,4 @@ class _SpinIconState extends State<SpinIcon> with SingleTickerProviderStateMixin
     if (MediaQuery.disableAnimationsOf(context)) return icon;
     return RotationTransition(turns: _controller, child: icon);
   }
-}
-
-/// Pelat besi dilihat dari atas — tanda yang sama dengan ikon aplikasi.
-/// Dipakai di tempat logo, supaya layar masuk dan ikon di home screen HP
-/// terlihat berasal dari satu barang, bukan dumbbell di satu tempat dan pelat
-/// di tempat lain.
-class PlateMark extends StatelessWidget {
-  const PlateMark({super.key, required this.size, required this.color, this.groove});
-
-  final double size;
-  final Color color;
-
-  /// Warna alur dan lubang tengah. Bawaan: warna latar di belakang pelat,
-  /// diteruskan dari pemanggil karena widget ini tidak tahu ia duduk di mana.
-  final Color? groove;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: size,
-      height: size,
-      child: CustomPaint(painter: _PlatePainter(color, groove ?? Colors.transparent)),
-    );
-  }
-}
-
-class _PlatePainter extends CustomPainter {
-  const _PlatePainter(this.color, this.groove);
-
-  final Color color;
-  final Color groove;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final c = size.center(Offset.zero);
-    final r = size.shortestSide / 2;
-    final fill = Paint()..color = color;
-    final cut = Paint()..color = groove;
-    final ring = Paint()
-      ..color = groove
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = r * 0.09;
-
-    canvas.drawCircle(c, r, fill);
-    // Alur pegangan di tepi luar: dua lekuk kecil yang membuat bentuknya
-    // terbaca sebagai pelat, bukan koin.
-    for (final a in [math.pi * 0.5, math.pi * 1.5]) {
-      canvas.drawCircle(c + Offset(math.cos(a), math.sin(a)) * (r * 0.72), r * 0.13, cut);
-    }
-    canvas.drawCircle(c, r * 0.58, ring);
-    canvas.drawCircle(c, r * 0.24, cut);
-  }
-
-  @override
-  bool shouldRepaint(_PlatePainter old) => old.color != color || old.groove != groove;
 }

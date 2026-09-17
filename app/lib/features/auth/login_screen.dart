@@ -7,7 +7,6 @@ import '../../data/account_store.dart';
 import '../../core/strings.dart';
 import '../../core/theme.dart';
 import '../../main.dart' show supabaseConfigured;
-import '../../core/motion.dart';
 import '../../core/widgets.dart';
 import 'field.dart';
 
@@ -83,15 +82,14 @@ class _LoginScreenState extends State<LoginScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Container(
+                // Berkas yang sama dengan ikon di layar Home ponsel, bukan
+                // gambar kedua yang perlahan menyimpang dari yang pertama.
+                Image.asset(
+                  'assets/brand/app_icon.png',
                   width: 56,
                   height: 56,
-                  decoration: BoxDecoration(
-                    color: c.accent,
-                    borderRadius: BorderRadius.circular(GymRadius.card),
-                  ),
-                  alignment: Alignment.center,
-                  child: PlateMark(size: 32, color: c.accentInk, groove: c.accent),
+                  // 256 px turun ke 56 pt; tanpa ini tepinya bergerigi.
+                  filterQuality: FilterQuality.medium,
                 ),
                 const SizedBox(height: 18),
                 Text('GymApps', style: Theme.of(context).textTheme.displaySmall),

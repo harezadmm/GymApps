@@ -28,3 +28,7 @@ REFRENSI/
 
 # Kredensial lokal — jangan pernah di-commit
 .secrets/
+
+# Sisa jalannya skrip Python di tools/
+__pycache__/
+*.pyc

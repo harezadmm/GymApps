@@ -67,6 +67,7 @@ flutter:
 
   assets:
     - assets/data/exercises.json
+    - assets/brand/app_icon.png
 
   fonts:
     - family: Inter
