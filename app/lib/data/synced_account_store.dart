@@ -30,6 +30,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'account_store.dart';
 
+/// Hasil menyambungkan akun yang sudah masuk ke server.
+enum ConnectResult { connected, wrongPassword, unreachable }
+
 class SyncedAccountStore implements AccountStore {
   SyncedAccountStore({required this.local, required this.auth, this.onSignedIn});
 
@@ -72,6 +75,21 @@ class SyncedAccountStore implements AccountStore {
       }
     }
     return result;
+  }
+
+  /// Sambungkan akun yang sudah masuk di HP ini ke server.
+  ///
+  /// Untuk orang yang masuknya terjadi tanpa sinyal, atau sebelum build ini
+  /// punya server — mereka tetap masuk, tapi tanpa sesi Supabase, dan kata
+  /// sandinya tidak disimpan di mana pun untuk dipakai ulang. Kata sandi
+  /// diperiksa lokal dulu, sama seperti saat masuk.
+  Future<ConnectResult> connect(String password) async {
+    final account = await local.signedIn();
+    if (account == null) return ConnectResult.unreachable;
+    final check = await local.signIn(email: account.email, password: password);
+    if (check is! SignInOk) return ConnectResult.wrongPassword;
+    await _reachServer(email: account.email, password: password);
+    return auth.currentSession != null ? ConnectResult.connected : ConnectResult.unreachable;
   }
 
   /// true kalau server menerima kredensial ini dan sesinya sekarang ada.
