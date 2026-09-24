@@ -76,6 +76,15 @@ class ExerciseCatalog {
 
   final List<Exercise> all;
 
+  late final Map<String, Exercise> _byId = {for (final e in all) e.id: e};
+
+  /// Gerakan berdasarkan id katalog, atau null kalau tidak ada.
+  Exercise? byId(String id) => _byId[id];
+
+  /// Nama untuk ditampilkan. Id yang tidak dikenal tetap diberi nama yang
+  /// jujur, bukan string kosong yang membuat baris terlihat rusak.
+  String nameOf(String id) => _byId[id]?.name ?? 'Exercise $id';
+
   static ExerciseCatalog? _cached;
 
   static Future<ExerciseCatalog> load() async {

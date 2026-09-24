@@ -1,7 +1,12 @@
 /// Editor rutinitas — artboard `06 Routine Editor`.
 ///
-/// Di sinilah target dibekukan: sets, rep range, increment, rest, dan policy
-/// progresi per gerakan. Nilai-nilai inilah yang nanti dibaca mesin progresi.
+/// Di sinilah target dibekukan: sets, rep range, beban awal, increment, rest,
+/// warm-up, dan policy progresi per gerakan. Nilai-nilai inilah yang nanti
+/// dibaca mesin progresi.
+///
+/// Editor tidak menyimpan sendiri. Hasilnya dikembalikan lewat `pop`, dan
+/// pemanggil yang memutuskan ke mana perginya: tab Workout menulis ke store,
+/// layar "susun split sendiri" menampungnya dulu sampai onboarding selesai.
 library;
 
 import 'package:flutter/material.dart';
@@ -10,15 +15,14 @@ import '../../core/format.dart';
 import '../../core/strings.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
+import '../../data/exercise_catalog.dart';
 import '../../domain/models.dart';
-import '../../data/demo.dart';
+import '../../domain/progression.dart';
+import '../session/session_launcher.dart';
 
-/// Apa yang terjadi di editor, dikembalikan ke layar Workout.
+/// Apa yang terjadi di editor, dikembalikan ke pemanggil.
 sealed class RoutineEditorResult {
   const RoutineEditorResult();
-
-  static const deleted = RoutineDeleted();
-  factory RoutineEditorResult.saved(String name) = RoutineSaved;
 }
 
 class RoutineDeleted extends RoutineEditorResult {
@@ -26,28 +30,141 @@ class RoutineDeleted extends RoutineEditorResult {
 }
 
 class RoutineSaved extends RoutineEditorResult {
-  const RoutineSaved(this.name);
-  final String name;
+  const RoutineSaved(this.routine);
+  final Routine routine;
 }
 
-class RoutineEditorScreen extends StatefulWidget {
-  const RoutineEditorScreen({super.key, required this.routineName});
+/// Bagian tubuh yang lompatan 5 kg-nya wajar — sama dengan daftar openGym.
+const _heavyBodyParts = {'upper legs', 'lower legs', 'back'};
 
-  final String routineName;
+/// Pilihan increment beban. Di luar ini jarang ada alat yang bisa dimuat.
+const _increments = [0.5, 1.0, 1.25, 2.0, 2.5, 5.0, 10.0];
+
+enum _RowAction { moveUp, moveDown, replace, remove }
+
+class RoutineEditorScreen extends StatefulWidget {
+  const RoutineEditorScreen({super.key, required this.routine, this.allowDelete = true});
+
+  final Routine routine;
+
+  /// Rutinitas yang baru dibuat di layar susun split tidak perlu tombol hapus
+  /// di sini — dihapus dari daftarnya sendiri.
+  final bool allowDelete;
 
   @override
   State<RoutineEditorScreen> createState() => _RoutineEditorScreenState();
 }
 
 class _RoutineEditorScreenState extends State<RoutineEditorScreen> {
-  late final List<EditableExercise> _exercises = demoEditableExercises();
-  late final _nameController = TextEditingController(text: widget.routineName);
+  late List<ExerciseConfig> _exercises = List.of(widget.routine.exercises);
+  late ProgressionPolicy? _policy = widget.routine.policy;
+  late final _nameController = TextEditingController(text: widget.routine.name);
+  late final Future<ExerciseCatalog> _catalog = ExerciseCatalog.load();
   int _expanded = 0;
+  bool _dirty = false;
 
   @override
   void dispose() {
     _nameController.dispose();
     super.dispose();
+  }
+
+  void _change(VoidCallback f) => setState(() {
+        f();
+        _dirty = true;
+      });
+
+  Routine get _result => widget.routine.copyWith(
+        name: _nameController.text.trim().isEmpty ? widget.routine.name : _nameController.text.trim(),
+        exercises: _exercises,
+        policy: _policy,
+      );
+
+  void _save() => Navigator.of(context).pop(RoutineSaved(_result));
+
+  Future<void> _add() async {
+    final picked = await pickExercise(context);
+    if (picked == null || !mounted) return;
+    _change(() {
+      _exercises = [..._exercises, _configFor(picked)];
+      _expanded = _exercises.length - 1;
+    });
+  }
+
+  ExerciseConfig _configFor(Exercise e, {ExerciseConfig? keep}) {
+    final bw = e.equipment == 'body weight';
+    return ExerciseConfig(
+      exerciseId: e.id,
+      sets: keep?.sets ?? 3,
+      reps: keep?.reps ?? 12,
+      repsMin: keep == null ? 8 : keep.repsMin,
+      policy: keep?.policy,
+      restSeconds: keep?.restSeconds ?? 90,
+      warmupSets: keep?.warmupSets ?? 0,
+      bodyweight: bw,
+      heavyBodyPart: _heavyBodyParts.contains(e.bodyPart),
+    );
+  }
+
+  Future<void> _rowAction(int i, _RowAction a) async {
+    switch (a) {
+      case _RowAction.moveUp when i > 0:
+        _change(() {
+          final list = [..._exercises];
+          final item = list.removeAt(i);
+          list.insert(i - 1, item);
+          _exercises = list;
+          _expanded = i - 1;
+        });
+      case _RowAction.moveDown when i < _exercises.length - 1:
+        _change(() {
+          final list = [..._exercises];
+          final item = list.removeAt(i);
+          list.insert(i + 1, item);
+          _exercises = list;
+          _expanded = i + 1;
+        });
+      case _RowAction.replace:
+        final picked = await pickExercise(context);
+        if (picked == null || !mounted) return;
+        _change(() => _exercises = [..._exercises]..[i] = _configFor(picked, keep: _exercises[i]));
+      case _RowAction.remove:
+        _change(() {
+          _exercises = [..._exercises]..removeAt(i);
+          if (_expanded >= _exercises.length) _expanded = _exercises.length - 1;
+        });
+      default:
+        break;
+    }
+  }
+
+  Future<bool> _confirmDiscard() async {
+    if (!_dirty) return true;
+    final keep = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        final c = context.gym;
+        return AlertDialog(
+          backgroundColor: c.surface,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(GymRadius.large)),
+          title: Text(context.t.discardChangesTitle, style: Theme.of(context).textTheme.titleLarge),
+          actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(context.t.discard, style: TextStyle(fontWeight: FontWeight.w700, color: c.danger)),
+            ),
+            GymButton(label: context.t.save, height: 42, expand: false, onPressed: () => Navigator.of(context).pop(true)),
+          ],
+        );
+      },
+    );
+    if (!mounted) return false;
+    if (keep == true) {
+      _save();
+      return false;
+    }
+    return keep == false;
   }
 
   Future<void> _deleteRoutine() async {
@@ -60,11 +177,7 @@ class _RoutineEditorScreenState extends State<RoutineEditorScreen> {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(GymRadius.large)),
           title: Text(context.t.deleteRoutineTitle(_nameController.text),
               style: Theme.of(context).textTheme.titleLarge),
-          content: Text(
-            'The routine and its exercise targets are removed. Sessions you '
-            'already logged with it stay in your history.',
-            style: TextStyle(fontSize: 13.5, height: 1.45, color: c.text2),
-          ),
+          content: Text(context.t.deleteRoutineBody, style: TextStyle(fontSize: 13.5, height: 1.45, color: c.text2)),
           actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
           actions: [
             TextButton(
@@ -83,146 +196,126 @@ class _RoutineEditorScreenState extends State<RoutineEditorScreen> {
       },
     );
     if (ok != true || !mounted) return;
-    // Layar Workout memegang daftarnya, jadi hasilnya dikembalikan lewat pop
-    // dan penghapusan sebenarnya terjadi di sana — satu tempat yang memiliki
-    // daftar, bukan dua yang saling menebak.
-    Navigator.of(context).pop(RoutineEditorResult.deleted);
+    Navigator.of(context).pop(const RoutineDeleted());
+  }
+
+  Future<void> _leave() async {
+    final leave = await _confirmDiscard();
+    if (!mounted || !leave) return;
+    Navigator.of(context).pop();
   }
 
   @override
   Widget build(BuildContext context) {
     final c = context.gym;
-    return Scaffold(
-      backgroundColor: c.bg,
-      body: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(4, 6, 16, 10),
-              child: Row(
-                children: [
-                  IconButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    icon: Icon(Icons.arrow_back, color: c.text2),
-                    tooltip: context.t.back,
-                  ),
-                  Expanded(child: Text(context.t.editRoutine, style: Theme.of(context).textTheme.titleLarge)),
-                  GymButton(
-                    label: context.t.save,
-                    height: 36,
-                    expand: false,
-                    shape: GymButtonShape.pill,
-                    onPressed: () {
-                      // Belum ada store: katakan apa adanya alih-alih menutup
-                      // layar seolah-olah tersimpan.
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(context.t.keptInMemory)),
-                      );
-                      Navigator.of(context).pop(RoutineEditorResult.saved(_nameController.text.trim()));
-                    },
-                  ),
-                ],
+    final t = context.t;
+    return PopScope(
+      canPop: !_dirty,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _leave();
+      },
+      child: Scaffold(
+        backgroundColor: c.bg,
+        body: SafeArea(
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(4, 6, 16, 10),
+                child: Row(
+                  children: [
+                    IconButton(
+                      onPressed: () => Navigator.of(context).maybePop(),
+                      icon: Icon(Icons.arrow_back, color: c.text2),
+                      tooltip: t.back,
+                    ),
+                    Expanded(child: Text(t.editRoutine, style: Theme.of(context).textTheme.titleLarge)),
+                    GymButton(label: t.save, height: 36, expand: false, shape: GymButtonShape.pill, onPressed: _save),
+                  ],
+                ),
               ),
-            ),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-                children: [
-                  GymCard(
-                    radius: GymRadius.control,
-                    padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+              Expanded(
+                child: FutureBuilder<ExerciseCatalog>(
+                  future: _catalog,
+                  builder: (context, snap) {
+                    final catalog = snap.data;
+                    return ListView(
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+                      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
                       children: [
-                        SectionLabel(context.t.routineName),
-                        TextField(
-                          controller: _nameController,
-                          style: Theme.of(context).textTheme.titleLarge,
-                          textCapitalization: TextCapitalization.sentences,
-                          decoration: const InputDecoration(
-                            isDense: true,
-                            border: InputBorder.none,
-                            enabledBorder: InputBorder.none,
-                            focusedBorder: InputBorder.none,
-                            contentPadding: EdgeInsets.symmetric(vertical: 6),
+                        GymCard(
+                          radius: GymRadius.control,
+                          padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              SectionLabel(t.routineName),
+                              TextField(
+                                controller: _nameController,
+                                onChanged: (_) => _dirty = true,
+                                style: Theme.of(context).textTheme.titleLarge,
+                                textCapitalization: TextCapitalization.sentences,
+                                decoration: const InputDecoration(
+                                  isDense: true,
+                                  border: InputBorder.none,
+                                  enabledBorder: InputBorder.none,
+                                  focusedBorder: InputBorder.none,
+                                  contentPadding: EdgeInsets.symmetric(vertical: 6),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _MetaCard(
-                          icon: Icons.trending_up,
-                          label: context.t.defaultPolicy,
-                          value: 'Double progression',
+                        const SizedBox(height: 10),
+                        SectionLabel(t.defaultPolicy),
+                        const SizedBox(height: 6),
+                        _PolicyPicker(
+                          value: _policy ?? ProgressionPolicy.linear,
+                          mode: LogMode.reps,
+                          onChanged: (p) => _change(() => _policy = p),
                         ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: _MetaCard(icon: Icons.timer_outlined, label: context.t.defaultRest, value: '120 s'),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  SectionLabel(context.t.exercisesCount(_exercises.length)),
-                  const SizedBox(height: 10),
-                  for (final (i, ex) in _exercises.indexed) ...[
-                    _ExerciseEditor(
-                      exercise: ex,
-                      expanded: i == _expanded,
-                      onToggle: () => setState(() => _expanded = i == _expanded ? -1 : i),
-                      onChanged: () => setState(() {}),
-                    ),
-                    const SizedBox(height: 10),
-                  ],
-                  const SizedBox(height: 4),
-                  _AddExercise(onTap: () {}),
-                  const SizedBox(height: 24),
-                  GymButton(
-                    label: context.t.deleteRoutine,
-                    icon: Icons.delete_outline,
-                    tone: GymButtonTone.danger,
-                    onPressed: _deleteRoutine,
-                  ),
-                ],
+                        const SizedBox(height: 20),
+                        SectionLabel(t.exercisesCount(_exercises.length)),
+                        const SizedBox(height: 10),
+                        if (_exercises.isEmpty)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            child: Text(t.noExercisesYet, style: TextStyle(fontSize: 13.5, color: c.text2)),
+                          ),
+                        for (final (i, cfg) in _exercises.indexed) ...[
+                          _ExerciseEditor(
+                            key: ValueKey('${cfg.exerciseId}-$i'),
+                            name: catalog?.nameOf(cfg.exerciseId) ?? '…',
+                            subtitle: catalog?.byId(cfg.exerciseId)?.subtitle ?? '',
+                            config: cfg,
+                            routinePolicy: _policy,
+                            expanded: i == _expanded,
+                            isFirst: i == 0,
+                            isLast: i == _exercises.length - 1,
+                            onToggle: () => setState(() => _expanded = i == _expanded ? -1 : i),
+                            onChanged: (next) => _change(() => _exercises = [..._exercises]..[i] = next),
+                            onAction: (a) => _rowAction(i, a),
+                          ),
+                          const SizedBox(height: 10),
+                        ],
+                        const SizedBox(height: 4),
+                        _AddExercise(onTap: _add),
+                        if (widget.allowDelete) ...[
+                          const SizedBox(height: 24),
+                          GymButton(
+                            label: t.deleteRoutine,
+                            icon: Icons.delete_outline,
+                            tone: GymButtonTone.danger,
+                            onPressed: _deleteRoutine,
+                          ),
+                        ],
+                      ],
+                    );
+                  },
+                ),
               ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _MetaCard extends StatelessWidget {
-  const _MetaCard({required this.icon, required this.label, required this.value});
-
-  final IconData icon;
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.gym;
-    return GymCard(
-      radius: GymRadius.card,
-      padding: const EdgeInsets.fromLTRB(14, 11, 14, 13),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, size: 13, color: c.text2),
-              const SizedBox(width: 6),
-              Expanded(child: SectionLabel(label)),
             ],
           ),
-          const SizedBox(height: 6),
-          Text(value, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontSize: 15)),
-        ],
+        ),
       ),
     );
   }
@@ -230,28 +323,81 @@ class _MetaCard extends StatelessWidget {
 
 class _ExerciseEditor extends StatelessWidget {
   const _ExerciseEditor({
-    required this.exercise,
+    super.key,
+    required this.name,
+    required this.subtitle,
+    required this.config,
+    required this.routinePolicy,
     required this.expanded,
+    required this.isFirst,
+    required this.isLast,
     required this.onToggle,
     required this.onChanged,
+    required this.onAction,
   });
 
-  final EditableExercise exercise;
+  final String name;
+  final String subtitle;
+  final ExerciseConfig config;
+  final ProgressionPolicy? routinePolicy;
   final bool expanded;
+  final bool isFirst;
+  final bool isLast;
   final VoidCallback onToggle;
-  final VoidCallback onChanged;
+  final ValueChanged<ExerciseConfig> onChanged;
+  final ValueChanged<_RowAction> onAction;
 
-  String get _summary {
-    final cfg = exercise.config;
-    final reps = cfg.repsMin == null ? '${cfg.reps}' : '${cfg.repsMin}–${cfg.reps}';
-    final policy = policyName[cfg.policy ?? ProgressionPolicy.linear]!.split(' ').first.toLowerCase();
-    return '${cfg.sets} × $reps · ${formatWeight(cfg.weight)} kg · $policy';
+  int get _lo => config.repsMin ?? config.reps;
+
+  String _summary(BuildContext context) {
+    final reps = config.repsMin == null ? '${config.reps}' : '${config.repsMin}–${config.reps}';
+    final policy = policyName[policyFor(config, routineDefault: routinePolicy)]!.split(' ').first.toLowerCase();
+    final w = config.weight > 0 ? ' · ${formatWeight(config.weight)} kg' : '';
+    return '${config.sets} × $reps$w · $policy';
+  }
+
+  /// Rep range dipertahankan sah: bawah tidak pernah melewati atas. Kalau
+  /// keduanya sama, targetnya satu angka (linear, 5×5) dan `repsMin` dilepas.
+  ExerciseConfig _withRange(int lo, int hi) {
+    final top = hi.clamp(1, 50);
+    final bottom = lo.clamp(1, top);
+    return ExerciseConfig(
+      exerciseId: config.exerciseId,
+      policy: config.policy,
+      mode: config.mode,
+      sets: config.sets,
+      reps: top,
+      repsMin: bottom == top ? null : bottom,
+      repsMax: config.repsMax,
+      weight: config.weight,
+      seconds: config.seconds,
+      increment: config.increment,
+      restSeconds: config.restSeconds,
+      deloadFactor: config.deloadFactor,
+      bodyweight: config.bodyweight,
+      heavyBodyPart: config.heavyBodyPart,
+      warmupSets: config.warmupSets,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final c = context.gym;
-    final cfg = exercise.config;
+    final t = context.t;
+    final inc = weightIncrement(config, 'kg');
+    final rest = config.restSeconds ?? 90;
+
+    PopupMenuItem<_RowAction> item(_RowAction a, IconData icon, String label, {bool enabled = true, Color? tone}) =>
+        PopupMenuItem(
+          value: a,
+          enabled: enabled,
+          height: 44,
+          child: Row(children: [
+            Icon(icon, size: 17, color: enabled ? (tone ?? c.text2) : c.text3),
+            const SizedBox(width: 12),
+            Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: enabled ? (tone ?? c.text) : c.text3)),
+          ]),
+        );
 
     return Container(
       decoration: BoxDecoration(
@@ -259,101 +405,141 @@ class _ExerciseEditor extends StatelessWidget {
         borderRadius: BorderRadius.circular(GymRadius.card),
         border: Border.all(color: expanded ? c.accent : c.border),
       ),
-      padding: EdgeInsets.fromLTRB(10, 10, 10, expanded ? 14 : 10),
+      padding: EdgeInsets.fromLTRB(14, 8, 2, expanded ? 14 : 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              // Pegangan geser — mengubah urutan gerakan belum aktif, tapi
-              // tempatnya sudah benar supaya tata letaknya tidak bergeser nanti.
-              Icon(Icons.drag_indicator, size: 18, color: c.text3),
-              const SizedBox(width: 8),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(exercise.name, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 17)),
-                    const SizedBox(height: 2),
-                    Text(expanded ? '${exercise.muscle} · ${exercise.gear}' : _summary,
-                        style: TextStyle(fontSize: 12.5, color: c.text2)),
-                  ],
+                child: InkWell(
+                  onTap: onToggle,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(name, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 17)),
+                        const SizedBox(height: 2),
+                        Text(expanded ? subtitle : _summary(context), style: TextStyle(fontSize: 12.5, color: c.text2)),
+                      ],
+                    ),
+                  ),
                 ),
               ),
               IconButton(
                 onPressed: onToggle,
                 icon: Icon(expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, color: c.text2),
-                tooltip: expanded ? context.t.collapse : context.t.expand,
+                tooltip: expanded ? t.collapse : t.expand,
+              ),
+              PopupMenuButton<_RowAction>(
+                icon: Icon(Icons.more_vert, size: 20, color: c.text2),
+                tooltip: t.exerciseActions,
+                color: c.surface2,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(GymRadius.control)),
+                onSelected: onAction,
+                itemBuilder: (context) => [
+                  item(_RowAction.moveUp, Icons.arrow_upward, t.moveUp, enabled: !isFirst),
+                  item(_RowAction.moveDown, Icons.arrow_downward, t.moveDown, enabled: !isLast),
+                  item(_RowAction.replace, Icons.swap_horiz, t.replaceExercise),
+                  item(_RowAction.remove, Icons.delete_outline, t.removeExercise, tone: c.danger),
+                ],
               ),
             ],
           ),
-          if (expanded) ...[
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: _StepperField(
-                    label: context.t.sets,
-                    value: '${cfg.sets}',
-                    onMinus: () {
-                      exercise.config = cfg.copyWith(sets: (cfg.sets - 1).clamp(1, 12));
-                      onChanged();
-                    },
-                    onPlus: () {
-                      exercise.config = cfg.copyWith(sets: (cfg.sets + 1).clamp(1, 12));
-                      onChanged();
-                    },
+          if (expanded)
+            Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 10),
+                  Row(children: [
+                    Expanded(
+                      child: _StepperField(
+                        label: t.sets,
+                        value: '${config.sets}',
+                        onMinus: () => onChanged(config.copyWith(sets: (config.sets - 1).clamp(1, 12))),
+                        onPlus: () => onChanged(config.copyWith(sets: (config.sets + 1).clamp(1, 12))),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _StepperField(
+                        label: t.warmups,
+                        value: '${config.warmupSets}',
+                        onMinus: () => onChanged(config.copyWith(warmupSets: (config.warmupSets - 1).clamp(0, 3))),
+                        onPlus: () => onChanged(config.copyWith(warmupSets: (config.warmupSets + 1).clamp(0, 3))),
+                      ),
+                    ),
+                  ]),
+                  const SizedBox(height: 10),
+                  SectionLabel(t.repRange),
+                  const SizedBox(height: 6),
+                  Row(children: [
+                    Expanded(
+                      child: _StepperField(
+                        value: '$_lo',
+                        onMinus: () => onChanged(_withRange(_lo - 1, config.reps)),
+                        onPlus: () => onChanged(_withRange(_lo + 1, config.reps)),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: Text('–', style: TextStyle(fontSize: 18, color: c.text2)),
+                    ),
+                    Expanded(
+                      child: _StepperField(
+                        value: '${config.reps}',
+                        onMinus: () => onChanged(_withRange(_lo, config.reps - 1)),
+                        onPlus: () => onChanged(_withRange(_lo, config.reps + 1)),
+                      ),
+                    ),
+                  ]),
+                  const SizedBox(height: 10),
+                  Row(children: [
+                    Expanded(
+                      child: _StepperField(
+                        label: t.startingWeight,
+                        value: config.weight == 0 ? (config.bodyweight ? 'BW' : '—') : '${formatWeight(config.weight)} kg',
+                        onMinus: () => onChanged(config.copyWith(weight: (config.weight - inc).clamp(0, 999).toDouble())),
+                        onPlus: () => onChanged(config.copyWith(weight: config.weight + inc)),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _StepperField(
+                        label: t.increment,
+                        value: '${formatDelta(inc)} kg',
+                        onMinus: () {
+                          final i = _increments.lastIndexWhere((x) => x < inc);
+                          if (i >= 0) onChanged(config.copyWith(increment: _increments[i]));
+                        },
+                        onPlus: () {
+                          final i = _increments.indexWhere((x) => x > inc);
+                          if (i >= 0) onChanged(config.copyWith(increment: _increments[i]));
+                        },
+                      ),
+                    ),
+                  ]),
+                  const SizedBox(height: 10),
+                  _StepperField(
+                    label: t.rest,
+                    value: '$rest s',
+                    onMinus: () => onChanged(config.copyWith(restSeconds: (rest - 15).clamp(15, 600))),
+                    onPlus: () => onChanged(config.copyWith(restSeconds: (rest + 15).clamp(15, 600))),
                   ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _ReadField(
-                    label: context.t.reps,
-                    value: cfg.repsMin == null ? '${cfg.reps}' : '${cfg.repsMin} – ${cfg.reps}',
+                  const SizedBox(height: 12),
+                  SectionLabel(t.progressionPolicy),
+                  const SizedBox(height: 6),
+                  _PolicyPicker(
+                    value: policyFor(config, routineDefault: routinePolicy),
+                    mode: config.mode,
+                    onChanged: (p) => onChanged(config.copyWith(policy: p)),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(child: _ReadField(label: context.t.increment, value: '${formatDelta(exercise.increment)} kg')),
-                const SizedBox(width: 10),
-                Expanded(child: _ReadField(label: context.t.rest, value: '${exercise.restSeconds} s')),
-              ],
-            ),
-            const SizedBox(height: 12),
-            SectionLabel(context.t.progressionPolicy),
-            const SizedBox(height: 6),
-            _PolicyPicker(
-              value: cfg.policy ?? ProgressionPolicy.linear,
-              mode: cfg.mode,
-              onChanged: (p) {
-                exercise.config = cfg.copyWith(policy: p);
-                onChanged();
-              },
-            ),
-            const SizedBox(height: 14),
-            SectionLabel(context.t.intensifiers),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                for (final name in ['Drop set', 'Rest-pause', 'Superset']) ...[
-                  _Intensifier(
-                    label: name,
-                    on: exercise.intensifiers.contains(name),
-                    onTap: () {
-                      exercise.intensifiers.contains(name)
-                          ? exercise.intensifiers.remove(name)
-                          : exercise.intensifiers.add(name);
-                      onChanged();
-                    },
-                  ),
-                  const SizedBox(width: 8),
                 ],
-              ],
+              ),
             ),
-          ],
         ],
       ),
     );
@@ -361,9 +547,9 @@ class _ExerciseEditor extends StatelessWidget {
 }
 
 class _StepperField extends StatelessWidget {
-  const _StepperField({required this.label, required this.value, required this.onMinus, required this.onPlus});
+  const _StepperField({this.label, required this.value, required this.onMinus, required this.onPlus});
 
-  final String label;
+  final String? label;
   final String value;
   final VoidCallback onMinus;
   final VoidCallback onPlus;
@@ -374,11 +560,13 @@ class _StepperField extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SectionLabel(label),
-        const SizedBox(height: 6),
+        if (label != null) ...[
+          SectionLabel(label!),
+          const SizedBox(height: 6),
+        ],
         Container(
           height: 48,
-          padding: const EdgeInsets.symmetric(horizontal: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 2),
           decoration: BoxDecoration(
             color: c.surface2,
             borderRadius: BorderRadius.circular(GymRadius.segment),
@@ -386,47 +574,28 @@ class _StepperField extends StatelessWidget {
           ),
           child: Row(
             children: [
-              IconButton(onPressed: onMinus, icon: Icon(Icons.remove, size: 18, color: c.accent), tooltip: context.t.fewer),
+              IconButton(
+                onPressed: onMinus,
+                visualDensity: VisualDensity.compact,
+                icon: Icon(Icons.remove, size: 18, color: c.accent),
+                tooltip: context.t.fewer,
+              ),
               Expanded(
                 child: Center(
-                  child: Text(value, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: c.text)),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(value, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: c.text)),
+                  ),
                 ),
               ),
-              IconButton(onPressed: onPlus, icon: Icon(Icons.add, size: 18, color: c.accent), tooltip: context.t.more),
+              IconButton(
+                onPressed: onPlus,
+                visualDensity: VisualDensity.compact,
+                icon: Icon(Icons.add, size: 18, color: c.accent),
+                tooltip: context.t.more,
+              ),
             ],
           ),
-        ),
-      ],
-    );
-  }
-}
-
-/// Nilai yang belum bisa diubah dari layar ini. Ditulis biasa, bukan disamarkan
-/// sebagai input — tombol yang tidak melakukan apa-apa lebih buruk daripada
-/// tidak ada tombol.
-class _ReadField extends StatelessWidget {
-  const _ReadField({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.gym;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SectionLabel(label),
-        const SizedBox(height: 6),
-        Container(
-          height: 48,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: c.surface2,
-            borderRadius: BorderRadius.circular(GymRadius.segment),
-            border: Border.all(color: c.border),
-          ),
-          child: Text(value, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: c.text)),
         ),
       ],
     );
@@ -461,44 +630,9 @@ class _PolicyPicker extends StatelessWidget {
           icon: Icon(Icons.keyboard_arrow_down, color: c.text2),
           style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, color: c.text),
           items: [
-            for (final p in options)
-              DropdownMenuItem(value: p, child: Text(policyName[p]!)),
+            for (final p in options) DropdownMenuItem(value: p, child: Text(policyName[p]!)),
           ],
           onChanged: (p) => p == null ? null : onChanged(p),
-        ),
-      ),
-    );
-  }
-}
-
-class _Intensifier extends StatelessWidget {
-  const _Intensifier({required this.label, required this.on, required this.onTap});
-
-  final String label;
-  final bool on;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.gym;
-    return Material(
-      color: on ? c.accentSoft : c.surface2,
-      borderRadius: BorderRadius.circular(GymRadius.pill),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(GymRadius.pill),
-        child: Container(
-          height: 34,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(GymRadius.pill),
-            border: Border.all(color: on ? c.accent : c.border),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: on ? c.accent : c.text2),
-          ),
         ),
       ),
     );

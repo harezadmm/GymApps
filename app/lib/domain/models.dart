@@ -88,6 +88,7 @@ class ExerciseConfig {
     this.deloadFactor,
     this.bodyweight = false,
     this.heavyBodyPart = false,
+    this.warmupSets = 0,
   });
 
   final String exerciseId;
@@ -118,6 +119,11 @@ class ExerciseConfig {
   /// Tubuh bawah/punggung: lompatan 5 kg normal, bukan brutal.
   final bool heavyBodyPart;
 
+  /// Berapa baris warm-up yang disiapkan di depan set kerja saat sesi dibuka.
+  /// Heavy Duty memakai 1–2; kebanyakan rutinitas lain 0 dan menambahnya
+  /// sendiri kalau perlu.
+  final int warmupSets;
+
   ExerciseConfig copyWith({
     ProgressionPolicy? policy,
     int? sets,
@@ -128,9 +134,12 @@ class ExerciseConfig {
     double? increment,
     int? restSeconds,
     double? deloadFactor,
+    int? warmupSets,
+    bool? bodyweight,
+    String? exerciseId,
   }) {
     return ExerciseConfig(
-      exerciseId: exerciseId,
+      exerciseId: exerciseId ?? this.exerciseId,
       policy: policy ?? this.policy,
       mode: mode,
       sets: sets ?? this.sets,
@@ -142,8 +151,9 @@ class ExerciseConfig {
       increment: increment ?? this.increment,
       restSeconds: restSeconds ?? this.restSeconds,
       deloadFactor: deloadFactor ?? this.deloadFactor,
-      bodyweight: bodyweight,
+      bodyweight: bodyweight ?? this.bodyweight,
       heavyBodyPart: heavyBodyPart,
+      warmupSets: warmupSets ?? this.warmupSets,
     );
   }
 
@@ -165,6 +175,7 @@ class ExerciseConfig {
         if (deloadFactor != null) 'dl': deloadFactor,
         if (bodyweight) 'bw': true,
         if (heavyBodyPart) 'heavy': true,
+        if (warmupSets > 0) 'wu': warmupSets,
       };
 
   factory ExerciseConfig.fromJson(Map<String, dynamic> j) => ExerciseConfig(
@@ -185,6 +196,7 @@ class ExerciseConfig {
         deloadFactor: (j['dl'] as num?)?.toDouble(),
         bodyweight: j['bw'] == true,
         heavyBodyPart: j['heavy'] == true,
+        warmupSets: (j['wu'] as num?)?.toInt() ?? 0,
       );
 }
 
@@ -294,3 +306,133 @@ const policyName = <ProgressionPolicy, String>{
   ProgressionPolicy.hit: 'Heavy Duty (HIT)',
   ProgressionPolicy.time: 'Add time',
 };
+
+
+/// Satu rutinitas yang disimpan: nama dan daftar gerakan beserta targetnya.
+///
+/// `id` tetap selama rutinitas hidup, tidak ikut berubah saat dinamai ulang —
+/// urutan rotasi program menunjuk ke id, bukan ke nama.
+class Routine {
+  const Routine({required this.id, required this.name, this.exercises = const [], this.policy});
+
+  final String id;
+  final String name;
+  final List<ExerciseConfig> exercises;
+
+  /// Policy bawaan untuk gerakan yang tidak menentukan sendiri.
+  final ProgressionPolicy? policy;
+
+  int get setCount => exercises.fold(0, (a, e) => a + e.sets);
+
+  Routine copyWith({String? id, String? name, List<ExerciseConfig>? exercises, ProgressionPolicy? policy}) => Routine(
+        id: id ?? this.id,
+        name: name ?? this.name,
+        exercises: exercises ?? this.exercises,
+        policy: policy ?? this.policy,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        if (policy != null) 'pol': policy!.name,
+        'ex': [for (final e in exercises) e.toJson()],
+      };
+
+  factory Routine.fromJson(Map<String, dynamic> j) => Routine(
+        id: j['id'] as String? ?? '',
+        name: j['name'] as String? ?? '',
+        policy: _byName(ProgressionPolicy.values, j['pol']),
+        exercises: [
+          for (final e in (j['ex'] as List? ?? const []))
+            ExerciseConfig.fromJson(Map<String, dynamic>.from(e as Map)),
+        ],
+      );
+}
+
+/// Bagaimana program menentukan sesi berikutnya (FR-B2).
+///
+/// `rotation`: urutan sesi, tidak terikat hari — bolos Senin tidak menggeser
+/// apa pun, sesi berikutnya tetap yang berikutnya. `weekday`: rutinitas terikat
+/// ke hari latihan dalam seminggu.
+enum ProgramMode { rotation, weekday }
+
+/// Program aktif: rutinitas mana, dalam urutan apa, dan aturan istirahatnya.
+class Program {
+  const Program({
+    required this.name,
+    this.templateId,
+    this.mode = ProgramMode.rotation,
+    this.order = const [],
+    this.cursor = 0,
+    this.minRestDays = 0,
+    this.days = const [],
+    this.skippedOn,
+  });
+
+  final String name;
+
+  /// Template asalnya (`ppl`, `heavy-duty`, …), atau null untuk split buatan
+  /// sendiri.
+  final String? templateId;
+
+  final ProgramMode mode;
+
+  /// Id rutinitas dalam urutan sesi.
+  final List<String> order;
+
+  /// Mode rotasi: indeks di [order] untuk sesi berikutnya (FR-B3).
+  final int cursor;
+
+  /// Hari istirahat minimum sejak latihan terakhir (FR-B5). Saran, bukan kunci.
+  final int minRestDays;
+
+  /// Mode weekday: hari latihan, 1 = Senin … 7 = Minggu. Rutinitas dibagikan ke
+  /// hari-hari ini berurutan, berputar kalau harinya lebih banyak.
+  final List<int> days;
+
+  /// Tanggal `YYYY-MM-DD` yang dilewati lewat tombol Skip di mode weekday.
+  final String? skippedOn;
+
+  Program copyWith({
+    String? name,
+    ProgramMode? mode,
+    List<String>? order,
+    int? cursor,
+    int? minRestDays,
+    List<int>? days,
+    String? skippedOn,
+    bool clearSkip = false,
+  }) =>
+      Program(
+        name: name ?? this.name,
+        templateId: templateId,
+        mode: mode ?? this.mode,
+        order: order ?? this.order,
+        cursor: cursor ?? this.cursor,
+        minRestDays: minRestDays ?? this.minRestDays,
+        days: days ?? this.days,
+        skippedOn: clearSkip ? null : (skippedOn ?? this.skippedOn),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        if (templateId != null) 'tpl': templateId,
+        'mode': mode.name,
+        'order': order,
+        'cursor': cursor,
+        if (minRestDays != 0) 'rest': minRestDays,
+        if (days.isNotEmpty) 'days': days,
+        if (skippedOn != null) 'skip': skippedOn,
+      };
+
+  factory Program.fromJson(Map<String, dynamic> j) => Program(
+        name: j['name'] as String? ?? '',
+        templateId: j['tpl'] as String?,
+        mode: _byName(ProgramMode.values, j['mode']) ?? ProgramMode.rotation,
+        order: (j['order'] as List?)?.cast<String>() ?? const [],
+        cursor: (j['cursor'] as num?)?.toInt() ?? 0,
+        minRestDays: (j['rest'] as num?)?.toInt() ?? 0,
+        days: (j['days'] as List?)?.map((d) => (d as num).toInt()).toList() ?? const [],
+        skippedOn: j['skip'] as String?,
+      );
+}

@@ -1,95 +1,220 @@
 /// Tab Home — artboard `04 Home`.
 ///
 /// Satu pertanyaan yang dijawab layar ini: **hari ini latihan apa?** Semua yang
-/// lain di bawahnya hanya konteks.
+/// lain di bawahnya hanya konteks — dan semuanya dihitung dari program dan
+/// riwayat yang tersimpan, bukan angka contoh.
 library;
 
 import 'package:flutter/material.dart';
 
+import '../../core/format.dart';
 import '../../core/strings.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
-import '../../data/demo.dart';
+import '../../data/exercise_catalog.dart';
 import '../../data/workout_store.dart';
-import '../session/session_screen.dart';
+import '../../domain/models.dart';
+import '../../domain/onerm.dart';
+import '../../domain/program.dart';
+import '../../domain/session_plan.dart';
+import '../onboarding/program_flow.dart';
+import '../session/session_launcher.dart';
+import '../workout/routine_editor_screen.dart';
+
+/// Ringkasan tujuh hari terakhir, dihitung dari riwayat.
+class _Recent {
+  _Recent(List<Workout> newestFirst, DateTime today) {
+    final day = dateOnly(today);
+    final weekAgo = isoDate(day.subtract(const Duration(days: 6)));
+    final recent = newestFirst.where((w) => w.date.compareTo(weekAgo) >= 0).toList();
+    final older = newestFirst.where((w) => w.date.compareTo(weekAgo) < 0).toList().reversed.toList();
+
+    volume = 0;
+    for (final w in recent) {
+      for (final e in w.entries) {
+        for (final s in e.sets) {
+          if (s.done && !s.isWarmup) volume += s.weight * s.reps;
+        }
+      }
+    }
+
+    // Gerakan yang e1RM-nya minggu ini melewati semua sesi sebelumnya.
+    final ids = {for (final w in recent) for (final e in w.entries) e.exerciseId};
+    final all = newestFirst.reversed.toList();
+    e1rmUp = ids.where((id) {
+      final now = best1RM(all, id);
+      final before = best1RM(older, id);
+      return now != null && before != null && now.est > before.est;
+    }).length;
+
+    final last = lastTrainingDay(newestFirst);
+    daysSince = last == null ? null : day.difference(last).inDays;
+  }
+
+  late double volume;
+  late int e1rmUp;
+  late int? daysSince;
+}
 
 class HomeScreen extends StatelessWidget {
-  const HomeScreen({super.key, this.programName = 'Push / Pull / Legs'});
-
-  /// Program yang dipilih saat onboarding — ditulis di bawah nama rutinitas.
-  final String programName;
+  const HomeScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     final c = context.gym;
+    final t = context.t;
+    final store = context.workouts;
+    final now = DateTime.now();
+    final recent = _Recent(store.workouts, now);
+
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SectionLabel(context.t.catalogue('Tuesday · 16 Sep')),
-                  const SizedBox(height: 4),
-                  Text(context.t.nextUp, style: Theme.of(context).textTheme.headlineMedium),
-                ],
-              ),
-            ),
-            Pill(
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.monitor_weight_outlined),
-                  SizedBox(width: 6),
-                  // Angka berat badan tidak diterjemahkan: satuannya sama di
-                  // kedua bahasa dan formatnya sudah ditangani formatWeight.
-                  Text('78.4 kg'),
-                ],
-              ),
-            ),
-          ],
-        ),
+        SectionLabel('${t.weekdayLong(now.weekday)} · ${now.day} ${t.monthShort(now.month)}'),
+        const SizedBox(height: 4),
+        Text(t.nextUp, style: Theme.of(context).textTheme.headlineMedium),
         const SizedBox(height: 16),
-        _NextSessionCard(programName: programName),
+        if (!store.loaded)
+          const SizedBox(height: 200)
+        else if (store.program == null || store.nextSessionOn(now) == null)
+          _NoProgramCard(hasProgram: store.program != null)
+        else
+          _NextSessionCard(next: store.nextSessionOn(now)!, program: store.program!),
         const SizedBox(height: 22),
         Row(
           children: [
-            Expanded(child: SectionLabel(context.t.thisWeek)),
-            Text(context.t.plannedOf(2, 4), style: TextStyle(fontSize: 12, color: c.text2)),
+            Expanded(child: SectionLabel(t.thisWeek)),
+            Text(t.sessionsCount(_thisWeek(store.workouts, now)), style: TextStyle(fontSize: 12, color: c.text2)),
           ],
         ),
         const SizedBox(height: 10),
-        const _WeekStrip(),
+        _WeekStrip(history: store.workouts, today: now, program: store.program),
         const SizedBox(height: 12),
         Row(
           children: [
-            Expanded(child: _StatTile(value: '18.4 t', label: context.t.volume7d)),
+            Expanded(
+              child: _StatTile(
+                value: recent.volume >= 1000
+                    ? '${(recent.volume / 1000).toStringAsFixed(1)} t'
+                    : '${formatDelta(recent.volume.roundToDouble())} kg',
+                label: t.volume7d,
+              ),
+            ),
             const SizedBox(width: 10),
-            Expanded(child: _StatTile(value: '+3', label: context.t.e1rmUp, accent: true)),
+            Expanded(
+              child: _StatTile(
+                value: recent.e1rmUp > 0 ? '+${recent.e1rmUp}' : '0',
+                label: t.e1rmUp,
+                accent: recent.e1rmUp > 0,
+              ),
+            ),
             const SizedBox(width: 10),
-            Expanded(child: _StatTile(value: '4d', label: context.t.sinceLast)),
+            Expanded(
+              child: _StatTile(
+                value: recent.daysSince == null ? '—' : t.daysShort(recent.daysSince!),
+                label: t.sinceLast,
+              ),
+            ),
           ],
         ),
       ],
     );
   }
+
+  /// Sesi yang tercatat sejak Senin minggu ini.
+  static int _thisWeek(List<Workout> history, DateTime today) {
+    final monday = dateOnly(today).subtract(Duration(days: today.weekday - 1));
+    final from = isoDate(monday);
+    return history.where((w) => w.date.compareTo(from) >= 0).length;
+  }
 }
 
-class _NextSessionCard extends StatelessWidget {
-  const _NextSessionCard({required this.programName});
+class _NoProgramCard extends StatelessWidget {
+  const _NoProgramCard({required this.hasProgram});
 
-  final String programName;
+  final bool hasProgram;
 
   @override
   Widget build(BuildContext context) {
     final c = context.gym;
-    final all = demoExercises();
+    final t = context.t;
+    return GymCard(
+      radius: GymRadius.hero,
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(t.noProgramYet, style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 6),
+          Text(t.noProgramHint, style: TextStyle(fontSize: 13, height: 1.4, color: c.text2)),
+          const SizedBox(height: 16),
+          GymButton(label: t.choosePlan, onPressed: () => chooseProgram(context)),
+          const SizedBox(height: 10),
+          GymButton(
+            label: t.freestyle,
+            icon: Icons.edit_note_outlined,
+            tone: GymButtonTone.neutral,
+            height: 44,
+            onPressed: () => openFreestyleSession(context, t.freestyle),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NextSessionCard extends StatelessWidget {
+  const _NextSessionCard({required this.next, required this.program});
+
+  final NextSession next;
+  final Program program;
+
+  Future<void> _start(BuildContext context) async {
+    final routine = next.routine;
+    if (routine.exercises.isNotEmpty) {
+      await openRoutineSession(context, routine);
+      return;
+    }
+    final store = context.workouts;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.t.emptyRoutineHint)));
+    final result = await Navigator.of(context).push<RoutineEditorResult>(
+      MaterialPageRoute(builder: (_) => RoutineEditorScreen(routine: routine)),
+    );
+    switch (result) {
+      case RoutineSaved(:final routine):
+        await store.saveRoutine(routine);
+      case RoutineDeleted():
+        await store.deleteRoutine(routine.id);
+      case null:
+        break;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gym;
+    final t = context.t;
+    final store = context.workouts;
+    final routine = next.routine;
+    final history = store.chronological;
+
+    final dueLabel = switch (next.daysAway) {
+      0 => t.dueToday,
+      1 => t.dueTomorrow,
+      _ => t.dueOn(t.weekdayShort(next.due.weekday).toUpperCase()),
+    };
+    final dayName = t.weekdayLong(next.due.weekday);
+
+    // Kapan rutinitas ini terakhir dilatih — dicocokkan lewat nama, karena
+    // itulah yang tersimpan di setiap sesi.
+    final lastOfRoutine = lastTrainingDay([for (final w in store.workouts) if (w.routine == routine.name) w]);
+    final sinceText = lastOfRoutine == null
+        ? t.notTrainedYet
+        : t.lastTrained(dateOnly(DateTime.now()).difference(lastOfRoutine).inDays);
+
     const shown = 3;
-    final preview = all.take(shown).toList();
-    final hidden = all.length - preview.length;
+    final preview = routine.exercises.take(shown).toList();
+    final hidden = routine.exercises.length - preview.length;
 
     return GymCard(
       radius: GymRadius.hero,
@@ -99,106 +224,115 @@ class _NextSessionCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Expanded(child: SectionLabel(context.t.nextSession)),
+              Expanded(child: SectionLabel(t.nextSession)),
               Pill(
-                color: c.accentSoft,
-                textColor: c.accent,
-                child: Text(context.t.dueToday, style: const TextStyle(fontSize: 10, letterSpacing: 0.8)),
+                color: next.early ? c.surface2 : c.accentSoft,
+                textColor: next.early ? c.text2 : c.accent,
+                child: Text(dueLabel, style: const TextStyle(fontSize: 10, letterSpacing: 0.8)),
               ),
             ],
           ),
           const SizedBox(height: 12),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Text(demoRoutineName, style: Theme.of(context).textTheme.displaySmall),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(context.t.rotationOf(programName),
-                    maxLines: 1, overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 13, color: c.text2)),
-              ),
-            ],
+          Text(routine.name, style: Theme.of(context).textTheme.displaySmall),
+          const SizedBox(height: 4),
+          Text(
+            program.mode == ProgramMode.weekday ? t.weekdayOf(program.name) : t.rotationOf(program.name),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 13, color: c.text2),
           ),
-          const SizedBox(height: 10),
-          Text(context.t.routineSummary(all.length, 52, 4),
+          const SizedBox(height: 8),
+          Text('${t.routineOverview(routine.exercises.length, routine.setCount)} · $sinceText',
               style: TextStyle(fontSize: 13, color: c.text2)),
-          const SizedBox(height: 14),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-            decoration: BoxDecoration(
-              color: c.bgNested,
-              borderRadius: BorderRadius.circular(GymRadius.control),
+          if (next.early) ...[
+            const SizedBox(height: 10),
+            NoteBanner(
+              text: program.mode == ProgramMode.weekday ? t.nextTrainingDay(dayName) : t.recoverUntil(dayName),
+              icon: Icons.bedtime_outlined,
+              tone: c.warn,
             ),
-            child: Column(
-              children: [
-                for (final e in preview)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: Row(
-                      children: [
-                        Expanded(child: Text(e.name, style: Theme.of(context).textTheme.bodyLarge)),
-                        Text(
-                          '${formatWeight(e.config.weight)} kg × ${e.config.reps}',
-                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.text2),
+          ],
+          if (preview.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            FutureBuilder<ExerciseCatalog>(
+              future: ExerciseCatalog.load(),
+              builder: (context, snap) {
+                final catalog = snap.data;
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: c.bgNested,
+                    borderRadius: BorderRadius.circular(GymRadius.control),
+                  ),
+                  child: Column(
+                    children: [
+                      for (final cfg in preview)
+                        Builder(builder: (context) {
+                          // Target yang sama persis dengan yang akan terbuka
+                          // di layar sesi — dihitung dengan fungsi yang sama.
+                          final plan = planExercise(cfg, history, routineDefault: routine.policy);
+                          final work = plan.sets.firstWhere((s) => !s.isWarmup, orElse: () => const SetRow());
+                          final target = work.weight > 0
+                              ? '${formatWeight(work.weight)} kg × ${work.reps}'
+                              : '${plan.sets.where((s) => !s.isWarmup).length} × ${work.reps}';
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(catalog?.nameOf(cfg.exerciseId) ?? '…',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: Theme.of(context).textTheme.bodyLarge),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(target,
+                                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.text2)),
+                              ],
+                            ),
+                          );
+                        }),
+                      if (hidden > 0)
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Text(t.moreItems(hidden), style: TextStyle(fontSize: 12, color: c.text3)),
+                          ),
                         ),
-                      ],
-                    ),
+                    ],
                   ),
-                if (hidden > 0)
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Text(context.t.moreItems(hidden), style: TextStyle(fontSize: 12, color: c.text3)),
-                    ),
-                  ),
-              ],
+                );
+              },
             ),
-          ),
+          ],
           const SizedBox(height: 16),
-          GymButton(
-            label: context.t.startSession,
-            icon: Icons.play_arrow,
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => SessionScreen(
-                  routineName: demoRoutineName,
-                  exercises: demoExercises(),
-                  history: context.workouts.workouts,
-                ),
-              ),
-            ),
-          ),
+          GymButton(label: t.startSession, icon: Icons.play_arrow, onPressed: () => _start(context)),
           const SizedBox(height: 10),
           Row(
             children: [
               Expanded(
                 child: GymButton(
-                  label: context.t.skip,
+                  label: t.skip,
                   icon: Icons.skip_next,
                   tone: GymButtonTone.neutral,
                   height: 44,
-                  onPressed: () {},
+                  onPressed: () async {
+                    final messenger = ScaffoldMessenger.of(context);
+                    final msg = t.skipped;
+                    await store.skipNext(DateTime.now());
+                    messenger.showSnackBar(SnackBar(content: Text(msg)));
+                  },
                 ),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: GymButton(
-                  label: context.t.freestyle,
+                  label: t.freestyle,
                   icon: Icons.edit_note_outlined,
                   tone: GymButtonTone.neutral,
                   height: 44,
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => SessionScreen(
-                        routineName: 'Freestyle',
-                        exercises: demoExercises(),
-                        history: context.workouts.workouts,
-                      ),
-                    ),
-                  ),
+                  onPressed: () => openFreestyleSession(context, t.freestyle),
                 ),
               ),
             ],
@@ -210,70 +344,70 @@ class _NextSessionCard extends StatelessWidget {
 }
 
 class _WeekStrip extends StatelessWidget {
-  const _WeekStrip();
+  const _WeekStrip({required this.history, required this.today, required this.program});
 
-  static const _days = [
-    ('M', '16', _DayState.done),
-    ('T', '17', _DayState.today),
-    ('W', '18', _DayState.plain),
-    ('T', '19', _DayState.plain),
-    ('F', '20', _DayState.plain),
-    ('S', '21', _DayState.plain),
-    ('S', '22', _DayState.plain),
-  ];
+  final List<Workout> history;
+  final DateTime today;
+  final Program? program;
 
   @override
   Widget build(BuildContext context) {
     final c = context.gym;
+    final day = dateOnly(today);
+    final monday = day.subtract(Duration(days: day.weekday - 1));
+    final trained = {for (final w in history) w.date};
+    final planned = program?.mode == ProgramMode.weekday ? program!.days.toSet() : const <int>{};
+
     return Row(
       children: [
-        for (final (i, day) in _days.indexed) ...[
+        for (var i = 0; i < 7; i++) ...[
           if (i > 0) const SizedBox(width: 8),
-          Expanded(
-            child: Container(
-              height: 62,
-              decoration: BoxDecoration(
-                color: day.$3 == _DayState.done ? c.accent : c.surface,
-                borderRadius: BorderRadius.circular(GymRadius.card),
-                border: Border.all(
-                  color: switch (day.$3) {
-                    _DayState.done => Colors.transparent,
-                    _DayState.today => c.accent,
-                    _DayState.plain => c.border,
-                  },
+          Builder(builder: (context) {
+            final d = monday.add(Duration(days: i));
+            final done = trained.contains(isoDate(d));
+            final isToday = d == day;
+            final plannedDay = planned.contains(d.weekday) && !done;
+            return Expanded(
+              child: Container(
+                height: 62,
+                decoration: BoxDecoration(
+                  color: done ? c.accent : c.surface,
+                  borderRadius: BorderRadius.circular(GymRadius.card),
+                  border: Border.all(
+                    color: done ? Colors.transparent : (isToday ? c.accent : c.border),
+                  ),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      context.t.weekdayShort(d.weekday).substring(0, 1),
+                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: done ? c.accentInk : c.text2),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '${d.day}',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: done ? c.accentInk : c.text),
+                    ),
+                    // Titik kecil untuk hari latihan yang direncanakan di mode
+                    // hari tetap — supaya "hari ini libur" terlihat tanpa teks.
+                    if (plannedDay)
+                      Container(
+                        margin: const EdgeInsets.only(top: 3),
+                        width: 4,
+                        height: 4,
+                        decoration: BoxDecoration(color: c.accent, shape: BoxShape.circle),
+                      ),
+                  ],
                 ),
               ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    day.$1,
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      color: day.$3 == _DayState.done ? c.accentInk : c.text2,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    day.$2,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: day.$3 == _DayState.done ? c.accentInk : c.text,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
+            );
+          }),
         ],
       ],
     );
   }
 }
-
-enum _DayState { done, today, plain }
 
 class _StatTile extends StatelessWidget {
   const _StatTile({required this.value, required this.label, this.accent = false});
@@ -291,9 +425,13 @@ class _StatTile extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            value,
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: accent ? c.accent : c.text),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: accent ? c.accent : c.text),
+            ),
           ),
           const SizedBox(height: 2),
           Text(label, style: TextStyle(fontSize: 11, color: c.text2)),

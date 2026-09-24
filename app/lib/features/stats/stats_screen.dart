@@ -12,11 +12,11 @@ import '../../core/format.dart';
 import '../../core/strings.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
-import '../../data/demo.dart';
 import '../../data/exercise_catalog.dart';
 import '../../data/workout_store.dart';
 import '../../domain/models.dart';
 import '../../domain/muscle_volume.dart';
+import '../../domain/stats.dart';
 
 class StatsScreen extends StatefulWidget {
   const StatsScreen({super.key});
@@ -35,6 +35,12 @@ class _StatsScreenState extends State<StatsScreen> {
   Map<MuscleGroup, double> _now = const {};
   Map<MuscleGroup, double> _before = const {};
   bool _ready = false;
+
+  /// Katalog yang sudah termuat, untuk menamai gerakan dan memetakan otot.
+  ExerciseCatalog? _cat;
+
+  /// Gerakan yang ditampilkan di grafik e1RM. null = yang paling sering dicatat.
+  String? _e1rmId;
 
   @override
   void initState() {
@@ -55,6 +61,7 @@ class _StatsScreenState extends State<StatsScreen> {
 
   Future<void> _recompute(List<Workout> history) async {
     final catalog = await _catalog;
+    _cat = catalog;
     // Jangkar waktu diambil dari sesi terakhir, bukan dari hari ini: orang yang
     // libur seminggu tidak boleh membuka layar ini dan melihat semuanya nol.
     final dates = history.map((w) => DateTime.tryParse(w.date)).nonNulls.toList()..sort();
@@ -252,13 +259,18 @@ class _StatsScreenState extends State<StatsScreen> {
             // Tab Fatigue tidak ada di artboard Pen — grafik ini tambahan,
             // jadi angkanya bukan tinggi batang hasil desain melainkan jumlah
             // set sungguhan, dan butuh baseline supaya bedanya kelihatan.
-            BarSeries(
-              values: demoWeeklySets,
-              leftLabel: '8 wk ago',
-              midLabel: '4 wk',
-              rightLabel: 'now',
-              baselineFraction: 0.6,
-            ),
+            Builder(builder: (context) {
+              final weekly = weeklyWorkingSets(context.workouts.workouts, DateTime.now());
+              return BarSeries(
+                // Belum ada set sama sekali → biarkan grafik bilang "belum ada
+                // data", bukan delapan batang setinggi nol.
+                values: weekly.every((v) => v == 0) ? const [] : weekly,
+                leftLabel: context.t.catalogue('8 wk ago'),
+                midLabel: context.t.catalogue('4 wk'),
+                rightLabel: context.t.catalogue('now'),
+                baselineFraction: 0.6,
+              );
+            }),
           ],
         ),
       ),
@@ -270,21 +282,24 @@ class _StatsScreenState extends State<StatsScreen> {
           children: [
             SectionLabel(context.t.daysSinceWorked),
             const SizedBox(height: 12),
-            for (final (i, entry) in demoRecovery.indexed) ...[
-              if (i > 0) const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(child: Text(context.t.region(entry.$1), style: Theme.of(context).textTheme.bodyLarge)),
-                  Text(context.t.daysShort(entry.$2),
-                      style: TextStyle(
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w700,
-                        // Di atas seminggu bukan lagi pemulihan, itu terlewat.
-                        color: entry.$2 >= 7 ? c.warn : c.text2,
-                      )),
-                ],
-              ),
-            ],
+            if (_cat == null)
+              Text(context.t.readingSessions, style: TextStyle(fontSize: 13, color: c.text2))
+            else
+              for (final (i, entry) in daysSinceRegion(context.workouts.workouts, _cat!, DateTime.now()).entries.indexed) ...[
+                if (i > 0) const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(child: Text(context.t.region(entry.key), style: Theme.of(context).textTheme.bodyLarge)),
+                    Text(entry.value == null ? '—' : context.t.daysShort(entry.value!),
+                        style: TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w700,
+                          // Di atas seminggu bukan lagi pemulihan, itu terlewat.
+                          color: (entry.value ?? 0) >= 7 ? c.warn : c.text2,
+                        )),
+                  ],
+                ),
+              ],
           ],
         ),
       ),
@@ -299,6 +314,29 @@ class _StatsScreenState extends State<StatsScreen> {
 
   List<Widget> _strength(BuildContext context) {
     final c = context.gym;
+    final t = context.t;
+    final history = context.workouts.workouts;
+    final now = DateTime.now();
+    final logged = loggedExercises(history);
+    final catalog = _cat;
+
+    if (logged.isEmpty || catalog == null) {
+      return [
+        NoteBanner(
+          text: catalog == null ? t.readingSessions : t.noSetsInRange,
+          icon: Icons.info_outline,
+          tone: c.text2,
+        ),
+      ];
+    }
+
+    final id = logged.contains(_e1rmId) ? _e1rmId! : logged.first;
+    final series = weeklyE1rm(history, id, now);
+    final peak = series.last;
+    final first = series.firstWhere((v) => v > 0, orElse: () => 0);
+    final pct = first > 0 ? (peak - first) / first * 100 : 0.0;
+    final movements = strengthByMovement(history, now);
+
     return [
       GymCard(
         radius: GymRadius.large,
@@ -307,16 +345,37 @@ class _StatsScreenState extends State<StatsScreen> {
           children: [
             Row(
               children: [
-                Expanded(child: SectionLabel(context.t.estimated1RM)),
-                Text('Barbell Row', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: c.text)),
-                Icon(Icons.keyboard_arrow_down, size: 18, color: c.text2),
+                Expanded(child: SectionLabel(t.estimated1RM)),
+                // Pilih gerakan dari yang benar-benar pernah dicatat.
+                PopupMenuButton<String>(
+                  tooltip: t.pickExercise,
+                  color: c.surface2,
+                  onSelected: (v) => setState(() => _e1rmId = v),
+                  itemBuilder: (context) => [
+                    for (final x in logged.take(12))
+                      PopupMenuItem(value: x, child: Text(catalog.nameOf(x))),
+                  ],
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 180),
+                        child: Text(catalog.nameOf(id),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: c.text)),
+                      ),
+                      Icon(Icons.keyboard_arrow_down, size: 18, color: c.text2),
+                    ],
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 12),
             Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Text(formatDelta(demoE1rmPeak),
+                Text(formatDelta(double.parse(peak.toStringAsFixed(1))),
                     style: TextStyle(fontSize: 34, fontWeight: FontWeight.w700, height: 1, color: c.text)),
                 const SizedBox(width: 6),
                 Padding(
@@ -329,21 +388,22 @@ class _StatsScreenState extends State<StatsScreen> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
                     decoration: BoxDecoration(
-                      color: c.doneInk.withValues(alpha: 0.16),
+                      color: (pct >= 0 ? c.doneInk : c.danger).withValues(alpha: 0.16),
                       borderRadius: BorderRadius.circular(GymRadius.pill),
                     ),
-                    child: Text('+8.8% · 12 wk',
-                        style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: c.doneInk)),
+                    child: Text('${pct >= 0 ? '+' : ''}${pct.toStringAsFixed(1)}% · 12 wk',
+                        style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: pct >= 0 ? c.doneInk : c.danger)),
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 14),
             BarSeries(
-                values: demoE1rm,
-                leftLabel: context.t.catalogue('12 wk ago'),
-                midLabel: context.t.catalogue('6 wk'),
-                rightLabel: context.t.catalogue('now')),
+                values: series.every((v) => v == 0) ? const [] : series,
+                baselineFraction: 0.6,
+                leftLabel: t.catalogue('12 wk ago'),
+                midLabel: t.catalogue('6 wk'),
+                rightLabel: t.catalogue('now')),
           ],
         ),
       ),
@@ -353,44 +413,24 @@ class _StatsScreenState extends State<StatsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SectionLabel(context.t.strengthByMovement),
+            SectionLabel(t.strengthByMovement),
             const SizedBox(height: 12),
-            for (final (i, m) in demoMovements.indexed) ...[
+            for (final (i, m) in movements.indexed) ...[
               if (i > 0) const SizedBox(height: 11),
               Row(
                 children: [
-                  Expanded(child: Text(m.name, style: Theme.of(context).textTheme.bodyLarge)),
-                  Text('${m.value} kg',
+                  Expanded(
+                    child: Text(catalog.nameOf(m.exerciseId),
+                        maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodyLarge),
+                  ),
+                  const SizedBox(width: 8),
+                  Text('${m.best.toStringAsFixed(1)} kg',
                       style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: c.text)),
                   const SizedBox(width: 8),
-                  _Change(delta: m.delta),
+                  _Change(delta: double.parse(m.delta.toStringAsFixed(1))),
                 ],
               ),
             ],
-          ],
-        ),
-      ),
-      const SizedBox(height: 14),
-      GymCard(
-        radius: GymRadius.large,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(child: SectionLabel(context.t.bodyweight)),
-                Text(context.t.targetWeight('75.0'),
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: c.accent)),
-              ],
-            ),
-            const SizedBox(height: 14),
-            BarSeries(
-              values: demoBodyweight,
-              leftLabel: context.t.catalogue('90 d'),
-              midLabel: context.t.catalogue('45 d'),
-              rightLabel: context.t.catalogue('now'),
-              highlightColor: c.doneInk,
-            ),
           ],
         ),
       ),
