@@ -163,13 +163,20 @@ class ExerciseCatalog {
   String nameOf(String id) => byId(id)?.name ?? 'Exercise $id';
 
   static ExerciseCatalog? _cached;
+  static Future<ExerciseCatalog>? _loading;
 
-  static Future<ExerciseCatalog> load() async {
+  /// Satu pemuatan untuk semua pemanggil. Layar Home memanggil ini dari
+  /// beberapa FutureBuilder sekaligus sebelum yang pertama selesai; tanpa
+  /// ini tiap panggilan mengunduh dan mem-parse 870 KB sendiri — di web itu
+  /// nama gerakan yang tetap "…" beberapa detik.
+  static Future<ExerciseCatalog> load() {
     final cached = _cached;
-    if (cached != null) return cached;
-    final raw = await rootBundle.loadString('assets/data/exercises.json');
-    final list = (jsonDecode(raw) as List).cast<Map<String, dynamic>>().map(Exercise.fromJson).toList();
-    return _cached = ExerciseCatalog._(list);
+    if (cached != null) return Future.value(cached);
+    return _loading ??= () async {
+      final raw = await rootBundle.loadString('assets/data/exercises.json');
+      final list = (jsonDecode(raw) as List).cast<Map<String, dynamic>>().map(Exercise.fromJson).toList();
+      return _cached = ExerciseCatalog._(list);
+    }();
   }
 
   /// Cari berdasarkan nama, bagian tubuh, alat, atau otot — per kata, dalam
