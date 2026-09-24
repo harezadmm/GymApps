@@ -12,6 +12,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:gymapps/core/strings.dart';
 import 'package:gymapps/core/theme.dart';
 import 'package:gymapps/data/backend.dart';
+import 'package:gymapps/data/synced_account_store.dart';
 import 'package:gymapps/data/workout_store.dart';
 import 'package:gymapps/features/profile/profile_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -34,7 +35,31 @@ class _StubBackend implements Backend {
       const PushAccepted(1);
 }
 
-Widget _wrap(WorkoutStore store, {required String? email}) => WorkoutScope(
+/// Backend yang tidak punya sesi sampai "tersambung".
+class _SessionBackend implements Backend {
+  bool signedIn = false;
+  int? _rev;
+
+  @override
+  String? get signedInEmail => signedIn ? 'a@b.co' : null;
+  @override
+  Future<int?> getRev() async => _rev;
+  @override
+  Future<PulledState?> pull() async {
+    if (!signedIn) throw const NotSignedIn();
+    return null;
+  }
+
+  @override
+  Future<PushResult> push({required int? baseRev, required Map<String, dynamic> state}) async {
+    if (!signedIn) throw const NotSignedIn();
+    _rev = (_rev ?? 0) + 1;
+    return PushAccepted(_rev!);
+  }
+}
+
+Widget _wrap(WorkoutStore store, {required String? email, Future<ConnectResult> Function(String)? onConnect}) =>
+    WorkoutScope(
       store: store,
       child: AppStrings(
         strings: Strings(AppLanguage.english),
@@ -49,6 +74,7 @@ Widget _wrap(WorkoutStore store, {required String? email}) => WorkoutScope(
               onLanguageChanged: (_) {},
               onSignOut: () {},
               email: email,
+              onConnect: onConnect,
             ),
           ),
         ),
@@ -114,6 +140,83 @@ void main() {
       await tester.pump();
 
       expect(find.text('Synced just now'), findsOneWidget);
+    });
+  });
+
+  group('sambungkan ke server dari Force sync', () {
+    // Lahir dari MuMu: HP yang sudah masuk sebelum build punya server tidak
+    // punya sesi Supabase. Force sync meminta kata sandi sekali — dan dialog
+    // pertamanya merah karena controller-nya dibuang selagi dialog menutup.
+    void phone(WidgetTester tester) {
+      tester.view.physicalSize = const Size(1080, 2340);
+      tester.view.devicePixelRatio = 3;
+      addTearDown(tester.view.reset);
+    }
+
+    Future<void> openForceSync(WidgetTester tester) async {
+      final tile = find.text('Force sync now');
+      await tester.scrollUntilVisible(tile, 200, scrollable: find.byType(Scrollable).first);
+      await tester.ensureVisible(tile);
+      await tester.pumpAndSettle();
+      await tester.tap(tile);
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('kata sandi benar: tersambung lalu tersinkron, tanpa error', (tester) async {
+      final server = _SessionBackend();
+      final store = WorkoutStore(server);
+      await store.load('a@b.co');
+      phone(tester);
+      await tester.pumpWidget(_wrap(store, email: 'a@b.co', onConnect: (pw) async {
+        if (pw != 'benar123') return ConnectResult.wrongPassword;
+        server.signedIn = true;
+        return ConnectResult.connected;
+      }));
+      await tester.pump();
+
+      await openForceSync(tester);
+      expect(find.text('Connect to the server'), findsOneWidget);
+      await tester.enterText(find.byType(TextField), 'benar123');
+      await tester.tap(find.text('Connect'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Connect to the server'), findsNothing);
+      expect(store.syncStatus, SyncStatus.synced);
+      expect(find.text('Synced just now'), findsWidgets);
+    });
+
+    testWidgets('kata sandi salah: pesan jelas, tidak tersambung', (tester) async {
+      final server = _SessionBackend();
+      final store = WorkoutStore(server);
+      await store.load('a@b.co');
+      phone(tester);
+      await tester.pumpWidget(_wrap(store, email: 'a@b.co', onConnect: (_) async => ConnectResult.wrongPassword));
+      await tester.pump();
+
+      await openForceSync(tester);
+      await tester.enterText(find.byType(TextField), 'salah');
+      await tester.tap(find.text('Connect'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Wrong password.'), findsOneWidget);
+      expect(store.syncStatus, SyncStatus.noSession);
+    });
+
+    testWidgets('batal: dialog tertutup tanpa error', (tester) async {
+      final store = WorkoutStore(_SessionBackend());
+      await store.load('a@b.co');
+      phone(tester);
+      await tester.pumpWidget(_wrap(store, email: 'a@b.co', onConnect: (_) async => ConnectResult.connected));
+      await tester.pump();
+
+      await openForceSync(tester);
+      await tester.enterText(find.byType(TextField), 'apa saja');
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.text('Connect to the server'), findsNothing);
     });
   });
 

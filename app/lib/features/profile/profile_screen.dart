@@ -11,6 +11,7 @@ import '../../core/motion.dart';
 import '../../core/strings.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
+import '../../data/synced_account_store.dart';
 import '../../data/workout_store.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
@@ -21,11 +22,16 @@ class ProfileScreen extends StatefulWidget {
     required this.onLanguageChanged,
     required this.onSignOut,
     required this.email,
+    this.onConnect,
   });
 
   final AppLanguage language;
   final ValueChanged<AppLanguage> onLanguageChanged;
   final VoidCallback onSignOut;
+
+  /// Sambungkan akun ini ke server dengan kata sandinya. null kalau build ini
+  /// tidak punya server.
+  final Future<ConnectResult> Function(String password)? onConnect;
 
   /// Email akun yang sedang masuk. null hanya selagi pemeriksaannya berjalan;
   /// sebelumnya di sini ada alamat contoh yang di-hardcode, dan itu berarti
@@ -72,6 +78,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return;
     }
     await store.syncNow();
+    // Belum ada sesi server: minta kata sandi sekali, sambungkan, lalu coba
+    // lagi. Ini jalan yang ditempuh HP yang masuk sebelum build ini punya
+    // server — tanpa ini orangnya harus keluar lalu masuk lagi.
+    final onConnect = widget.onConnect;
+    if (store.syncStatus == SyncStatus.noSession && onConnect != null && mounted) {
+      final password = await _askPassword();
+      if (password == null) return;
+      final result = await onConnect(password);
+      switch (result) {
+        case ConnectResult.wrongPassword:
+          messenger.showSnackBar(SnackBar(content: Text(t.wrongPassword)));
+          return;
+        case ConnectResult.unreachable:
+          messenger.showSnackBar(SnackBar(content: Text(t.serverUnreachable)));
+          return;
+        case ConnectResult.connected:
+          await store.syncNow();
+      }
+    }
     final msg = switch (store.syncStatus) {
       SyncStatus.synced => t.syncedNow,
       SyncStatus.failed => t.syncFailed,
@@ -79,6 +104,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
       SyncStatus.idle || SyncStatus.syncing => t.syncPending,
     };
     messenger.showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  Future<String?> _askPassword() async {
+    final password = await showDialog<String>(context: context, builder: (_) => const _PasswordDialog());
+    return password == null || password.isEmpty ? null : password;
   }
 
   /// Pemilih bahasa: satu sheet, pilihan langsung berlaku.
@@ -308,6 +338,67 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ),
         ),
+      ],
+    );
+  }
+}
+
+/// Dialog kata sandi untuk menyambung ke server.
+///
+/// Widget sendiri karena controller-nya harus hidup sampai dialog benar-benar
+/// hilang. Dibuang tepat setelah `showDialog` kembali, TextField di animasi
+/// tutupnya masih memakainya — layar merah di build debug.
+class _PasswordDialog extends StatefulWidget {
+  const _PasswordDialog();
+
+  @override
+  State<_PasswordDialog> createState() => _PasswordDialogState();
+}
+
+class _PasswordDialogState extends State<_PasswordDialog> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() => Navigator.of(context).pop(_controller.text);
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gym;
+    final t = context.t;
+    return AlertDialog(
+      backgroundColor: c.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(GymRadius.large)),
+      title: Text(t.connectTitle, style: Theme.of(context).textTheme.titleLarge),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(t.connectBody, style: TextStyle(fontSize: 13.5, height: 1.45, color: c.text2)),
+          const SizedBox(height: 14),
+          TextField(
+            controller: _controller,
+            autofocus: true,
+            obscureText: true,
+            autocorrect: false,
+            enableSuggestions: false,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) => _submit(),
+            decoration: InputDecoration(labelText: t.password),
+          ),
+        ],
+      ),
+      actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(t.cancel, style: TextStyle(fontWeight: FontWeight.w700, color: c.text2)),
+        ),
+        GymButton(label: t.connect, height: 42, expand: false, onPressed: _submit),
       ],
     );
   }

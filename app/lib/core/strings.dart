@@ -350,8 +350,18 @@ class Strings {
   String get syncFailed =>
       _('Sync failed — saved on this device', 'Sync gagal — tersimpan di HP ini');
   String get syncPending => _('Not synced yet', 'Belum tersinkron');
-  String get syncNoSession => _('Not connected to the server — sign in again while online',
-      'Belum tersambung ke server — masuk ulang saat online');
+  String get syncNoSession => _('Not connected to the server — tap "Force sync now"',
+      'Belum tersambung ke server — ketuk "Paksa sync sekarang"');
+  String get connectTitle => _('Connect to the server', 'Sambungkan ke server');
+  String get connectBody => _(
+        'Enter your password once to start syncing this account. It is checked on this phone first.',
+        'Masukkan kata sandi sekali untuk mulai menyinkronkan akun ini. Kata sandi diperiksa di HP ini dulu.',
+      );
+  String get connect => _('Connect', 'Sambungkan');
+  String get serverUnreachable => _(
+        "Couldn't reach the server. Your data is safe on this phone — try again when you're online.",
+        'Server tidak terjangkau. Data aman di HP ini — coba lagi saat online.',
+      );
   String get syncOffHint => _(
         'This build has no server configured, so everything stays on this device.',
         'Build ini tidak punya server, jadi semua data hanya tersimpan di HP ini.',

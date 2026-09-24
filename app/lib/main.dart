@@ -300,6 +300,10 @@ class _AppFlowState extends State<AppFlow> {
           onLanguageChanged: widget.onLanguageChanged,
           email: _account?.email,
           onSignOut: _signOut,
+          onConnect: switch (_accounts) {
+            final SyncedAccountStore synced => synced.connect,
+            _ => null,
+          },
         ),
     };
   }
@@ -314,12 +318,14 @@ class HomeShell extends StatefulWidget {
     required this.onLanguageChanged,
     required this.onSignOut,
     required this.email,
+    this.onConnect,
   });
 
   final AppLanguage language;
   final ValueChanged<AppLanguage> onLanguageChanged;
   final VoidCallback onSignOut;
   final String? email;
+  final Future<ConnectResult> Function(String password)? onConnect;
 
   @override
   State<HomeShell> createState() => _HomeShellState();
@@ -362,6 +368,7 @@ class _HomeShellState extends State<HomeShell> {
               onLanguageChanged: widget.onLanguageChanged,
               onSignOut: widget.onSignOut,
               email: widget.email,
+              onConnect: widget.onConnect,
             ),
           ],
         ),
