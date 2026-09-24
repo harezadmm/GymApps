@@ -1,4 +1,4 @@
-/// Tab History â€” artboard `11 History`.
+/// Tab History — artboard `11 History`.
 ///
 /// Membaca riwayat asli dari [WorkoutStore]. Susunan dan tokennya tetap sama
 /// dengan artboard; yang berubah cuma sumber angkanya. Ini juga layar tempat
@@ -28,7 +28,7 @@ class HistoryScreen extends StatefulWidget {
 class _HistoryScreenState extends State<HistoryScreen> {
   int _filter = 0;
 
-  /// Filter diambil dari nama rutinitas yang benar-benar ada di riwayat â€”
+  /// Filter diambil dari nama rutinitas yang benar-benar ada di riwayat —
   /// dulu tertulis Push/Pull/Legs apa pun program orangnya.
   static List<String> _filtersFor(List<Workout> all) {
     final seen = <String>[];
@@ -57,7 +57,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         ScreenHeader(
           title: context.t.history,
           actions: [
-            // Kalender bulanan belum ada â€” kotak aktivitas di bawah sudah
+            // Kalender bulanan belum ada — kotak aktivitas di bawah sudah
             // menjawab "kapan saja aku latihan". Tombol + mencatat sesi baru.
             SquareIconButton(
               icon: Icons.add,
@@ -99,7 +99,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         ],
         if (!store.loaded)
           // Riwayat masih dibaca dari disk. Jangan tulis "belum ada sesi" di
-          // sini â€” itu kalimat yang paling menakutkan untuk dibaca keliru.
+          // sini — itu kalimat yang paling menakutkan untuk dibaca keliru.
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 30),
             child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
@@ -268,7 +268,7 @@ class _SessionRow extends StatelessWidget {
                         if (workout.durationSeconds != null) _clock(workout.durationSeconds!),
                         '${(volume / 1000).toStringAsFixed(1)} t',
                         context.t.setsSuffix(_workingSets.length),
-                      ].join(' Â· '),
+                      ].join(' · '),
                       style: TextStyle(fontSize: 12.5, color: c.text2),
                     ),
                   ],
@@ -321,7 +321,7 @@ Future<void> _showDetail(BuildContext context, Workout workout) async {
               [
                 workout.date,
                 if (workout.durationSeconds != null) '${workout.durationSeconds! ~/ 60} min',
-              ].join(' Â· '),
+              ].join(' · '),
               style: TextStyle(fontSize: 13, color: c.text2),
             ),
             const SizedBox(height: 16),
@@ -339,7 +339,7 @@ Future<void> _showDetail(BuildContext context, Workout workout) async {
                             style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: s.isWarmup ? c.warn : c.text2)),
                       ),
                       Expanded(
-                        child: Text('${weightLabel(s.weight, bodyweight: e.target?.bodyweight ?? false)} kg Ã— ${s.reps}',
+                        child: Text('${weightLabel(s.weight, bodyweight: e.target?.bodyweight ?? false)} kg × ${s.reps}',
                             style: TextStyle(fontSize: 14, color: s.done ? c.text : c.text3)),
                       ),
                       Icon(s.done ? Icons.check_circle : Icons.circle_outlined,
@@ -362,7 +362,7 @@ Future<void> _showDetail(BuildContext context, Workout workout) async {
                     backgroundColor: c.surface,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(GymRadius.large)),
                     title: Text('${t.delete}?', style: Theme.of(context).textTheme.titleLarge),
-                    content: Text('${workout.routine ?? t.freestyleSession} Â· ${workout.date}',
+                    content: Text('${workout.routine ?? t.freestyleSession} · ${workout.date}',
                         style: TextStyle(fontSize: 14, color: c.text2)),
                     actions: [
                       TextButton(

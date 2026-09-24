@@ -131,6 +131,18 @@ class Strings {
   String get dueToday => _('DUE TODAY', 'HARI INI');
   String get startSession => _('START SESSION', 'MULAI SESI');
   String get freestyle => _('Freestyle', 'Bebas');
+  String get otherSession => _('Train another session', 'Pilih sesi lain');
+  String get otherSessionTitle => _('What are you training today?', 'Hari ini latihan apa?');
+  String get otherSessionHint => _(
+        'The rotation carries on from whichever session you train.',
+        'Rotasi lanjut dari sesi yang kamu kerjakan.',
+      );
+  String get otherSessionHintWeekday => _(
+        'Your weekly schedule stays the same — this only changes today.',
+        'Jadwal mingguanmu tetap — ini hanya mengganti latihan hari ini.',
+      );
+  String get upNext => _('UP NEXT', 'BERIKUTNYA');
+  String get notInProgram => _('Not in the rotation', 'Di luar rotasi');
   String get thisWeek => _('This week', 'Minggu ini');
   String plannedOf(int done, int total) =>
       _('$done of $total planned', '$done dari $total rencana');
@@ -338,6 +350,12 @@ class Strings {
   String get syncFailed =>
       _('Sync failed — saved on this device', 'Sync gagal — tersimpan di HP ini');
   String get syncPending => _('Not synced yet', 'Belum tersinkron');
+  String get syncNoSession => _('Not connected to the server — sign in again while online',
+      'Belum tersambung ke server — masuk ulang saat online');
+  String get syncOffHint => _(
+        'This build has no server configured, so everything stays on this device.',
+        'Build ini tidak punya server, jadi semua data hanya tersimpan di HP ini.',
+      );
   String get training => _('Training', 'Latihan');
   String get units => _('Units', 'Satuan');
   String get restPauseRest => _('Rest-pause rest', 'Istirahat rest-pause');

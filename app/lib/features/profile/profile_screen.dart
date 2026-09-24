@@ -60,6 +60,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  /// Sinkron sekarang, lalu katakan hasilnya dengan kata-kata — ikon kecil di
+  /// kartu akun gampang terlewat, dan orang yang menekan tombol ini sedang
+  /// menunggu jawaban.
+  Future<void> _forceSync() async {
+    final store = WorkoutScope.read(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final t = context.t;
+    if (!store.hasBackend) {
+      messenger.showSnackBar(SnackBar(content: Text(t.syncOffHint)));
+      return;
+    }
+    await store.syncNow();
+    final msg = switch (store.syncStatus) {
+      SyncStatus.synced => t.syncedNow,
+      SyncStatus.failed => t.syncFailed,
+      SyncStatus.noSession => t.syncNoSession,
+      SyncStatus.idle || SyncStatus.syncing => t.syncPending,
+    };
+    messenger.showSnackBar(SnackBar(content: Text(msg)));
+  }
+
   /// Pemilih bahasa: satu sheet, pilihan langsung berlaku.
   ///
   /// Tidak ada tombol "simpan" — menutup sheet setelah memilih sudah cukup,
@@ -138,6 +159,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         SyncStatus.synced => (t.syncedNow, c.doneInk, Icons.cloud_done_outlined),
                         SyncStatus.failed => (t.syncFailed, c.warn, Icons.cloud_off_outlined),
                         SyncStatus.idle => (t.syncPending, c.text2, Icons.cloud_queue),
+                        SyncStatus.noSession => (t.syncNoSession, c.warn, Icons.cloud_off_outlined),
                       };
                       final syncing = store.hasBackend && store.syncStatus == SyncStatus.syncing;
                       return FadeSwap(
@@ -210,7 +232,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             SettingsTile(
               icon: Icons.sync,
               label: t.forceSync,
-              onTap: () => _todo(t.forceSync),
+              onTap: _forceSync,
             ),
           ],
         ),

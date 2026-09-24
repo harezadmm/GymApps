@@ -14,6 +14,11 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 /// FR-A4 ("dua HP offline, tidak ada data hilang") bisa dipenuhi. Penolakan
 /// datang bersama dokumen server, dan pemanggilnya yang memutuskan cara merge.
 abstract interface class Backend {
+  /// Email akun server yang sesinya sedang dipegang, null kalau tidak ada
+  /// atau backend-nya tidak tahu. Store membandingkannya dengan akun yang
+  /// sedang terbuka sebelum mendorong apa pun.
+  String? get signedInEmail;
+
   Future<int?> getRev();
   Future<PulledState?> pull();
   Future<PushResult> push({required int? baseRev, required Map<String, dynamic> state});
@@ -60,6 +65,9 @@ class SupabaseBackend implements Backend {
   final SupabaseClient _client;
 
   static const _table = 'user_state';
+
+  @override
+  String? get signedInEmail => _client.auth.currentSession?.user.email;
 
   SupabaseClient get _authed {
     if (_client.auth.currentSession == null) throw const NotSignedIn();
