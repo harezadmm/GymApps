@@ -19,6 +19,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -32,14 +34,21 @@ jobs:
       - name: Test
         working-directory: app
         run: flutter test
+      # Secret yang kosong menghasilkan build yang jalan tapi tanpa server.
+      # Di main itu tidak boleh lolos; di PR (tanpa secret) build tetap dicek.
+      - name: Pastikan kredensial Supabase ada
+        if: github.ref == 'refs/heads/main'
+        run: |
+          [ -n "$SUPABASE_URL" ] && [ -n "$SUPABASE_ANON_KEY" ] || { echo '::error::SUPABASE_URL / SUPABASE_ANON_KEY kosong'; exit 1; }
+          case "$SUPABASE_ANON_KEY" in sb_secret_*) echo '::error::itu secret key, bukan publishable key'; exit 1;; esac
       - name: Build web
         working-directory: app
         run: >
           flutter build web --release
-          --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }}
-          --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
+          --dart-define=SUPABASE_URL="$SUPABASE_URL"
+          --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
       - name: Deploy ke Vercel
-        if: github.ref == 'refs/heads/main' && env.VERCEL_TOKEN != ''
+        if: github.ref == 'refs/heads/main' && env.VERCEL_TOKEN != '' && env.SUPABASE_URL != '' && env.SUPABASE_ANON_KEY != ''
         env:
           VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}

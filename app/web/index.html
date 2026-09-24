@@ -6,9 +6,10 @@
   <meta charset="UTF-8">
 
   <!--
-    viewport-fit=cover  : layar penuh sampai ke balik poni iPhone; Flutter
-                          membaca safe-area lewat MediaQuery, jadi kontennya
-                          tidak tertimpa.
+    viewport-fit=cover  : layar penuh sampai ke balik poni iPhone. Mesin
+                          Flutter web TIDAK membaca safe-area sendiri; nilainya
+                          diteruskan lewat variabel CSS di bawah (--sat dst.)
+                          dan disuntikkan ke MediaQuery oleh main.dart.
     user-scalable=no    : tangan berkeringat di gym mudah memicu pinch-zoom
                           tanpa sengaja. Zoom di sini tidak menambah apa pun —
                           Flutter menggambar ulang, bukan memperbesar teks.
@@ -40,6 +41,14 @@
   <link rel="manifest" href="manifest.json">
 
   <style>
+    /* Inset aman iPhone (poni, garis home), dibaca Flutter lewat
+       getComputedStyle — lihat lib/core/safe_area_web.dart. */
+    :root {
+      --sat: env(safe-area-inset-top, 0px);
+      --sar: env(safe-area-inset-right, 0px);
+      --sab: env(safe-area-inset-bottom, 0px);
+      --sal: env(safe-area-inset-left, 0px);
+    }
     html, body {
       margin: 0;
       padding: 0;

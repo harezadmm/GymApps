@@ -29,6 +29,24 @@ class WebAccountStore implements AccountStore {
 
   static const _timeout = Duration(seconds: 15);
 
+  /// Naik setiap kali keluar. Jawaban masuk/daftar yang datang sesudahnya —
+  /// atau sesudah batas waktu — tetap disimpan gotrue sebagai sesi; di sini
+  /// sesi semacam itu dibuang lagi supaya HP bersama tidak tiba-tiba
+  /// berpindah ke akun orang yang tadi gagal masuk.
+  int _epoch = 0;
+
+  Future<T> _call<T>(Future<T> request) {
+    final epoch = _epoch;
+    var timedOut = false;
+    unawaited(request.then((_) {
+      if (epoch != _epoch || timedOut) unawaited(signOut());
+    }, onError: (_) {}));
+    return request.timeout(_timeout, onTimeout: () {
+      timedOut = true;
+      throw TimeoutException('auth');
+    });
+  }
+
   Account? _accountOf(User? user) {
     final email = user?.email;
     if (email == null) return null;
@@ -45,7 +63,7 @@ class WebAccountStore implements AccountStore {
   Future<SignUpResult> signUp({required String email, required String password}) async {
     final address = LocalAccountStore.normalise(email);
     try {
-      final r = await auth.signUp(email: address, password: password).timeout(_timeout);
+      final r = await _call(auth.signUp(email: address, password: password));
       if (r.session == null) {
         // Proyek meminta konfirmasi email: belum ada sesi. Tidak bisa masuk
         // sampai tautannya diklik — dan aplikasi ini belum punya alur untuk
@@ -60,15 +78,17 @@ class WebAccountStore implements AccountStore {
           ? SignUpFailure.emailTaken
           : SignUpFailure.rejected);
     }
+    final account = _accountOf(auth.currentSession?.user);
+    if (account == null || account.email != address) return const SignUpError(SignUpFailure.offline);
     onSignedIn?.call();
-    return SignUpOk(_accountOf(auth.currentSession!.user)!);
+    return SignUpOk(account);
   }
 
   @override
   Future<SignInResult> signIn({required String email, required String password}) async {
     final address = LocalAccountStore.normalise(email);
     try {
-      await auth.signInWithPassword(email: address, password: password).timeout(_timeout);
+      await _call(auth.signInWithPassword(email: address, password: password));
     } catch (e) {
       if (_offline(e)) return const SignInError(SignInFailure.offline);
       // GoTrue sengaja tidak membedakan "email tidak ada" dari "kata sandi
@@ -78,13 +98,14 @@ class WebAccountStore implements AccountStore {
       return const SignInError(SignInFailure.invalidCredentials);
     }
     final account = _accountOf(auth.currentSession?.user);
-    if (account == null) return const SignInError(SignInFailure.offline);
+    if (account == null || account.email != address) return const SignInError(SignInFailure.offline);
     onSignedIn?.call();
     return SignInOk(account);
   }
 
   @override
   Future<void> signOut() async {
+    _epoch++;
     try {
       await auth.signOut().timeout(const Duration(seconds: 5));
     } catch (e) {
