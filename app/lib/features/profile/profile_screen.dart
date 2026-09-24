@@ -123,6 +123,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return;
     }
     await store.syncNow();
+    if (!mounted) return;
     // Belum ada sesi server: minta kata sandi sekali, sambungkan, lalu coba
     // lagi. Ini jalan yang ditempuh HP yang masuk sebelum build ini punya
     // server — tanpa ini orangnya harus keluar lalu masuk lagi.
@@ -130,11 +131,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (store.syncStatus == SyncStatus.noSession && onConnect != null && mounted) {
       final password = await _askPassword();
       if (password == null || !mounted) return;
-      final result = await _withProgress(() async {
-        final r = await onConnect(password);
-        if (r == ConnectResult.connected) await store.syncNow();
-        return r;
-      });
+      // Hanya menyambung yang ditunggu di balik dialog — waktunya dibatasi.
+      // Sinkron sesudahnya berjalan dengan penanda biasa di kartu akun.
+      final result = await _withProgress(() => onConnect(password));
+      if (!mounted) return;
       switch (result) {
         case ConnectResult.wrongPassword:
           messenger.showSnackBar(SnackBar(content: Text(t.wrongPassword)));
@@ -146,7 +146,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           messenger.showSnackBar(SnackBar(content: Text(t.serverUnreachable)));
           return;
         case ConnectResult.connected:
-          break;
+          await store.syncNow();
+          if (!mounted) return;
       }
     }
     final msg = switch (store.syncStatus) {

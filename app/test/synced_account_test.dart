@@ -32,6 +32,7 @@ class _FakeAuth implements GoTrueClient {
   /// Akun di server: email → kata sandi.
   final users = <String, String>{};
   bool offline = false;
+  bool rateLimited = false;
 
   /// Kalau diisi, masuk menunggu ini — jaringan gym yang lambat.
   Completer<void>? gate;
@@ -65,6 +66,9 @@ class _FakeAuth implements GoTrueClient {
     signIns++;
     await gate?.future;
     if (offline) throw AuthRetryableFetchException();
+    if (rateLimited) {
+      throw const AuthApiException('Request rate limit reached', statusCode: '429', code: 'over_request_rate_limit');
+    }
     if (users[email] != password) {
       throw const AuthApiException('Invalid login credentials', statusCode: '400', code: 'invalid_credentials');
     }
@@ -152,6 +156,28 @@ void main() {
       expect(auth.currentSession, isNull);
     });
 
+    test('salah ketik, akun server belum ada: tidak mendaftarkan kata sandi yang salah', () async {
+      // Temuan review: dulu salah ketik di sini mendaftarkan typo ke server
+      // dan sekaligus mengganti kata sandi lokal dengannya.
+      await legacyAccount('a@gym.test', 'rahasia123');
+      expect(await store.connect('rahasia12'), ConnectResult.wrongPassword);
+      expect(auth.signUps, 0);
+      expect(auth.users, isEmpty);
+      expect(await local.signIn(email: 'a@gym.test', password: 'rahasia123'), isA<SignInOk>());
+    });
+
+    test('tanpa jaringan dan kata sandi tidak lolos lokal: tidak dituduh salah', () async {
+      await legacyAccount('a@gym.test', 'rahasia123');
+      auth.offline = true;
+      expect(await store.connect('dariHPlain'), ConnectResult.unreachable);
+    });
+
+    test('server membatasi permintaan (429): tidak terjangkau, bukan ditolak', () async {
+      await legacyAccount('a@gym.test', 'rahasia123');
+      auth.rateLimited = true;
+      expect(await store.connect('rahasia123'), ConnectResult.unreachable);
+    });
+
     test('tanpa jaringan: tidak terjangkau, dan tidak mencoba mendaftar', () async {
       await legacyAccount('a@gym.test', 'rahasia123');
       auth.offline = true;
@@ -189,6 +215,14 @@ void main() {
       expect(r, isA<SignInOk>());
       expect((await local.signedIn())?.email, 'baru@gym.test');
       expect(signedInCalls, 1);
+    });
+
+    test('email yang tidak ada di mana pun: ditolak, tidak membuat akun baru', () async {
+      final r = await store.signIn(email: 'hariz@gmial.com', password: 'rahasia123');
+      expect(r, isA<SignInError>());
+      expect(auth.signUps, 0);
+      expect(auth.users, isEmpty);
+      expect(await local.signedIn(), isNull);
     });
 
     test('HP baru, kata sandi salah: tetap ditolak dan tidak ada akun lokal', () async {

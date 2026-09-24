@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Satu-satunya sambungan antara aplikasi dan dokumen akun di server.
@@ -66,6 +68,11 @@ class SupabaseBackend implements Backend {
 
   static const _table = 'user_state';
 
+  /// Batas waktu tiap permintaan. Sinkron yang tidak pernah selesai lebih
+  /// buruk daripada yang gagal: panggilan berikutnya menunggu di belakangnya,
+  /// dan status "menyinkronkan…" tidak pernah hilang.
+  static const _timeout = Duration(seconds: 30);
+
   @override
   String? get signedInEmail => _client.auth.currentSession?.user.email;
 
@@ -76,13 +83,13 @@ class SupabaseBackend implements Backend {
 
   @override
   Future<int?> getRev() async {
-    final row = await _authed.from(_table).select('rev').maybeSingle();
+    final row = await _authed.from(_table).select('rev').maybeSingle().timeout(_timeout);
     return row == null ? null : (row['rev'] as num).toInt();
   }
 
   @override
   Future<PulledState?> pull() async {
-    final row = await _authed.from(_table).select('rev, state').maybeSingle();
+    final row = await _authed.from(_table).select('rev, state').maybeSingle().timeout(_timeout);
     if (row == null) return null;
     return PulledState(
       rev: (row['rev'] as num).toInt(),
@@ -97,7 +104,7 @@ class SupabaseBackend implements Backend {
     final data = await _authed.rpc('push_state', params: {
       'p_base_rev': baseRev,
       'p_state': state,
-    });
+    }).timeout(_timeout);
 
     // push_state() mengembalikan tabel satu baris.
     final row = data is List ? data.first as Map : data as Map;
