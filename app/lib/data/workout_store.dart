@@ -26,6 +26,7 @@ import '../domain/models.dart';
 import '../domain/program.dart';
 import '../domain/templates.dart';
 import 'backend.dart';
+import 'exercise_catalog.dart';
 
 /// Nomor bentuk dokumen. Dinaikkan kalau susunannya berubah sedemikian rupa
 /// sehingga versi lama tidak bisa membacanya; pembacanya lalu bisa memutuskan
@@ -62,6 +63,9 @@ class WorkoutStore extends ChangeNotifier {
   /// null = onboarding belum memilih program.
   Program? _program;
 
+  /// Gerakan yang dibuat sendiri karena tidak ada di katalog (FR-C2).
+  List<Exercise> _customEx = const [];
+
   bool _loaded = false;
   final _ready = Completer<void>();
   SyncStatus _sync = SyncStatus.idle;
@@ -76,6 +80,7 @@ class WorkoutStore extends ChangeNotifier {
   List<Workout> get chronological => List.unmodifiable(_workouts.reversed);
 
   List<Routine> get routines => List.unmodifiable(_routines);
+  List<Exercise> get customExercises => List.unmodifiable(_customEx);
   Program? get program => _program;
 
   /// Program sudah dipilih — onboarding tidak perlu diulang.
@@ -116,6 +121,7 @@ class WorkoutStore extends ChangeNotifier {
         _workouts = _workoutsIn(doc);
         _routines = _routinesIn(doc);
         _program = _programIn(doc);
+        _customEx = _customIn(doc);
       } on FormatException catch (e) {
         // Dokumen rusak. Dibiarkan di disk, tidak ditimpa: kalau ini bug
         // penulisan, menghapusnya akan menghapus riwayat orang selamanya.
@@ -123,6 +129,7 @@ class WorkoutStore extends ChangeNotifier {
         _workouts = const [];
       }
     }
+    ExerciseCatalog.registerCustom(_customEx);
     _loaded = true;
     if (!_ready.isCompleted) _ready.complete();
     notifyListeners();
@@ -233,6 +240,33 @@ class WorkoutStore extends ChangeNotifier {
     await _commit();
   }
 
+  /// Buat gerakan custom dan kembalikan hasilnya. Nama yang sama persis dengan
+  /// gerakan custom yang sudah ada tidak membuat duplikat — yang lama dipakai.
+  Future<Exercise> addCustomExercise({
+    required String name,
+    required String bodyPart,
+    required String target,
+    String equipment = '',
+  }) async {
+    final clean = name.trim();
+    for (final e in _customEx) {
+      if (e.name.toLowerCase() == clean.toLowerCase()) return e;
+    }
+    final ex = Exercise(
+      id: 'custom-${DateTime.now().microsecondsSinceEpoch.toRadixString(36)}${(_idSeq++).toRadixString(36)}',
+      name: clean,
+      bodyPart: bodyPart,
+      equipment: equipment,
+      target: target,
+      secondary: const [],
+      custom: true,
+    );
+    _customEx = [..._customEx, ex];
+    ExerciseCatalog.registerCustom(_customEx);
+    await _commit();
+    return ex;
+  }
+
   static int _idSeq = 0;
 
   /// Id yang cukup unik untuk satu orang: waktu dalam mikrodetik plus urutan,
@@ -260,6 +294,8 @@ class WorkoutStore extends ChangeNotifier {
     _workouts = const [];
     _routines = const [];
     _program = null;
+    _customEx = const [];
+    ExerciseCatalog.registerCustom(const []);
     await _persist();
     notifyListeners();
   }
@@ -275,7 +311,13 @@ class WorkoutStore extends ChangeNotifier {
         'workouts': [for (final w in _workouts) w.toJson()],
         if (_routines.isNotEmpty) 'routines': [for (final r in _routines) r.toJson()],
         if (_program != null) 'program': _program!.toJson(),
+        if (_customEx.isNotEmpty) 'customEx': [for (final e in _customEx) e.toJson()],
       };
+
+  static List<Exercise> _customIn(Map doc) => [
+        for (final e in (doc['customEx'] as List? ?? const []))
+          Exercise.fromJson({...Map<String, dynamic>.from(e as Map), 'custom': true}),
+      ];
 
   static List<Routine> _routinesIn(Map doc) => [
         for (final r in (doc['routines'] as List? ?? const []))
@@ -326,6 +368,12 @@ class WorkoutStore extends ChangeNotifier {
             _program = _programIn(theirs);
             _routines = _routinesIn(theirs);
           }
+          // Gerakan custom digabung per id: gerakan yang dibuat di HP lain
+          // dipakai riwayat di sana, dan membuangnya membuat sesi itu kehilangan
+          // nama gerakannya.
+          final ids = {for (final e in _customEx) e.id};
+          _customEx = [..._customEx, for (final e in _customIn(theirs)) if (!ids.contains(e.id)) e];
+          ExerciseCatalog.registerCustom(_customEx);
           await _persist();
           final retry = await backend.push(baseRev: rev, state: toDocument());
           if (retry case PushAccepted(rev: final newRev)) {

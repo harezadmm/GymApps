@@ -577,6 +577,18 @@ class Strings {
   String sessionDiffers(String routine) =>
       _('This session differs from $routine', 'Sesi ini berbeda dari $routine');
   String libraryCount(String n) => _('$n exercises', '$n gerakan');
+  String addAsCustom(String q) =>
+      _('Add "$q" as custom exercise', 'Tambah "$q" sebagai gerakan sendiri');
+  String get cantFindIt => _("Can't find it?", 'Tidak ketemu?');
+  String get newCustomExercise => _('New custom exercise', 'Gerakan sendiri baru');
+  String get exerciseNameLabel => _('Exercise name', 'Nama gerakan');
+  String get exerciseNameHint => _('e.g. Single arm lat pulldown', 'mis. Single arm lat pulldown');
+  String get mainMuscle => _('Main muscle', 'Otot utama');
+  String get needExerciseName => _('Give the exercise a name.', 'Beri nama gerakannya.');
+  String get needMuscle => _('Pick the main muscle.', 'Pilih otot utamanya.');
+  String get customTag => _('CUSTOM', 'SENDIRI');
+  String customSaved(String name) =>
+      _('$name added to your exercises.', '$name masuk ke daftar gerakanmu.');
   String sessionsCount(int n) => n == 1 ? _('1 session', '1 sesi') : _('$n sessions', '$n sesi');
 
   String catalogue(String en) => _(en, _catalogueId[en] ?? en);

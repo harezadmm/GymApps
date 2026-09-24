@@ -12,6 +12,7 @@ import '../../core/strings.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
 import '../../data/exercise_catalog.dart';
+import '../../data/workout_store.dart';
 
 class ExerciseLibraryScreen extends StatefulWidget {
   const ExerciseLibraryScreen({super.key, this.picking = false});
@@ -64,6 +65,27 @@ class _ExerciseLibraryScreenState extends State<ExerciseLibraryScreen> {
     return list;
   }
 
+  /// Buat gerakan custom (FR-C2), lalu pakai langsung. Di mode pemilih,
+  /// gerakan barunya dikembalikan seolah dipilih dari daftar.
+  Future<void> _createCustom(String name) async {
+    final created = await showModalBottomSheet<Exercise>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: context.gym.surface,
+      showDragHandle: true,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(GymRadius.large))),
+      builder: (_) => CustomExerciseSheet(initialName: name),
+    );
+    if (created == null || !mounted) return;
+    if (widget.picking) {
+      Navigator.of(context).pop(created);
+      return;
+    }
+    _query.clear();
+    setState(() {});
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.t.customSaved(created.name))));
+  }
+
   void _showDetails(BuildContext context, Exercise e) {
     final c = context.gym;
     final t = context.t;
@@ -112,7 +134,11 @@ class _ExerciseLibraryScreenState extends State<ExerciseLibraryScreen> {
                     tooltip: context.t.back,
                   ),
                   Expanded(child: _SearchField(controller: _query, onChanged: (_) => setState(() {}))),
-                  const SizedBox(width: 6),
+                  IconButton(
+                    onPressed: () => _createCustom(''),
+                    icon: Icon(Icons.add, color: c.accent),
+                    tooltip: context.t.customExercise,
+                  ),
                 ],
               ),
             ),
@@ -173,13 +199,41 @@ class _ExerciseLibraryScreenState extends State<ExerciseLibraryScreen> {
                       Expanded(
                         child: list.isEmpty
                             ? Center(
-                                child: Text(context.t.nothingMatches(_query.text),
-                                    style: TextStyle(fontSize: 13.5, color: c.text2)),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(context.t.nothingMatches(_query.text.trim()),
+                                          textAlign: TextAlign.center,
+                                          style: TextStyle(fontSize: 13.5, color: c.text2)),
+                                      const SizedBox(height: 16),
+                                      // Tidak ada di katalog bukan jalan buntu:
+                                      // gerakan itu bisa dibuat sendiri dan
+                                      // langsung dipakai.
+                                      // Baris, bukan tombol: nama gerakan bisa
+                                      // panjang, dan label tombol tidak bisa
+                                      // terlipat — ia meluber keluar layar.
+                                      _AddCustomTile(
+                                        query: _query.text.trim(),
+                                        onTap: () => _createCustom(_query.text.trim()),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               )
                             : ListView.builder(
                                 padding: const EdgeInsets.fromLTRB(10, 0, 10, 20),
-                                itemCount: list.length,
+                                // Satu baris tambahan di ujung daftar: hasil
+                                // yang mirip belum tentu gerakan yang dicari.
+                                itemCount: list.length + (_query.text.trim().isEmpty ? 0 : 1),
                                 itemBuilder: (context, i) {
+                                  if (i == list.length) {
+                                    return _AddCustomTile(
+                                      query: _query.text.trim(),
+                                      onTap: () => _createCustom(_query.text.trim()),
+                                    );
+                                  }
                                   final e = list[i];
                                   return _ExerciseRow(
                                     exercise: e,
@@ -288,7 +342,22 @@ class _ExerciseRow extends StatelessWidget {
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 16),
                   ),
                   const SizedBox(height: 2),
-                  Text(exercise.subtitle, style: TextStyle(fontSize: 12.5, color: c.text2)),
+                  Row(
+                    children: [
+                      if (exercise.custom) ...[
+                        Pill(
+                          color: c.accentSoft,
+                          textColor: c.accent,
+                          child: Text(context.t.customTag, style: const TextStyle(fontSize: 9.5, letterSpacing: 0.8)),
+                        ),
+                        const SizedBox(width: 6),
+                      ],
+                      Flexible(
+                        child: Text(exercise.subtitle,
+                            maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12.5, color: c.text2)),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -322,6 +391,258 @@ class _DetailLine extends StatelessWidget {
           SizedBox(width: 96, child: Text(label, style: TextStyle(fontSize: 13, color: c.text2))),
           Expanded(child: Text(value, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.text))),
         ],
+      ),
+    );
+  }
+}
+
+/// Baris terakhir daftar hasil: tambah kueri ini sebagai gerakan custom.
+class _AddCustomTile extends StatelessWidget {
+  const _AddCustomTile({required this.query, required this.onTap});
+
+  final String query;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gym;
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(GymRadius.card),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(GymRadius.card),
+            border: Border.all(color: c.border),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.add_circle_outline, size: 20, color: c.accent),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(context.t.cantFindIt, style: TextStyle(fontSize: 12, color: c.text2)),
+                    const SizedBox(height: 2),
+                    Text(context.t.addAsCustom(query),
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: c.accent)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Otot utama untuk gerakan custom: label, istilah otot katalog (`tg`), dan
+/// bagian tubuh (`bp`). Keduanya dipakai peta otot dan kelipatan beban bawaan,
+/// jadi gerakan custom ikut terhitung di Stats seperti gerakan lain.
+const _muscleOptions = <(String, String, String)>[
+  ('Chest', 'pectorals', 'chest'),
+  ('Back', 'lats', 'back'),
+  ('Traps', 'traps', 'back'),
+  ('Shoulders', 'delts', 'shoulders'),
+  ('Biceps', 'biceps', 'upper arms'),
+  ('Triceps', 'triceps', 'upper arms'),
+  ('Forearms', 'forearms', 'lower arms'),
+  ('Quads', 'quads', 'upper legs'),
+  ('Hamstrings', 'hamstrings', 'upper legs'),
+  ('Glutes', 'glutes', 'upper legs'),
+  ('Calves', 'calves', 'lower legs'),
+  ('Abs', 'abs', 'waist'),
+];
+
+const _equipmentOptions = <String>[
+  'barbell',
+  'dumbbell',
+  'cable',
+  'leverage machine',
+  'smith machine',
+  'body weight',
+  'band',
+  'kettlebell',
+];
+
+/// Lembar isian gerakan custom. Menyimpan ke store lalu mengembalikan
+/// gerakan barunya lewat `pop`.
+class CustomExerciseSheet extends StatefulWidget {
+  const CustomExerciseSheet({super.key, this.initialName = ''});
+
+  final String initialName;
+
+  @override
+  State<CustomExerciseSheet> createState() => _CustomExerciseSheetState();
+}
+
+class _CustomExerciseSheetState extends State<CustomExerciseSheet> {
+  late final _name = TextEditingController(text: _capitalise(widget.initialName));
+  int? _muscle;
+  String? _equipment;
+  bool _saving = false;
+
+  static String _capitalise(String s) {
+    final t = s.trim();
+    return t.isEmpty ? t : '${t[0].toUpperCase()}${t.substring(1)}';
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _guess(widget.initialName);
+  }
+
+  /// Tebak otot dan alat dari nama yang diketik — "single arm lat pulldown"
+  /// hampir pasti punggung dan cable. Tebakan tetap bisa diganti.
+  void _guess(String name) {
+    final n = name.toLowerCase();
+    const muscleWords = <String, String>{
+      'pulldown': 'Back', 'row': 'Back', 'lat': 'Back', 'pull up': 'Back', 'pullup': 'Back', 'chin': 'Back',
+      'shrug': 'Traps', 'bench': 'Chest', 'chest': 'Chest', 'fly': 'Chest', 'pec': 'Chest', 'push up': 'Chest',
+      'press': 'Shoulders', 'lateral': 'Shoulders', 'delt': 'Shoulders', 'raise': 'Shoulders',
+      'curl': 'Biceps', 'pushdown': 'Triceps', 'tricep': 'Triceps', 'extension': 'Triceps', 'dip': 'Triceps',
+      'squat': 'Quads', 'leg press': 'Quads', 'lunge': 'Quads', 'deadlift': 'Hamstrings', 'rdl': 'Hamstrings',
+      'bench press': 'Chest', 'chest press': 'Chest', 'shoulder press': 'Shoulders',
+      'overhead press': 'Shoulders', 'military press': 'Shoulders', 'hip thrust': 'Glutes', 'glute': 'Glutes', 'calf': 'Calves', 'crunch': 'Abs', 'plank': 'Abs', 'ab ': 'Abs',
+    };
+    const gearWords = <String, String>{
+      'cable': 'cable', 'pulldown': 'cable', 'barbell': 'barbell', 'bb ': 'barbell', 'dumbbell': 'dumbbell',
+      'db ': 'dumbbell', 'machine': 'leverage machine', 'smith': 'smith machine', 'band': 'band',
+      'kettlebell': 'kettlebell', 'push up': 'body weight', 'pull up': 'body weight', 'dip': 'body weight',
+    };
+    // Frasa yang lebih panjang dicek lebih dulu: "leg press" harus menang dari
+    // "press", dan "tricep extension" dari "extension".
+    String? pick(Map<String, String> words) {
+      final keys = words.keys.toList()..sort((a, b) => b.length.compareTo(a.length));
+      for (final k in keys) {
+        if ('$n '.contains(k)) return words[k];
+      }
+      return null;
+    }
+
+    final m = pick(muscleWords);
+    if (m != null) _muscle = _muscleOptions.indexWhere((o) => o.$1 == m);
+    _equipment = pick(gearWords);
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final t = context.t;
+    final messenger = ScaffoldMessenger.of(context);
+    final name = _name.text.trim();
+    final problem = name.isEmpty ? t.needExerciseName : (_muscle == null ? t.needMuscle : null);
+    if (problem != null) {
+      messenger.showSnackBar(SnackBar(content: Text(problem)));
+      return;
+    }
+    setState(() => _saving = true);
+    final m = _muscleOptions[_muscle!];
+    final ex = await WorkoutScope.read(context).addCustomExercise(
+      name: name,
+      target: m.$2,
+      bodyPart: m.$3,
+      equipment: _equipment ?? '',
+    );
+    if (mounted) Navigator.of(context).pop(ex);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gym;
+    final t = context.t;
+    OutlineInputBorder border(Color colour) => OutlineInputBorder(
+          borderRadius: BorderRadius.circular(GymRadius.control),
+          borderSide: BorderSide(color: colour),
+        );
+
+    Widget chip(String label, bool on, VoidCallback onTap) => Material(
+          color: on ? c.accentSoft : c.surface2,
+          borderRadius: BorderRadius.circular(GymRadius.pill),
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(GymRadius.pill),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(GymRadius.pill),
+                border: Border.all(color: on ? c.accent : c.border),
+              ),
+              child: Text(label,
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: on ? c.accent : c.text2)),
+            ),
+          ),
+        );
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(t.newCustomExercise, style: Theme.of(context).textTheme.headlineSmall),
+              const SizedBox(height: 16),
+              SectionLabel(t.exerciseNameLabel),
+              const SizedBox(height: 6),
+              TextField(
+                controller: _name,
+                autofocus: widget.initialName.isEmpty,
+                textCapitalization: TextCapitalization.sentences,
+                onChanged: (v) {
+                  if (_muscle == null || _equipment == null) setState(() => _guess(v));
+                },
+                style: TextStyle(fontSize: 15, color: c.text),
+                decoration: InputDecoration(
+                  hintText: t.exerciseNameHint,
+                  hintStyle: TextStyle(fontSize: 15, color: c.text3),
+                  filled: true,
+                  fillColor: c.bgNested,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                  border: border(c.border),
+                  enabledBorder: border(c.border),
+                  focusedBorder: border(c.accent),
+                ),
+              ),
+              const SizedBox(height: 16),
+              SectionLabel(t.mainMuscle),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final (i, m) in _muscleOptions.indexed)
+                    chip(t.muscle(m.$1), _muscle == i, () => setState(() => _muscle = i)),
+                ],
+              ),
+              const SizedBox(height: 16),
+              SectionLabel(t.equipmentLabel),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final e in _equipmentOptions)
+                    chip(_capitalise(e), _equipment == e,
+                        () => setState(() => _equipment = _equipment == e ? null : e)),
+                ],
+              ),
+              const SizedBox(height: 22),
+              GymButton(label: t.save, onPressed: _saving ? null : _save),
+            ],
+          ),
+        ),
       ),
     );
   }
