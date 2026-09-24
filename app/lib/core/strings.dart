@@ -354,8 +354,13 @@ class Strings {
       'Belum tersambung ke server — ketuk "Paksa sync sekarang"');
   String get connectTitle => _('Connect to the server', 'Sambungkan ke server');
   String get connectBody => _(
-        'Enter your password once to start syncing this account. It is checked on this phone first.',
-        'Masukkan kata sandi sekali untuk mulai menyinkronkan akun ini. Kata sandi diperiksa di HP ini dulu.',
+        'Enter your account password once to start syncing this account.',
+        'Masukkan kata sandi akunmu sekali untuk mulai menyinkronkan akun ini.',
+      );
+  String get connecting => _('Connecting…', 'Menyambungkan…');
+  String get serverRejected => _(
+        'The server has a different password for this email. Enter the password you use on your other device.',
+        'Server punya kata sandi lain untuk email ini. Masukkan kata sandi yang kamu pakai di HP lain.',
       );
   String get connect => _('Connect', 'Sambungkan');
   String get serverUnreachable => _(

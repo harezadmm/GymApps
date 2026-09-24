@@ -78,6 +78,10 @@ class WorkoutStore extends ChangeNotifier {
   /// onboarding yang terpaksa jalan karena tarikan pertama belum datang.
   static String _kPlanLocal(String account) => 'state.$account.planBeforeServer';
 
+  /// Program atau rutinitas diubah di HP ini sejak dorongan terakhir yang
+  /// diterima server. Tidak ada = tidak tahu, dan itu dianggap berubah.
+  static String _kPlanDirty(String account) => 'state.$account.planDirty';
+
   /// Berapa banyak sesi terhapus yang diingat. Cukup untuk menutup jeda antar
   /// sinkron dua perangkat, dan tidak membuat dokumennya membengkak.
   static const _removedCap = 500;
@@ -115,6 +119,16 @@ class WorkoutStore extends ChangeNotifier {
   /// jauh lebih berharga daripada template yang dipilih karena layar
   /// onboarding muncul duluan.
   bool _planBeforeServer = false;
+
+  /// Rencana di HP ini berubah sejak terakhir diterima server. Saat konflik,
+  /// rencana HP ini hanya menang kalau memang diubah di sini — kalau tidak,
+  /// HP yang sekadar ikut sinkron akan menimpa program yang baru diganti di
+  /// HP lain dengan salinan lamanya.
+  bool _planDirty = true;
+
+  /// Berapa kali rencana diubah. Dipakai untuk tahu apakah ada perubahan baru
+  /// selagi dorongan sedang di jalan.
+  int _planEdits = 0;
 
   Future<void> _initialSync = Future.value();
 
@@ -187,6 +201,7 @@ class WorkoutStore extends ChangeNotifier {
     if (gen != _generation) return;
     _serverSeen = prefs.getInt(_kRev(account)) != null;
     _planBeforeServer = account.isNotEmpty && (prefs.getBool(_kPlanLocal(account)) ?? false);
+    _planDirty = prefs.getBool(_kPlanDirty(account)) ?? true;
     final raw = prefs.getString(_kDoc(account));
     if (raw != null) {
       try {
@@ -228,6 +243,7 @@ class WorkoutStore extends ChangeNotifier {
   void _empty() {
     _serverSeen = false;
     _planBeforeServer = false;
+    _planDirty = true;
     _workouts = const [];
     _routines = const [];
     _program = null;
@@ -263,7 +279,10 @@ class WorkoutStore extends ChangeNotifier {
     _workouts = [workout, ..._workouts];
     // Sesi dari program menggeser cursor-nya (FR-B3). Sesi bebas tidak.
     final p = _program;
-    if (p != null) _program = advanceAfter(p, routineId);
+    if (p != null) {
+      _program = advanceAfter(p, routineId);
+      if (routineId != null) await _markPlan();
+    }
     await _commit();
   }
 
@@ -274,6 +293,7 @@ class WorkoutStore extends ChangeNotifier {
   Future<void> setProgram(Program program, List<Routine> routines) async {
     _program = program;
     _routines = List.of(routines);
+    await _markPlan();
     final account = _account;
     if (_backend != null && !_serverSeen && account != null && account.isNotEmpty) {
       _planBeforeServer = true;
@@ -302,6 +322,7 @@ class WorkoutStore extends ChangeNotifier {
       final p = _program ?? const Program(name: 'My split');
       _program = p.copyWith(order: [...p.order, routine.id]);
     }
+    await _markPlan();
     await _commit();
   }
 
@@ -317,6 +338,7 @@ class WorkoutStore extends ChangeNotifier {
       if (idx >= 0 && idx < cursor) cursor--;
       _program = p.copyWith(order: order, cursor: order.isEmpty ? 0 : cursor % order.length);
     }
+    await _markPlan();
     await _commit();
   }
 
@@ -336,6 +358,7 @@ class WorkoutStore extends ChangeNotifier {
       if (at >= 0 && at < cursor) cursor++;
       _program = p.copyWith(order: order, cursor: cursor);
     }
+    await _markPlan();
     await _commit();
     return copy;
   }
@@ -343,6 +366,7 @@ class WorkoutStore extends ChangeNotifier {
   /// Ganti aturan program (nama, mode, hari, istirahat, urutan).
   Future<void> updateProgram(Program program) async {
     _program = program;
+    await _markPlan();
     await _commit();
   }
 
@@ -353,6 +377,7 @@ class WorkoutStore extends ChangeNotifier {
     final idx = p.order.indexOf(routineId);
     if (idx < 0) return;
     _program = p.copyWith(cursor: idx, clearSkip: true);
+    await _markPlan();
     await _commit();
   }
 
@@ -362,6 +387,7 @@ class WorkoutStore extends ChangeNotifier {
     final next = nextSessionOn(today);
     if (p == null || next == null) return;
     _program = skipNextIn(p, next);
+    await _markPlan();
     await _commit();
   }
 
@@ -415,6 +441,23 @@ class WorkoutStore extends ChangeNotifier {
     await _commit();
   }
 
+  Future<void> _markPlan() async {
+    _planEdits++;
+    _planDirty = true;
+    final account = _account;
+    if (account == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kPlanDirty(account), true);
+  }
+
+  /// Dorongan diterima server. Kalau rencana tidak diubah lagi selagi
+  /// dorongan itu di jalan, salinan server sekarang sama dengan milik HP ini.
+  Future<void> _planSent(SharedPreferences prefs, String account, int editsAtSend) async {
+    if (_planEdits != editsAtSend) return;
+    _planDirty = false;
+    await prefs.setBool(_kPlanDirty(account), false);
+  }
+
   static List<String> _capRemoved(List<String> keys) {
     final unique = keys.toSet().toList();
     return unique.length <= _removedCap ? unique : unique.sublist(unique.length - _removedCap);
@@ -423,6 +466,7 @@ class WorkoutStore extends ChangeNotifier {
   /// Hapus semua riwayat. Untuk tombol "hapus data" dan untuk test.
   Future<void> clear() async {
     _empty();
+    await _markPlan();
     await _persist();
     notifyListeners();
   }
@@ -565,6 +609,7 @@ class WorkoutStore extends ChangeNotifier {
       }
 
       if (wrongSession()) throw const NotSignedIn();
+      var edits = _planEdits;
       final result = await backend.push(baseRev: baseRev, state: toDocument());
       if (stale()) return;
 
@@ -572,6 +617,7 @@ class WorkoutStore extends ChangeNotifier {
       switch (result) {
         case PushAccepted(rev: final rev):
           await prefs.setInt(_kRev(account), rev);
+          await _planSent(prefs, account, edits);
           accepted = true;
 
         // Perangkat lain menulis lebih dulu. Riwayat lokal digabung dengan
@@ -584,10 +630,12 @@ class WorkoutStore extends ChangeNotifier {
           if (stale()) return;
           notifyListeners();
           if (wrongSession()) throw const NotSignedIn();
+          edits = _planEdits;
           final retry = await backend.push(baseRev: rev, state: toDocument());
           if (stale()) return;
           if (retry case PushAccepted(rev: final newRev)) {
             await prefs.setInt(_kRev(account), newRev);
+            await _planSent(prefs, account, edits);
             accepted = true;
           } else {
             // Ditolak lagi: perangkat lain menulis di antara dua dorongan.
@@ -620,11 +668,12 @@ class WorkoutStore extends ChangeNotifier {
   void _absorb(Map theirs, {bool preferServerPlan = false}) {
     _removed = _capRemoved([..._removed, ..._removedIn(theirs)]);
     _workouts = _merge(_workouts, _workoutsIn(theirs), _removed.toSet());
-    // Rencana tidak digabung per baris: yang ada di perangkat ini yang
-    // dipakai, kecuali perangkat ini belum punya rencana sama sekali —
-    // misalnya baru dipasang dan belum lewat onboarding — atau rencananya
-    // dipilih sebelum server sempat ditanya.
-    if (_program == null || (preferServerPlan && theirs['program'] is Map)) {
+    // Rencana tidak digabung per baris; satu sisi yang dipakai utuh. Milik
+    // perangkat ini hanya menang kalau memang diubah di sini sejak sinkron
+    // terakhir. Rencana server dipakai kalau perangkat ini belum punya rencana
+    // (baru dipasang), rencananya dipilih sebelum server sempat ditanya, atau
+    // perangkat ini tidak mengubah apa pun sementara HP lain mengubahnya.
+    if (_program == null || (theirs['program'] is Map && (preferServerPlan || !_planDirty))) {
       _program = _programIn(theirs);
       _routines = _routinesIn(theirs);
     }

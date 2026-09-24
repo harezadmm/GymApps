@@ -54,7 +54,7 @@ class GymApp extends StatefulWidget {
   State<GymApp> createState() => _GymAppState();
 }
 
-class _GymAppState extends State<GymApp> {
+class _GymAppState extends State<GymApp> with WidgetsBindingObserver {
   /// Bahasa dipegang di akar supaya satu setState memperbarui seluruh aplikasi.
   /// Belum disimpan ke disk — pilihannya kembali ke bawaan setelah app ditutup,
   /// dan itu ikut store Supabase nanti bersama setelan lain.
@@ -72,7 +72,22 @@ class _GymAppState extends State<GymApp> {
   // yang masuk baru diketahui AppFlow — lihat `_enter`.
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  /// Kembali ke aplikasi = sinkron. Sesi yang dicatat di HP lain sementara
+  /// aplikasi ini di belakang ikut tertarik, dan dorongan yang gagal karena
+  /// sinyal hilang dicoba lagi tanpa menunggu latihan berikutnya.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _store.syncNow();
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _store.dispose();
     super.dispose();
   }

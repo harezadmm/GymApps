@@ -5,6 +5,8 @@
 /// jadi tidak dikubur di bawah.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../core/motion.dart';
@@ -69,7 +71,50 @@ class _ProfileScreenState extends State<ProfileScreen> {
   /// Sinkron sekarang, lalu katakan hasilnya dengan kata-kata — ikon kecil di
   /// kartu akun gampang terlewat, dan orang yang menekan tombol ini sedang
   /// menunggu jawaban.
+  bool _forceSyncing = false;
+
   Future<void> _forceSync() async {
+    // Satu saja sekaligus. Ketukan kedua selagi menyambung dulu membuka dialog
+    // kata sandi kedua dan menyambung dua kali.
+    if (_forceSyncing) return;
+    _forceSyncing = true;
+    try {
+      await _runForceSync();
+    } finally {
+      _forceSyncing = false;
+    }
+  }
+
+  /// Jalankan [work] di balik dialog tunggu yang tidak bisa ditutup. Selama
+  /// menyambung, tombol keluar dan Force sync tidak boleh bisa diketuk.
+  Future<T> _withProgress<T>(Future<T> Function() work) async {
+    final navigator = Navigator.of(context, rootNavigator: true);
+    final label = context.t.connecting;
+    unawaited(showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => PopScope(
+        canPop: false,
+        child: AlertDialog(
+          backgroundColor: context.gym.surface,
+          content: Row(
+            children: [
+              const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2)),
+              const SizedBox(width: 16),
+              Expanded(child: Text(label)),
+            ],
+          ),
+        ),
+      ),
+    ));
+    try {
+      return await work();
+    } finally {
+      navigator.pop();
+    }
+  }
+
+  Future<void> _runForceSync() async {
     final store = WorkoutScope.read(context);
     final messenger = ScaffoldMessenger.of(context);
     final t = context.t;
@@ -84,17 +129,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final onConnect = widget.onConnect;
     if (store.syncStatus == SyncStatus.noSession && onConnect != null && mounted) {
       final password = await _askPassword();
-      if (password == null) return;
-      final result = await onConnect(password);
+      if (password == null || !mounted) return;
+      final result = await _withProgress(() async {
+        final r = await onConnect(password);
+        if (r == ConnectResult.connected) await store.syncNow();
+        return r;
+      });
       switch (result) {
         case ConnectResult.wrongPassword:
           messenger.showSnackBar(SnackBar(content: Text(t.wrongPassword)));
+          return;
+        case ConnectResult.rejected:
+          messenger.showSnackBar(SnackBar(content: Text(t.serverRejected)));
           return;
         case ConnectResult.unreachable:
           messenger.showSnackBar(SnackBar(content: Text(t.serverUnreachable)));
           return;
         case ConnectResult.connected:
-          await store.syncNow();
+          break;
       }
     }
     final msg = switch (store.syncStatus) {

@@ -118,6 +118,10 @@ abstract interface class AccountStore {
 
   /// Hapus akun beserta hash-nya. Dipakai test dan tombol "hapus akun" nanti.
   Future<void> erase();
+
+  /// Ganti kata sandi akun yang sudah ada di perangkat ini. Dipakai saat
+  /// server membuktikan kata sandi lain untuk email yang sama.
+  Future<void> replacePassword({required String email, required String password});
 }
 
 class LocalAccountStore implements AccountStore {
@@ -259,6 +263,17 @@ class LocalAccountStore implements AccountStore {
     await prefs.remove(_kCurrent);
     await _secrets.delete(_kHash(email));
     await prefs.setStringList(_kEmails, _emails(prefs).where((e) => e != email).toList());
+  }
+
+  @override
+  Future<void> replacePassword({required String email, required String password}) async {
+    final prefs = await _prefs();
+    final wanted = normalise(email);
+    if (!_emails(prefs).contains(wanted)) return;
+    // Salt baru juga: hash lama tidak boleh bisa dicocokkan dengan yang baru.
+    final salt = _newSalt();
+    await _secrets.write(_kHash(wanted), _derive(password, salt));
+    await prefs.setString(_kSalt(wanted), salt);
   }
 
   String _newSalt() {
