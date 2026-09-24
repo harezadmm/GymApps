@@ -74,9 +74,28 @@ class Account {
 /// Kenapa pendaftaran gagal. Sengaja enum, bukan string: pemanggilnya harus
 /// memilih pesan dalam bahasa yang sedang dipakai, dan string di sini akan
 /// memaksa satu bahasa masuk ke lapisan data.
-enum SignUpFailure { emailTaken }
+enum SignUpFailure {
+  emailTaken,
 
-enum SignInFailure { noAccount, wrongEmail, wrongPassword }
+  /// Server tidak terjangkau. Hanya terjadi kalau server yang memeriksa
+  /// (web) — akun lokal tidak pernah butuh jaringan untuk dibuat.
+  offline,
+
+  /// Server menjawab tapi menolak (kata sandi terlalu lemah, pendaftaran
+  /// ditutup, perlu konfirmasi email).
+  rejected,
+}
+
+enum SignInFailure {
+  noAccount,
+  wrongEmail,
+  wrongPassword,
+
+  /// Server sengaja tidak membedakan email yang tidak ada dari kata sandi
+  /// yang salah. Satu pesan untuk keduanya.
+  invalidCredentials,
+  offline,
+}
 
 sealed class SignUpResult {
   const SignUpResult();

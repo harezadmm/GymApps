@@ -61,8 +61,17 @@ class Strings {
         'Kedua kata sandi tidak sama.',
       );
   String get emailTaken => _(
-        'This email already has an account on this device. Sign in instead.',
-        'Email ini sudah punya akun di perangkat ini. Masuk saja.',
+        'This email already has an account. Sign in instead.',
+        'Email ini sudah punya akun. Masuk saja.',
+      );
+  String get invalidCredentials => _('Email or password is wrong.', 'Email atau kata sandi salah.');
+  String get authOffline => _(
+        "Couldn't reach the server. Check your connection and try again.",
+        'Server tidak terjangkau. Periksa koneksi lalu coba lagi.',
+      );
+  String get signUpRejected => _(
+        'The server declined this sign-up. Try a longer password.',
+        'Server menolak pendaftaran ini. Coba kata sandi yang lebih panjang.',
       );
   String get noAccountYet => _(
         'No account on this device yet. Create one first.',
