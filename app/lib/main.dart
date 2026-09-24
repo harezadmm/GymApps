@@ -68,13 +68,8 @@ class _GymAppState extends State<GymApp> {
   late final WorkoutStore _store =
       WorkoutStore(supabaseConfigured ? SupabaseBackend(Supabase.instance.client) : null);
 
-  @override
-  void initState() {
-    super.initState();
-    // Tidak di-await: store memberi tahu sendiri lewat notifier begitu
-    // riwayatnya selesai dibaca, dan layar sudah tahu cara menunggu.
-    _store.load();
-  }
+  // Store tidak dimuat di sini. Dokumennya milik satu akun, dan akun mana
+  // yang masuk baru diketahui AppFlow — lihat `_enter`.
 
   @override
   void dispose() {
@@ -156,29 +151,98 @@ class _AppFlowState extends State<AppFlow> {
   Future<void> _restore() async {
     final account = await _accounts.signedIn();
     if (!mounted) return;
-    setState(() {
-      _account = account;
-      _stage = account == null ? AppStage.login : AppStage.home;
-    });
+    if (account == null) {
+      setState(() => _stage = AppStage.login);
+      return;
+    }
+    await _enter();
   }
 
-  /// Dipanggil setelah masuk atau mendaftar berhasil.
+  bool _entering = false;
+
+  /// Onboarding sedang tampil karena program belum diketahui — bukan karena
+  /// orangnya memang belum punya. Kalau rencana dari server tiba selagi layar
+  /// pilih program terbuka, aplikasi langsung lanjut ke Home.
+  bool _awaitingPlan = false;
+  WorkoutStore? _watched;
+
+  void _onStoreChanged() {
+    final store = _watched;
+    if (store == null || !mounted) return;
+    if (_awaitingPlan && _stage == AppStage.program && store.hasProgram) {
+      _awaitingPlan = false;
+      setState(() => _stage = AppStage.home);
+    }
+  }
+
+  @override
+  void dispose() {
+    _watched?.removeListener(_onStoreChanged);
+    super.dispose();
+  }
+
+  /// Dipanggil setelah masuk atau mendaftar berhasil, dan saat aplikasi
+  /// dibuka oleh orang yang masih masuk.
   ///
-  /// Onboarding hanya dijalankan kalau program memang belum pernah dipilih.
-  /// Dulu setiap kali masuk ulang, orang disuruh memilih program lagi — dan
-  /// pilihannya tidak disimpan ke mana pun.
+  /// Dokumen akun inilah yang dibuka — bukan dokumen bersama satu HP. Lalu
+  /// onboarding hanya dijalankan kalau program memang belum pernah dipilih.
   Future<void> _enter() async {
+    // Layar masuk langsung diganti layar tunggu: menunggu server bisa makan
+    // beberapa detik, dan tombol "masuk" yang bisa diketuk lagi selama itu
+    // membuka akun dua kali.
+    if (_entering) return;
+    _entering = true;
+    setState(() => _stage = AppStage.booting);
+    try {
+      final store = WorkoutScope.read(context);
+      if (!identical(_watched, store)) {
+        _watched?.removeListener(_onStoreChanged);
+        _watched = store..addListener(_onStoreChanged);
+      }
+      final account = await _accounts.signedIn();
+      if (!mounted) return;
+      if (account == null) {
+        setState(() => _stage = AppStage.login);
+        return;
+      }
+      await store.load(account.email);
+      // Program orang ini mungkin sudah ada di server (HP baru, pasang ulang).
+      // Tarikan pertama ditunggu sebentar sebelum memutuskan onboarding.
+      // Kalau batas waktunya habis, onboarding tetap jalan — tapi rencana
+      // server yang datang belakangan masih menang (lihat _onStoreChanged
+      // dan planBeforeServer di store).
+      if (!store.hasProgram && store.hasBackend && !store.serverChecked) {
+        await store.initialSync.timeout(const Duration(seconds: 8), onTimeout: () {});
+      }
+      if (!mounted) return;
+      setState(() {
+        _account = account;
+        _awaitingPlan = !store.hasProgram;
+        _stage = store.hasProgram ? AppStage.home : AppStage.program;
+      });
+    } finally {
+      _entering = false;
+    }
+  }
+
+  /// Keluar. Store ditutup dan layar di atas Home dibuang lebih dulu, baru
+  /// sesi server dilepas: logout ke server bisa lambat, dan sesi latihan yang
+  /// dibuka selama menunggu akan tercatat ke store yang sudah tertutup.
+  Future<void> _signOut() async {
     final store = WorkoutScope.read(context);
-    final account = await _accounts.signedIn();
-    await store.ready;
-    if (!mounted) return;
+    Navigator.of(context).popUntil((r) => r.isFirst);
+    store.close();
     setState(() {
-      _account = account;
-      _stage = store.hasProgram ? AppStage.home : AppStage.program;
+      _account = null;
+      _awaitingPlan = false;
+      _stage = AppStage.booting;
     });
+    await _accounts.signOut();
+    if (mounted) setState(() => _stage = AppStage.login);
   }
 
   Future<void> _pickTemplate(ProgramTemplate t) async {
+    _awaitingPlan = false;
     await WorkoutScope.read(context).applyTemplate(t.id);
     if (mounted) setState(() => _stage = AppStage.equipment);
   }
@@ -187,6 +251,7 @@ class _AppFlowState extends State<AppFlow> {
     final store = WorkoutScope.read(context);
     final built = await buildOwnSplit(context);
     if (built == null || !mounted) return;
+    _awaitingPlan = false;
     await store.setProgram(built.program, built.routines);
     if (mounted) setState(() => _stage = AppStage.equipment);
   }
@@ -194,9 +259,18 @@ class _AppFlowState extends State<AppFlow> {
   @override
   Widget build(BuildContext context) {
     return switch (_stage) {
-      // Latar polos, bukan spinner: pemeriksaannya selesai dalam hitungan
+      // Latar polos dulu: membuka akun biasanya selesai dalam hitungan
       // milidetik, dan spinner yang berkelip lebih mengganggu daripada jeda.
-      AppStage.booting => Scaffold(backgroundColor: context.gym.bg),
+      // Spinner baru muncul kalau ternyata menunggu server.
+      AppStage.booting => Scaffold(
+          backgroundColor: context.gym.bg,
+          body: FutureBuilder<void>(
+            future: Future<void>.delayed(const Duration(milliseconds: 600)),
+            builder: (context, snap) => snap.connectionState == ConnectionState.done
+                ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
+                : const SizedBox.shrink(),
+          ),
+        ),
       AppStage.login => LoginScreen(
           store: _accounts,
           onSignedIn: _enter,
@@ -209,8 +283,10 @@ class _AppFlowState extends State<AppFlow> {
           onRegistered: _enter,
           onSignInInstead: () => setState(() => _stage = AppStage.login),
         ),
+      // Kembali dari sini berarti keluar: akunnya sudah masuk, dan layar masuk
+      // di atas akun yang masih terbuka membuat masuk berikutnya bertabrakan.
       AppStage.program => ProgramPickerScreen(
-          onBack: () => setState(() => _stage = AppStage.login),
+          onBack: _signOut,
           onContinue: _pickTemplate,
           onBuildOwn: _buildOwn,
         ),
@@ -223,15 +299,7 @@ class _AppFlowState extends State<AppFlow> {
           language: widget.language,
           onLanguageChanged: widget.onLanguageChanged,
           email: _account?.email,
-          onSignOut: () async {
-            await _accounts.signOut();
-            if (mounted) {
-              setState(() {
-                _account = null;
-                _stage = AppStage.login;
-              });
-            }
-          },
+          onSignOut: _signOut,
         ),
     };
   }

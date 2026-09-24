@@ -128,6 +128,17 @@ class GymButton extends StatelessWidget {
       GymButtonTone.danger => (c.danger.withValues(alpha: 0.16), c.danger),
     };
 
+    final text = Text(
+      label,
+      maxLines: 1,
+      style: TextStyle(
+        fontSize: 14,
+        fontWeight: FontWeight.w800,
+        letterSpacing: 0.6,
+        color: fg,
+      ),
+    );
+
     return PressScale(
       enabled: onPressed != null,
       child: SizedBox(
@@ -160,15 +171,15 @@ class GymButton extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (icon != null) ...[Icon(icon, size: 18, color: fg), const SizedBox(width: 8)],
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.6,
-                    color: fg,
-                  ),
-                ),
+                // Label yang lebih panjang dari tombolnya mengecil, tidak
+                // meluber keluar: tombol setengah lebar di HP 360 dp dan
+                // terjemahan yang lebih panjang dari bahasa Inggrisnya.
+                // Hanya untuk tombol yang melebar — tombol selebar isinya bisa
+                // duduk di Row tanpa batas lebar, dan Flexible di sana error.
+                if (expand)
+                  Flexible(child: FittedBox(fit: BoxFit.scaleDown, child: text))
+                else
+                  text,
               ],
             ),
           ),

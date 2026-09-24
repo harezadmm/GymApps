@@ -169,8 +169,8 @@ class _NextSessionCard extends StatelessWidget {
   final NextSession next;
   final Program program;
 
-  Future<void> _start(BuildContext context) async {
-    final routine = next.routine;
+  Future<void> _start(BuildContext context, [Routine? pick]) async {
+    final routine = pick ?? next.routine;
     if (routine.exercises.isNotEmpty) {
       await openRoutineSession(context, routine);
       return;
@@ -309,6 +309,20 @@ class _NextSessionCard extends StatelessWidget {
           const SizedBox(height: 16),
           GymButton(label: t.startSession, icon: Icons.play_arrow, onPressed: () => _start(context)),
           const SizedBox(height: 10),
+          // Jadwal bilang Push, badan bilang Legs. Rutinitas lain dari split
+          // yang sama bisa langsung dimulai dari sini; cursor rotasi lalu
+          // bergeser ke sesudah rutinitas yang benar-benar dikerjakan.
+          GymButton(
+            label: t.otherSession,
+            icon: Icons.swap_horiz,
+            tone: GymButtonTone.neutral,
+            height: 44,
+            onPressed: () async {
+              final picked = await pickOtherRoutine(context, program: program, current: routine);
+              if (picked != null && context.mounted) await _start(context, picked);
+            },
+          ),
+          const SizedBox(height: 10),
           Row(
             children: [
               Expanded(
@@ -341,6 +355,93 @@ class _NextSessionCard extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Sheet "hari ini latihan apa?": semua rutinitas, urutan rotasi dulu.
+/// null kalau ditutup tanpa memilih.
+Future<Routine?> pickOtherRoutine(BuildContext context, {required Program program, required Routine current}) {
+  final store = WorkoutScope.read(context);
+  final inProgram = programRoutines(program, store.routines);
+  final ids = {for (final r in inProgram) r.id};
+  final others = [for (final r in store.routines) if (!ids.contains(r.id)) r];
+  return showModalBottomSheet<Routine>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: context.gym.surface,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(GymRadius.sheet)),
+    ),
+    builder: (sheet) {
+      final c = sheet.gym;
+      final t = sheet.t;
+      Widget tile(Routine r, {String? note}) {
+        final isNext = r.id == current.id;
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Material(
+            color: isNext ? c.accentSoft : c.bgNested,
+            borderRadius: BorderRadius.circular(GymRadius.control),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(GymRadius.control),
+              onTap: () => Navigator.of(sheet).pop(r),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(r.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(sheet).textTheme.titleMedium),
+                          const SizedBox(height: 2),
+                          Text(
+                            [t.routineOverview(r.exercises.length, r.setCount), ?note].join(' · '),
+                            style: TextStyle(fontSize: 12.5, color: c.text2),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (isNext)
+                      Pill(
+                        color: c.accent,
+                        textColor: c.accentInk,
+                        child: Text(t.upNext, style: const TextStyle(fontSize: 10, letterSpacing: 0.8)),
+                      )
+                    else
+                      Icon(Icons.play_arrow, color: c.text2),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      }
+
+      return DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.6,
+        maxChildSize: 0.9,
+        builder: (_, scroll) => SafeArea(
+          child: ListView(
+            controller: scroll,
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+            children: [
+              SectionLabel(t.otherSessionTitle),
+              const SizedBox(height: 4),
+              Text(program.mode == ProgramMode.weekday ? t.otherSessionHintWeekday : t.otherSessionHint,
+                  style: TextStyle(fontSize: 13, color: c.text2)),
+              const SizedBox(height: 14),
+              for (final r in inProgram) tile(r),
+              for (final r in others) tile(r, note: t.notInProgram),
+            ],
+          ),
+        ),
+      );
+    },
+  );
 }
 
 class _WeekStrip extends StatelessWidget {

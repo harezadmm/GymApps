@@ -7,6 +7,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// Server palsu di memori. Yang diuji perilaku store saat push diterima atau
 /// ditolak, bukan Supabase-nya.
 class _FakeBackend implements Backend {
+  @override
+  String? get signedInEmail => null;
+
   _FakeBackend({this.rev, Map<String, dynamic>? state}) : state = state ?? {};
 
   int? rev;
@@ -44,6 +47,9 @@ class _FakeBackend implements Backend {
 /// Backend yang selalu gagal, untuk menguji bahwa kegagalan jaringan tidak
 /// pernah menyentuh data lokal.
 class _BrokenBackend implements Backend {
+  @override
+  String? get signedInEmail => null;
+
   @override
   Future<int?> getRev() async => throw Exception('tidak ada jaringan');
 
@@ -194,9 +200,12 @@ void main() {
       expect((server.state['workouts'] as List).length, 2);
     });
 
-    test('sesi yang lebih lengkap menang saat tanggalnya sama', () async {
-      // Satu sesi dicatat di dua perangkat pada hari yang sama. Yang setnya
-      // lebih banyak yang dipakai; memilih sembarang berarti menghapus latihan.
+    test('sesi berbeda di tanggal yang sama sama-sama dipertahankan', () async {
+      // Dulu digabung per tanggal dan yang setnya lebih banyak menang — yang
+      // lain dibuang. Padahal dua sesi berbeda di satu hari itu biasa (pagi
+      // kardio, sore beban), dan membuang salah satunya berarti menghapus
+      // latihan. Sesi yang sama persis tetap cukup sekali; lihat
+      // account_sync_test.dart.
       final server = _FakeBackend(rev: 2, state: {
         'schema': stateSchema,
         'workouts': [_sesi('2026-09-16', entri: 1).toJson()],
@@ -208,8 +217,8 @@ void main() {
       await store.addWorkout(_sesi('2026-09-16', entri: 4));
       await store.syncNow();
 
-      expect(store.workouts.length, 1);
-      expect(store.workouts.first.entries.length, 4);
+      expect(store.workouts.length, 2);
+      expect(store.workouts.map((w) => w.entries.length).toSet(), {1, 4});
     });
   });
   group('program dan rutinitas', () {

@@ -2,7 +2,7 @@
 ///
 /// Semua test di sini lahir dari laporan pemakai di emulator:
 /// * Switch rest timer terdorong keluar kartu di HP 360 dp.
-/// * Tombol â‹¯ di kartu gerakan hanya ikon, tidak bisa diketuk.
+/// * Tombol ⋯ di kartu gerakan hanya ikon, tidak bisa diketuk.
 /// * "ADD EXERCISE" dan "BUILD MY OWN" tidak melakukan apa-apa.
 /// * Angka yang diketik di kolom KG hilang saat set dicentang.
 library;
@@ -32,11 +32,11 @@ SessionExercise _bench({bool expanded = true}) => SessionExercise(
       icon: Icons.fitness_center,
       config: const ExerciseConfig(exerciseId: '0025', policy: ProgressionPolicy.double_, reps: 10, repsMin: 6),
       sets: const [SetRow(weight: 60, reps: 8), SetRow(weight: 60, reps: 8)],
-      previous: const ['60 Ã— 8', '60 Ã— 8'],
+      previous: const ['60 × 8', '60 × 8'],
       expanded: expanded,
     );
 
-/// HP kecil yang umum: 360 Ã— 780 dp.
+/// HP kecil yang umum: 360 × 780 dp.
 void _phone(WidgetTester tester) {
   tester.view.physicalSize = const Size(1080, 2340);
   tester.view.devicePixelRatio = 3;
@@ -71,7 +71,7 @@ void main() {
     expect(ex.restEnabled, isFalse);
   });
 
-  testWidgets('tombol â‹¯ membuka menu aksi gerakan', (tester) async {
+  testWidgets('tombol ⋯ membuka menu aksi gerakan', (tester) async {
     _phone(tester);
     await tester.pumpWidget(_wrap(store, SessionScreen(routineName: 'Push', exercises: [_bench(), _bench(expanded: false)])));
     await tester.pump();

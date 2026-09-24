@@ -12,7 +12,14 @@
 ///
 /// * Masuk tetap bisa tanpa sinyal — FR-A3 menjanjikan itu, dan orang di ruang
 ///   bawah tanah gym memang tidak punya sinyal.
-/// * Kata sandi yang salah tidak pernah sampai ke jaringan.
+/// * Kata sandi yang salah untuk akun yang ada di HP ini tidak pernah sampai
+///   ke jaringan.
+///
+/// Satu pengecualian: email yang belum pernah masuk di HP ini. Itu HP baru
+/// atau aplikasi yang dipasang ulang, dan akunnya hanya ada di server — maka
+/// server yang memeriksa kata sandinya, lalu akun lokal dibuat dengannya.
+/// Tanpa jalur ini, orang yang ganti HP disuruh "membuat akun" untuk email
+/// yang sudah mereka punya.
 ///
 /// Sesi Supabase-nya adalah *tambahan*, bukan syarat. Gagal menyambung berarti
 /// kehilangan sinkron, bukan kehilangan aplikasi.
@@ -51,9 +58,33 @@ class SyncedAccountStore implements AccountStore {
   @override
   Future<SignInResult> signIn({required String email, required String password}) async {
     final result = await local.signIn(email: email, password: password);
-    if (result is! SignInOk) return result;
-    await _reachServer(email: email, password: password);
+    if (result is SignInOk) {
+      await _reachServer(email: email, password: password);
+      return result;
+    }
+    if (result case SignInError(reason: SignInFailure.noAccount || SignInFailure.wrongEmail)) {
+      if (await _serverAccepts(email: email, password: password)) {
+        final made = await local.signUp(email: email, password: password);
+        if (made case SignUpOk(:final account)) {
+          onSignedIn?.call();
+          return SignInOk(account);
+        }
+      }
+    }
     return result;
+  }
+
+  /// true kalau server menerima kredensial ini dan sesinya sekarang ada.
+  /// Jaringan mati atau kata sandi salah sama-sama false — pemanggil lalu
+  /// menampilkan kesalahan lokal seperti biasa.
+  Future<bool> _serverAccepts({required String email, required String password}) async {
+    try {
+      await auth.signInWithPassword(email: LocalAccountStore.normalise(email), password: password);
+    } catch (e) {
+      debugPrint('server menolak atau tidak terjangkau: $e');
+      return false;
+    }
+    return auth.currentSession != null;
   }
 
   @override
@@ -61,8 +92,10 @@ class SyncedAccountStore implements AccountStore {
     await local.signOut();
     // Sesi server dibuang juga. Kalau tidak, perangkat yang dipinjamkan ke
     // orang lain akan tetap mendorong riwayat ke akun pemilik sebelumnya.
+    // Sesi lokal Supabase dibuang sebelum permintaan logout dikirim, jadi
+    // batas waktu di sini aman: yang terpotong hanya pemberitahuan ke server.
     try {
-      await auth.signOut();
+      await auth.signOut().timeout(const Duration(seconds: 5));
     } catch (e) {
       debugPrint('gagal keluar dari Supabase: $e');
     }
@@ -86,12 +119,13 @@ class SyncedAccountStore implements AccountStore {
   /// Mendaftar di sini aman karena lokal sudah membuktikan kata sandinya —
   /// jalur ini tidak pernah dilewati kredensial yang salah.
   Future<void> _reachServer({required String email, required String password}) async {
+    final address = LocalAccountStore.normalise(email);
     try {
-      await auth.signInWithPassword(email: email, password: password);
+      await auth.signInWithPassword(email: address, password: password);
     } on AuthException catch (e) {
       debugPrint('masuk ke Supabase gagal (${e.message}); mencoba mendaftar');
       try {
-        await auth.signUp(email: email, password: password);
+        await auth.signUp(email: address, password: password);
       } on AuthException catch (e) {
         // Kata sandi lokal berbeda dari yang ada di server, atau email ditolak.
         // Aplikasi tetap jalan; yang hilang cuma sinkronnya.

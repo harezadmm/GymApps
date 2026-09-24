@@ -20,6 +20,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// dan status sinkronnya bukan "sync mati".
 class _StubBackend implements Backend {
   @override
+  String? get signedInEmail => null;
+
+  @override
   Future<int?> getRev() async => null;
   @override
   Future<PulledState?> pull() async => null;
