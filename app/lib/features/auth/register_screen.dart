@@ -99,6 +99,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
         widget.onRegistered();
       case SignUpError(reason: SignUpFailure.emailTaken):
         setState(() => _emailError = t.emailTaken);
+      case SignUpError(reason: SignUpFailure.offline):
+        setState(() => _emailError = t.authOffline);
+      case SignUpError(reason: SignUpFailure.rejected):
+        setState(() => _passwordError = t.signUpRejected);
     }
   }
 

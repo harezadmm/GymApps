@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/format.dart';
+import '../../core/keep_awake.dart';
 import '../../core/motion.dart';
 import '../../core/strings.dart';
 import '../../core/theme.dart';
@@ -136,7 +137,14 @@ class _SessionScreenState extends State<SessionScreen> {
       _restingOn ?? (_exercises.isEmpty ? null : _exercises.firstWhere((e) => e.expanded, orElse: () => _exercises.first));
 
   @override
+  void initState() {
+    super.initState();
+    KeepAwake.holdIfEnabled();
+  }
+
+  @override
   void dispose() {
+    KeepAwake.release();
     _rest.dispose();
     super.dispose();
   }

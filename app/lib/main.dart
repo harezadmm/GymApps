@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -7,6 +8,7 @@ import 'core/theme.dart';
 import 'data/account_store.dart';
 import 'data/backend.dart';
 import 'data/synced_account_store.dart';
+import 'data/web_account_store.dart';
 import 'data/workout_store.dart';
 import 'features/auth/login_screen.dart';
 import 'features/auth/register_screen.dart';
@@ -102,6 +104,7 @@ class _GymAppState extends State<GymApp> with WidgetsBindingObserver {
           title: 'GymApps',
           debugShowCheckedModeBanner: false,
           theme: buildGymTheme(),
+          builder: _phoneWidthOnWeb,
           home: AppFlow(
             language: _lang,
             onLanguageChanged: (l) => setState(() => _lang = l),
@@ -110,6 +113,30 @@ class _GymAppState extends State<GymApp> with WidgetsBindingObserver {
       ),
     );
   }
+}
+
+/// Di web pada layar lebar (laptop), aplikasi tampil selebar ponsel di tengah.
+///
+/// Tata letaknya memang satu kolom; kartu yang direntang ke 1400 px hanya
+/// membuat angka-angkanya berjauhan. MediaQuery ikut dipersempit supaya
+/// widget yang membaca lebar layar melihat lebar yang sama dengan yang
+/// digambar.
+Widget _phoneWidthOnWeb(BuildContext context, Widget? child) {
+  final mq = MediaQuery.of(context);
+  if (!kIsWeb || child == null || mq.size.width <= 600) return child ?? const SizedBox.shrink();
+  const width = 480.0;
+  return ColoredBox(
+    color: Theme.of(context).scaffoldBackgroundColor,
+    child: Center(
+      child: SizedBox(
+        width: width,
+        child: MediaQuery(
+          data: mq.copyWith(size: Size(width, mq.size.height)),
+          child: child,
+        ),
+      ),
+    ),
+  );
 }
 
 /// Urutan layar dari login sampai akhir.
@@ -144,17 +171,24 @@ class _AppFlowState extends State<AppFlow> {
   /// dibungkus supaya masuk dan mendaftar juga menghasilkan sesi server —
   /// tanpa sesi itu, `SupabaseBackend` menolak setiap dorongan dan sinkronnya
   /// diam tanpa pernah mengeluh.
-  late final AccountStore _accounts = supabaseConfigured
-      ? SyncedAccountStore(
-          local: LocalAccountStore(),
-          auth: Supabase.instance.client.auth,
-          // Riwayat yang sudah tercatat offline harus naik begitu sesi ada,
-          // bukan menunggu latihan berikutnya selesai.
-          onSignedIn: () {
-            if (mounted) WorkoutScope.read(context).syncNow();
-          },
-        )
-      : LocalAccountStore();
+  ///
+  /// Di web tidak ada sisi lokal: browser tidak punya Keystore, dan server
+  /// yang memeriksa kata sandi. Lihat [WebAccountStore].
+  late final AccountStore _accounts = switch ((kIsWeb, supabaseConfigured)) {
+    (true, true) => WebAccountStore(Supabase.instance.client.auth, onSignedIn: _syncAfterSignIn),
+    (_, true) => SyncedAccountStore(
+        local: LocalAccountStore(),
+        auth: Supabase.instance.client.auth,
+        onSignedIn: _syncAfterSignIn,
+      ),
+    _ => LocalAccountStore(),
+  };
+
+  /// Riwayat yang sudah tercatat offline harus naik begitu sesi ada, bukan
+  /// menunggu latihan berikutnya selesai.
+  void _syncAfterSignIn() {
+    if (mounted) WorkoutScope.read(context).syncNow();
+  }
 
   @override
   void initState() {

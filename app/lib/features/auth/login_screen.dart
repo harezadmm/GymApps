@@ -58,6 +58,8 @@ class _LoginScreenState extends State<LoginScreen> {
               SignInFailure.noAccount => t.noAccountYet,
               SignInFailure.wrongEmail => t.wrongEmail,
               SignInFailure.wrongPassword => t.wrongPassword,
+              SignInFailure.invalidCredentials => t.invalidCredentials,
+              SignInFailure.offline => t.authOffline,
             });
     }
   }

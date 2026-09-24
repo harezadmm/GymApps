@@ -9,6 +9,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../core/keep_awake.dart';
 import '../../core/motion.dart';
 import '../../core/strings.dart';
 import '../../core/theme.dart';
@@ -46,6 +47,14 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   bool _keepAwake = true;
+
+  @override
+  void initState() {
+    super.initState();
+    KeepAwake.enabled.then((v) {
+      if (mounted) setState(() => _keepAwake = v);
+    });
+  }
 
   /// Versi dibaca dari bundle, bukan ditulis tangan. Nomor yang di-hardcode
   /// pasti basi pada rilis berikutnya, dan laporan bug yang menyebut versi
@@ -287,7 +296,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
             SettingsTile(
               icon: Icons.lightbulb_outline,
               label: t.keepScreenAwake,
-              trailing: Switch(value: _keepAwake, onChanged: (v) => setState(() => _keepAwake = v)),
+              trailing: Switch(
+                value: _keepAwake,
+                onChanged: (v) {
+                  setState(() => _keepAwake = v);
+                  KeepAwake.set(v);
+                },
+              ),
             ),
             SettingsTile(
                 icon: Icons.calendar_view_week, label: t.weekStartsOn, value: t.monday, onTap: () => _todo(t.weekStartsOn)),
