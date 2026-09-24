@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/motion.dart';
+import 'core/safe_area_stub.dart' if (dart.library.js_interop) 'core/safe_area_web.dart';
 import 'core/strings.dart';
 import 'core/theme.dart';
 import 'data/account_store.dart';
@@ -115,15 +118,24 @@ class _GymAppState extends State<GymApp> with WidgetsBindingObserver {
   }
 }
 
-/// Di web pada layar lebar (laptop), aplikasi tampil selebar ponsel di tengah.
+/// Penyesuaian tampilan khusus web, dipasang lewat `MaterialApp.builder`.
 ///
-/// Tata letaknya memang satu kolom; kartu yang direntang ke 1400 px hanya
-/// membuat angka-angkanya berjauhan. MediaQuery ikut dipersempit supaya
-/// widget yang membaca lebar layar melihat lebar yang sama dengan yang
-/// digambar.
+/// * Inset aman iPhone: mesin Flutter web tidak mengisi `MediaQuery.padding`,
+///   jadi nilainya dibaca dari CSS (lihat `safe_area_web.dart`) dan
+///   disuntikkan di sini. Tanpa ini, `SafeArea` di semua layar tidak berbuat
+///   apa-apa dan tombol FINISH tergambar di balik jam iPhone.
+/// * Layar lebar (laptop): aplikasi tampil selebar ponsel di tengah. Tata
+///   letaknya memang satu kolom; kartu yang direntang ke 1400 px hanya membuat
+///   angka-angkanya berjauhan. MediaQuery ikut dipersempit supaya widget yang
+///   membaca lebar layar melihat lebar yang sama dengan yang digambar.
 Widget _phoneWidthOnWeb(BuildContext context, Widget? child) {
-  final mq = MediaQuery.of(context);
-  if (!kIsWeb || child == null || mq.size.width <= 600) return child ?? const SizedBox.shrink();
+  if (!kIsWeb || child == null) return child ?? const SizedBox.shrink();
+  var mq = MediaQuery.of(context);
+  final css = readCssSafeArea();
+  if (css != EdgeInsets.zero && mq.padding == EdgeInsets.zero) {
+    mq = mq.copyWith(padding: css, viewPadding: css);
+  }
+  if (mq.size.width <= 600) return MediaQuery(data: mq, child: child);
   const width = 480.0;
   return ColoredBox(
     color: Theme.of(context).scaffoldBackgroundColor,
@@ -143,7 +155,7 @@ Widget _phoneWidthOnWeb(BuildContext context, Widget? child) {
 /// `booting` ada karena memeriksa akun tersimpan itu asinkron. Tanpa tahap
 /// ini, layar masuk berkedip sesaat sebelum diganti Home untuk orang yang
 /// sebenarnya sudah masuk.
-enum AppStage { booting, login, register, program, equipment, home }
+enum AppStage { booting, login, register, program, equipment, home, unconfigured }
 
 /// Mengatur perpindahan antar tahap.
 ///
@@ -190,14 +202,32 @@ class _AppFlowState extends State<AppFlow> {
     if (mounted) WorkoutScope.read(context).syncNow();
   }
 
+  /// Sesi server yang dicabut selagi aplikasi terbuka (token dicabut, akun
+  /// dihapus, refresh ditolak). Di web akunnya *adalah* sesi itu, jadi tanpa
+  /// ini orangnya tetap di Home dengan sinkron yang diam-diam mati selamanya.
+  StreamSubscription<AuthState>? _authEvents;
+
   @override
   void initState() {
     super.initState();
+    if (_accounts is WebAccountStore) {
+      _authEvents = Supabase.instance.client.auth.onAuthStateChange.listen((s) {
+        // Keluar yang kita mulai sendiri sudah mengosongkan _account lebih
+        // dulu; yang ditangani di sini hanya keluar yang datang dari server.
+        if (s.event == AuthChangeEvent.signedOut && _account != null && mounted) _signOut();
+      }, onError: (Object e) => debugPrint('auth event: $e'));
+    }
     _restore();
   }
 
   /// Orang yang sudah masuk tidak perlu masuk lagi tiap membuka aplikasi.
   Future<void> _restore() async {
+    // Versi web tanpa server tidak punya arti: tidak ada Keystore untuk akun
+    // lokal, dan tidak ada yang bisa disinkronkan. Lebih baik bilang.
+    if (kIsWeb && !supabaseConfigured) {
+      setState(() => _stage = AppStage.unconfigured);
+      return;
+    }
     final account = await _accounts.signedIn();
     if (!mounted) return;
     if (account == null) {
@@ -226,6 +256,7 @@ class _AppFlowState extends State<AppFlow> {
 
   @override
   void dispose() {
+    _authEvents?.cancel();
     _watched?.removeListener(_onStoreChanged);
     super.dispose();
   }
@@ -343,6 +374,15 @@ class _AppFlowState extends State<AppFlow> {
           onBack: () => setState(() => _stage = AppStage.program),
           onSkip: () => setState(() => _stage = AppStage.home),
           onContinue: () => setState(() => _stage = AppStage.home),
+        ),
+      AppStage.unconfigured => Scaffold(
+          backgroundColor: context.gym.bg,
+          body: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Text(context.t.syncOffHint, textAlign: TextAlign.center),
+            ),
+          ),
         ),
       AppStage.home => HomeShell(
           language: widget.language,

@@ -46,6 +46,12 @@ try {
 
 if ($BuildOnly) { exit 0 }
 
+# Perintah yang tidak ditemukan tidak mengubah $LASTEXITCODE, jadi tanpa cek
+# ini skrip berakhir "sukses" tanpa mengunggah apa pun.
+if (-not (Get-Command vercel -ErrorAction SilentlyContinue)) {
+  throw 'Vercel CLI tidak ditemukan. Pasang: npm i -g vercel, lalu vercel login.'
+}
+
 $env:VERCEL_ORG_ID = 'team_UX8bS9Ox2sShcGlmYygJ69fY'
 $env:VERCEL_PROJECT_ID = 'prj_kxhHMOYx3TjRlsnVbX68hvLl0rtB'
 $out = Join-Path $root 'app\build\web'

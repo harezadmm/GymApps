@@ -109,7 +109,7 @@ class SessionScreen extends StatefulWidget {
   State<SessionScreen> createState() => _SessionScreenState();
 }
 
-class _SessionScreenState extends State<SessionScreen> {
+class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserver {
   final _rest = RestTimer();
   final _elapsed = Stopwatch()..start();
   late final List<SessionExercise> _exercises = List.of(widget.exercises);
@@ -139,11 +139,22 @@ class _SessionScreenState extends State<SessionScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     KeepAwake.holdIfEnabled();
+  }
+
+  /// Browser melepas wake lock setiap kali halaman disembunyikan (pindah
+  /// aplikasi, layar dikunci), dan tidak memintanya lagi. Dipegang ulang
+  /// setiap kembali ke depan; di Android/iOS pemanggilan ulangnya tidak
+  /// berefek apa-apa.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted) KeepAwake.holdIfEnabled();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     KeepAwake.release();
     _rest.dispose();
     super.dispose();
