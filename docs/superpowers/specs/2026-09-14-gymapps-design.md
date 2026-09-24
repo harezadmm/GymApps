@@ -12,7 +12,7 @@ Base code: https://github.com/DuarteSantos8/openGym (commit a68a88d, 2026-09-13,
 Aplikasi gym untuk pemakaian pribadi satu orang, dengan:
 
 1. **APK Android** sebagai alat utama di gym (offline-first).
-2. **Supabase** sebagai database dan auth, agar data tidak terkunci di HP.
+2. **Supabase** sebagai cermin data opsional, dinyalakan sendiri oleh pengguna, semata agar dashboard web bisa membacanya. Bukan gerbang masuk aplikasi.
 3. **Dashboard web** untuk mengecek progres dari laptop.
 4. **Pilihan split latihan** sebagai konsep utama: Push/Pull/Legs, Bro split, Upper/Lower, Heavy Duty, dan custom. Dengan mode rotasi (bukan hanya hari kalender tetap).
 5. **Progressive overload otomatis**: setiap sesi dicatat (alat, set, rep, beban), sesi berikutnya sudah di-setup dengan target yang naik, dan alasan target itu ditampilkan.
@@ -29,7 +29,7 @@ Yang **tidak** masuk scope (setidaknya fase ini): gamifikasi (XP, streak, quest,
 | Base | **Flutter, dengan openGym sebagai rujukan algoritma** | Revisi 2026-09-15: pemilik produk memilih Flutter. Fork React tidak lagi jadi aplikasi. Yang tetap dipanen dari openGym: dataset 1.324 gerakan (dipakai apa adanya sebagai JSON) dan **aturan** engine progresi, 1RM, muscle map, recovery — dibaca dari `reference/opengym/src/lib/` lalu ditulis ulang dalam Dart beserta unit test-nya. Ongkosnya nyata: ~53.000 baris JS tidak ikut, tapi keputusan stack ada di pemilik produk. |
 | Model data | **Tetap satu dokumen JSON** (`S`) seperti openGym | Seluruh lapisan penyimpanan openGym hanya ±200 baris (`lib/api.js` 83 baris, `lib/sync-merge.js` 105 baris, bagian push/pull di `store/useStore.js`). Semua analitik di `lib/` adalah fungsi murni atas dokumen ini. Normalisasi relasional berarti membongkar 36 ribu baris kode. |
 | Backend | **Supabase**: tabel `user_state` dengan kolom jsonb + Supabase Auth | Mengganti server Node openGym. Passkey openGym memang tidak bisa dipakai di WebView Capacitor (didokumentasikan di `docs/MOBILE.md`), jadi Supabase Auth justru menyelesaikan masalah itu. |
-| Auth | **Email + password**, satu akun | Personal, satu pengguna. Google OAuth di Capacitor perlu setup Google Console, SHA-1 fingerprint, dan deep link. Tidak sepadan untuk satu orang. Bisa ditambah nanti. |
+| Auth | **Anonymous sign-in Supabase**, tanpa layar login. Email pemulihan opsional, dipasang belakangan | Revisi 2026-09-16. Aplikasi satu orang tidak butuh gerbang akun: identitas hanya dibutuhkan agar dashboard web bisa membaca baris yang sama. `signInAnonymously()` di `supabase_flutter` memberi `auth.uid()` yang sah untuk RLS tanpa meminta apa pun. Email ditautkan belakangan lewat `updateUser` hanya sebagai jalur pemulihan. Lihat PRD FR-A1 sampai FR-A1d dan FR-A9. |
 | Sinkron | Offline-first: localStorage + file mirror di HP tetap sumber utama, Supabase cermin | Sama persis dengan pola openGym sekarang, hanya endpoint-nya diganti. `sync-merge.js` (merge berbasis revisi) dipakai apa adanya. |
 | Dashboard web | **Vite + React SPA** terpisah di folder `dashboard/`, mengimpor `frontend/src/lib/` langsung | Stack sama dengan aplikasi, jadi fungsi progresi, 1RM, recovery, statistik dipakai ulang tanpa ditulis ulang. Bukan Next.js karena tidak perlu SSR dan lib openGym ditulis untuk browser. Deploy ke Vercel sebagai static site. |
 | Gaya dashboard | Terang (light), kartu putih, mengikuti layar Analysis/Statistics Liftoff yang memang bertema terang | Layar analitik Liftoff sendiri terang. Konsisten dengan referensi, dan enak dibaca di laptop. |
@@ -115,7 +115,7 @@ push(baseRev, state)     // → { ok:true, rev } | { ok:false, rev, state }  (ko
 
 Implementasi `backend-supabase.js` memakai `@supabase/supabase-js`. Session auth disimpan lewat `@aparajita/capacitor-secure-storage` yang sudah jadi dependensi openGym.
 
-Yang dihapus di store: alur passkey, pairing code, guest mode, endpoint push notification server (rest timer di APK sudah pakai notifikasi lokal Capacitor, tidak butuh server).
+Yang dihapus: alur passkey, layar login, dan penyimpanan multi-akun. Yang dipertahankan sebagai pola: *pairing code* openGym (`/api/pair/create`, `/api/pair/redeem`) untuk menautkan dashboard web ke identitas anonim HP, dan *guest mode* sebagai dasar mode lokal-saja yang kini menjadi default (PRD FR-A8).
 
 ### 4.4 Fase lanjutan (opsional): flatten ke tabel `workout_sets`
 
@@ -209,7 +209,7 @@ Skrinsut acuan per layar: `01_Onboarding_Auth/Home_Screen.jpg` (grid kartu), `03
 
 ## 9. Dashboard web (`dashboard/`)
 
-Vite + React + react-router. Login Supabase (akun yang sama). Membaca `user_state.state` sekali saat buka, lalu berlangganan Realtime pada baris itu agar sesi yang baru selesai di HP langsung tampil.
+Vite + React + react-router. Terikat ke identitas HP lewat kode pairing 6 digit sekali seumur perangkat (PRD FR-A1c), bukan lewat layar login. Membaca `user_state.state` sekali saat buka, lalu berlangganan Realtime pada baris itu agar sesi yang baru selesai di HP langsung tampil.
 
 Halaman:
 
@@ -218,7 +218,7 @@ Halaman:
 3. **Program**: split aktif, posisi cursor rotasi, kepatuhan (sesi terencana vs terlaksana per minggu), penanda stall.
 4. **Otot**: BodyMap mode Balance, Fatigue, Strength (komponen openGym yang ada).
 5. **Riwayat**: tabel semua sesi dengan filter tanggal, rutinitas, gerakan; ekspor CSV.
-6. **Pengaturan**: unduh backup JSON (blob mentah), ganti password.
+6. **Pengaturan**: unduh backup JSON (blob mentah), putuskan sambungan perangkat.
 
 Gaya: terang, kartu putih membulat, sidebar kiri dengan item aktif berbentuk pill biru, mini-chart di kartu ringkasan. Komponen chart openGym dipakai ulang; kalau butuh grafik lebih kaya, tambah Recharts.
 
@@ -231,7 +231,7 @@ Dashboard **hanya membaca** pada fase pertama. Edit dari web (misal ubah rutinit
 | # | Milestone | Isi | Kriteria selesai |
 |---|---|---|---|
 | M0 | Fork dan toolchain | Clone openGym ke `frontend/`, hapus bagian server/admin/coach/MCP, `npm run build:mobile`, `npx cap open android`, build debug APK, pasang di HP | APK openGym polos jalan di HP, tes vitest hijau |
-| M1 | Supabase | Proyek Supabase, migrasi §4, `backend.js` + `backend-supabase.js`, layar login email/password menggantikan `Login.jsx` dan `MobileOnboarding.jsx`, push/pull/konflik diuji | Sesi yang dicatat di HP muncul di tabel `user_state`; instal ulang APK lalu login memulihkan data |
+| M1 | Supabase | Proyek Supabase, migrasi §4, `backend.js` + `backend-supabase.js`, tanpa layar login, sinkronisasi opt-in di Pengaturan lewat `signInAnonymously()`, kode pairing untuk dashboard, push/pull/konflik diuji | Instal APK baru dan catat sesi tanpa pernah melihat layar akun; setelah sinkronisasi dinyalakan, sesi muncul di tabel `user_state` |
 | M2 | Split dan Heavy Duty | `program.js`, mode rotasi di Home, template Bro dan Heavy Duty, policy `hit` + test | Program Heavy Duty berjalan 2 siklus dengan target naik dan pesan alasan yang benar |
 | M3 | Reskin Liftoff | Token CSS, TabBar 5 tab, Home, Workout, Stats sesuai §8 | Skrinsut side-by-side dengan referensi untuk 4 layar utama |
 | M4 | Dashboard web | `dashboard/` §9, deploy Vercel | Buka dashboard di laptop, lihat sesi yang baru selesai di HP dalam hitungan detik |
@@ -244,7 +244,7 @@ Alasan urutan: risiko terbesar ada di toolchain Android (M0), lalu keamanan data
 ## 11. Yang harus disiapkan pengguna sebelum eksekusi
 
 Akun dan kredensial:
-- Proyek Supabase (free tier cukup). Dibutuhkan: Project URL, anon key, dan akses ke SQL editor atau Supabase CLI. Aktifkan provider Email di Authentication, matikan "Confirm email" agar satu akun bisa dibuat langsung.
+- Proyek Supabase (free tier cukup). Dibutuhkan: Project URL, anon key, dan akses ke SQL editor atau Supabase CLI. Di Authentication, **aktifkan Anonymous sign-ins**. Provider Email hanya perlu diaktifkan jika email pemulihan (PRD FR-A1d) dipakai.
 - Akun Vercel (atau Netlify) untuk dashboard. Boleh ditunda sampai M4.
 
 Toolchain di mesin Windows:
@@ -273,7 +273,7 @@ Data pribadi untuk seed awal (bisa diisi di aplikasi):
 
 ## 13. Keputusan yang masih bisa kamu ubah tanpa membongkar desain
 
-- Auth email+password → Google sign-in (M5).
+- Anonymous sign-in → tambah Google sign-in sebagai jalur pemulihan alternatif (M5).
 - Gaya dashboard terang → gelap (hanya token CSS).
 - Default Heavy Duty (rep range, hari istirahat).
 - Menyimpan atau membuang bahasa selain EN dari bundle.

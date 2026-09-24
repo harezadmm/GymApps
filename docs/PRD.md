@@ -69,7 +69,7 @@ Konsekuensi desain:
 
 ### Masuk lingkup rilis pertama (P0 dan P1)
 
-- Akun tunggal, login email + password, data tersinkron ke Supabase.
+- Tanpa layar login. Mode lokal adalah default; sinkronisasi ke Supabase opsional, dinyalakan dengan satu tombol.
 - Library gerakan bawaan openGym (1.324 gerakan dengan animasi) dan gerakan custom.
 - Program split: Push/Pull/Legs, Upper/Lower, Bro split, Heavy Duty, Full Body, custom. Mode hari kalender dan mode rotasi.
 - Logger sesi lengkap: set, rep, beban, RIR/RPE opsional, warm-up, drop set, rest-pause, superset, rest timer, catatan.
@@ -106,7 +106,7 @@ Konsekuensi desain:
 ## 7. Alur utama
 
 ### 7.1 Pertama kali pakai
-Buka APK → layar login → masuk dengan email dan password → aplikasi menarik data dari Supabase (kosong untuk pengguna baru) → pilih program split dari template atau buat sendiri → pilih profil alat gym → tiba di Home yang menampilkan sesi berikutnya.
+Buka APK → langsung ke onboarding tanpa layar akun → pilih program split dari template atau buat sendiri → pilih profil alat gym → tiba di Home yang menampilkan sesi berikutnya.
 
 ### 7.2 Hari latihan
 Buka aplikasi → Home menampilkan "Sesi berikutnya: Pull, jatuh tempo hari ini" → tap Start → aplikasi minta berat badan (opsional, bisa dilewati) → layar Workout terbuka dengan semua gerakan, target beban dan rep sudah terisi, kolom PREV menunjukkan sesi lalu → selesai satu set, tap centang → rest timer berjalan otomatis → ulangi → tap Finish → ringkasan: durasi, volume, PR baru, otot yang dilatih, dan preview target sesi berikutnya → cursor rotasi bergeser.
@@ -115,10 +115,10 @@ Buka aplikasi → Home menampilkan "Sesi berikutnya: Pull, jatuh tempo hari ini"
 Buka aplikasi → Home menampilkan "Berikutnya: Legs, bisa kapan saja" (mode rotasi) atau "Hari istirahat, sesi berikutnya Kamis: Legs" (mode kalender) → pengguna bisa Start sekarang, Skip sesi, atau mulai Freestyle.
 
 ### 7.4 Cek progres di laptop
-Buka dashboard web → login akun yang sama → Overview menampilkan heatmap aktivitas, sesi minggu ini vs rencana, berat badan → buka Progres, pilih Bench Press → grafik e1RM 12 minggu, tabel sesi, target berikutnya dan alasannya.
+Buka dashboard web → sekali saja masukkan kode pairing 6 digit dari HP (kunjungan berikutnya langsung masuk) → Overview menampilkan heatmap aktivitas, sesi minggu ini vs rencana, berat badan → buka Progres, pilih Bench Press → grafik e1RM 12 minggu, tabel sesi, target berikutnya dan alasannya.
 
 ### 7.5 Ganti HP
-Instal APK di HP baru → login → semua data kembali dalam satu kali tarik.
+Instal APK di HP baru → impor berkas backup JSON, atau pulihkan lewat email pemulihan jika sudah dipasang → semua data kembali.
 
 ---
 
@@ -128,13 +128,18 @@ Instal APK di HP baru → login → semua data kembali dalam satu kali tarik.
 
 | ID | P | Kebutuhan | Kriteria penerimaan |
 |---|---|---|---|
-| FR-A1 | P0 | Login dengan email dan password lewat Supabase Auth. Sesi login bertahan sampai logout eksplisit. | Tutup aplikasi, buka lagi setelah 7 hari, tidak diminta login ulang. |
+| FR-A1 | P0 | **Tidak ada layar login.** Aplikasi dibuka langsung ke Home dan langsung bisa dipakai mencatat latihan. Tidak ada email, password, atau akun yang diminta kapan pun, kecuali pengguna sendiri yang memilihnya (FR-A1b, FR-A1d). | Instal APK baru, buka, catat satu sesi lengkap. Tidak ada satu pun layar akun yang muncul sepanjang alur itu. |
+| FR-A1b | P0 | Sinkronisasi ke Supabase bersifat **opsional dan opt-in**, satu tombol di Pengaturan bernama "Hubungkan dashboard web". Menekannya membuat identitas lewat Supabase **anonymous sign-in** di latar belakang, tanpa meminta apa pun dari pengguna. | Tap tombol itu, dalam ≤ 5 detik status berubah menjadi "Tersambung" tanpa ada isian yang harus diketik. |
+| FR-A1c | P0 | Setelah tersambung, aplikasi menampilkan **kode pairing 6 digit** berlaku 10 menit. Dashboard web meminta kode itu sekali, lalu terikat ke identitas yang sama secara permanen. | Masukkan kode di dashboard, dashboard menampilkan data dari HP. Buka dashboard esok hari, tidak diminta kode lagi. |
+| FR-A1d | P1 | Pengguna bisa memasang **email pemulihan** kapan saja di Pengaturan, yang menautkan identitas anonim tadi ke email itu. Tanpa ini, data hanya ada di HP dan di baris Supabase yang kuncinya ada di HP. Aplikasi menjelaskan risiko itu satu kali saat pertama menyalakan sinkronisasi. | Pasang email, hapus aplikasi, instal ulang, pulihkan lewat tautan email, data kembali. |
 | FR-A2 | P0 | Seluruh data pengguna disimpan lokal dan dicerminkan ke Supabase (tabel `user_state`). | Selesaikan satu sesi, dalam ≤ 10 detik dengan jaringan aktif baris `user_state.state.workouts` berisi sesi itu. |
 | FR-A3 | P0 | Aplikasi berfungsi penuh saat offline. Perubahan dikirim saat jaringan kembali. | Matikan data, catat sesi lengkap, nyalakan data, sesi muncul di Supabase tanpa tindakan pengguna. Indikator "belum tersinkron" tampil selama offline. |
 | FR-A4 | P0 | Konflik dua perangkat diselesaikan dengan merge berbasis revisi (mekanisme openGym). Tidak ada data yang hilang diam-diam. | Dua perangkat offline masing-masing mencatat satu sesi berbeda, online bergantian, kedua sesi ada di hasil akhir. |
-| FR-A5 | P0 | Instal ulang atau ganti HP memulihkan semua data setelah login. | Hapus data aplikasi, login, jumlah workout sama dengan sebelum dihapus. |
+| FR-A5 | P0 | Pemulihan data setelah instal ulang atau ganti HP tersedia lewat dua jalur: impor berkas backup JSON (FR-A6), atau email pemulihan jika sudah dipasang (FR-A1d). | Kedua jalur diuji: jumlah workout sama dengan sebelum dihapus. |
 | FR-A6 | P1 | Ekspor backup JSON lengkap lewat share sheet Android, dan impor dari file yang sama. | Ekspor, reset aplikasi, impor, data identik. |
-| FR-A7 | P1 | Logout menghapus data lokal setelah memastikan sudah tersinkron. | Jika ada perubahan belum terkirim, logout menampilkan peringatan dan menolak sampai sinkron selesai atau pengguna memilih buang. |
+| FR-A7 | P1 | "Putuskan sambungan" di Pengaturan menghentikan sinkronisasi dan kembali ke mode lokal saja. Data lokal **tidak** dihapus. Jika masih ada perubahan yang belum terkirim, aplikasi menyinkronkan dulu atau meminta konfirmasi eksplisit. | Putuskan sambungan, semua data latihan tetap utuh di HP, indikator sinkron hilang. |
+| FR-A8 | P0 | Mode lokal saja adalah **default dan sepenuhnya didukung**. Tidak ada fitur latihan yang dikunci di balik sinkronisasi. Yang hilang tanpa sinkronisasi hanya dashboard web. | Jalankan seluruh alur FR-B sampai FR-F tanpa pernah menyalakan sinkronisasi; semuanya berfungsi. |
+| FR-A9 | P0 | Satu HP, satu data. Tidak ada pemilih akun atau profil ganda di aplikasi. | Tidak ada layar atau menu untuk menambah atau berganti akun. |
 
 ### B. Program dan split
 
@@ -212,7 +217,7 @@ Instal APK di HP baru → login → semua data kembali dalam satu kali tarik.
 
 | ID | P | Kebutuhan | Kriteria penerimaan |
 |---|---|---|---|
-| FR-G1 | P0 | Login dengan akun yang sama; membaca `user_state` dan berlangganan Realtime sehingga sesi baru dari HP tampil tanpa refresh. | Selesaikan sesi di HP, dalam ≤ 10 detik dashboard yang terbuka menampilkan sesi itu. |
+| FR-G1 | P0 | Terikat ke identitas HP lewat kode pairing (FR-A1c), bukan login; membaca `user_state` dan berlangganan Realtime sehingga sesi baru dari HP tampil tanpa refresh. | Selesaikan sesi di HP, dalam ≤ 10 detik dashboard yang terbuka menampilkan sesi itu. |
 | FR-G2 | P0 | Halaman **Overview**: heatmap aktivitas, sesi minggu ini vs rencana program, berat badan 90 hari, 3 PR terbaru. | Semua elemen tampil dengan data nyata dari akun. |
 | FR-G3 | P0 | Halaman **Progres**: pilih gerakan, grafik e1RM dan volume mingguan dengan rentang 4, 12, 26, 52 minggu, tabel sesi, kartu "Target berikutnya" berisi beban, rep, dan alasan yang **identik** dengan yang akan ditampilkan HP. | Angka target di dashboard sama persis dengan yang muncul saat sesi dibuka di HP. |
 | FR-G4 | P0 | Halaman **Program**: split aktif, mode, urutan sesi dan posisi cursor, kepatuhan mingguan (sesi terencana vs terlaksana) 12 minggu, daftar gerakan stall (e1RM tidak naik ≥ 3 minggu). | Gerakan dengan e1RM datar 3 minggu muncul di daftar stall. |
@@ -226,10 +231,24 @@ Instal APK di HP baru → login → semua data kembali dalam satu kali tarik.
 
 | ID | P | Kebutuhan | Kriteria penerimaan |
 |---|---|---|---|
-| FR-H1 | P0 | Onboarding pertama: login → pilih program → pilih alat → Home. Maksimal 4 layar. Tanpa pertanyaan usia, diet, tujuan, avatar. | Pengguna baru tiba di Home dalam ≤ 4 layar setelah login. |
+| FR-H1 | P0 | Onboarding pertama: pilih program → pilih alat → Home. Maksimal 2 layar, dan keduanya bisa dilewati. Tanpa layar akun, tanpa pertanyaan usia, diet, tujuan, avatar. | Pengguna baru tiba di Home dalam ≤ 2 layar sejak aplikasi dibuka pertama kali. |
 | FR-H2 | P0 | Pengaturan: satuan kg/lb (dengan konversi data), rest default, rest-pause default, RIR/RPE on/off, wake lock, ukuran animasi, awal minggu, tema gelap/terang, warna aksen. | Semua opsi tersimpan dan tersinkron. |
 | FR-H3 | P1 | Pengingat rest timer sebagai notifikasi lokal saat aplikasi di latar belakang. | Kunci HP saat rest 90 detik, notifikasi muncul saat habis. |
 | FR-H4 | P2 | Bahasa Indonesia untuk UI. | Semua string UI tersedia dalam ID. |
+
+
+### I. Identitas dan ikon
+
+Aplikasi ini adalah produk sendiri. Kode yang di-port dari openGym boleh tetap menyebut asalnya di komentar dan di `NOTICE.md` (kewajiban atribusi AGPL), tapi tidak boleh ada jejak openGym yang tampil ke pengguna.
+
+| ID | P | Kebutuhan | Kriteria penerimaan |
+|---|---|---|---|
+| FR-I1 | P0 | Nama tampilan aplikasi `GymApps` (bukan `gymapps`), ikon launcher, dan splash screen memakai identitas sendiri. `applicationId` tetap `dev.hariz.gymapps`. | `android:label` di `AndroidManifest.xml` bernilai `GymApps`. `grep -rni "opengym" app/lib` hanya menemukan komentar, tidak ada string yang tampil di UI. |
+| FR-I2 | P0 | Ikon launcher Android lengkap: semua kerapatan mipmap, ikon adaptif (foreground dan background terpisah), dan monochrome untuk tema dinamis Android 13+. Dihasilkan dari satu berkas sumber lewat `flutter_launcher_icons`, bukan ditambal per ukuran. | Pasang APK, ikon tajam di launcher, di menu Recents, dan di Pengaturan aplikasi. Tidak ada ikon buram atau kotak putih. |
+| FR-I3 | P0 | Ikon **di dalam** aplikasi memakai satu set: Material Icons, dengan satu varian yang sama di seluruh aplikasi (misalnya semuanya `_rounded`). Dilarang mencampur emoji, gambar bitmap, atau pustaka ikon lain sebagai ikon fungsional. | `grep -rhoE "Icons\.[a-z_]+" app/lib` hanya menghasilkan satu varian. Tidak ada emoji sebagai ikon di layar mana pun. |
+| FR-I4 | P0 | Warna ikon mengikuti tema (`IconTheme` atau `colorScheme`), tidak dipaku dengan `Color(0x...)`. Ukuran ikon mengikuti skala tetap: 16, 20, 24, 32. | Ganti tema terang/gelap, semua ikon ikut berubah dan tidak ada yang hilang kontras. |
+| FR-I5 | P1 | Splash screen memakai warna latar yang sama dengan latar tema gelap, sehingga tidak ada kedipan putih saat aplikasi dibuka. | Buka aplikasi 5 kali, tidak ada kilatan putih di antara splash dan Home. |
+| FR-I6 | P1 | Dashboard web memakai favicon dan nama yang sama dengan aplikasi. | Tab browser menampilkan ikon dan judul GymApps. |
 
 ---
 
@@ -257,7 +276,6 @@ Bottom navigation 5 tab (gaya Liftoff): **Workout · Home · Stats · History ·
 
 | Layar | Isi | Referensi skrinsut |
 |---|---|---|
-| Login | Email, password, tombol masuk, tautan lupa password | — |
 | Onboarding: pilih program | Kartu template, deskripsi singkat, jumlah hari | `02_.../Getting_Started.jpg`, `Beginner.jpg` |
 | Onboarding: pilih alat | Daftar alat berkelompok dengan gambar dan centang | `03_.../Is_This_Your_Equipment.jpg` |
 | Home | Header berat badan dan sesi minggu ini; kartu besar "Sesi berikutnya" dengan Start, Skip, Freestyle; strip 7 hari | `01_.../Home_Screen.jpg` (grid kartu) |
