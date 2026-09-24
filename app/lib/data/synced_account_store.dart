@@ -94,8 +94,11 @@ class SyncedAccountStore implements AccountStore {
       if (await _reachServer(email: email, password: password) == _Reach.session) onSignedIn?.call();
       return result;
     }
+    // Email yang belum dikenal HP ini: server hanya ditanya "akun ini ada?",
+    // tidak pernah disuruh membuat akun. Salah ketik email di layar masuk
+    // tidak boleh diam-diam melahirkan akun kosong baru.
     if (result case SignInError(reason: SignInFailure.noAccount || SignInFailure.wrongEmail)) {
-      if (await _reachServer(email: email, password: password) == _Reach.session) {
+      if (await _reachServer(email: email, password: password, mayRegister: false) == _Reach.session) {
         final made = await local.signUp(email: email, password: password);
         if (made case SignUpOk(:final account)) {
           onSignedIn?.call();
@@ -121,7 +124,11 @@ class SyncedAccountStore implements AccountStore {
     final email = account.email;
     final epoch = _epoch;
     final localOk = await local.signIn(email: email, password: password) is SignInOk;
-    final reach = await _reachServer(email: email, password: password);
+    // Mendaftar hanya dengan kata sandi yang sudah lolos di lokal. Kalau lokal
+    // menolak, server harus membuktikan kata sandi itu lewat akun yang sudah
+    // ada — pendaftaran baru tidak membuktikan apa-apa, dan salah ketik akan
+    // jadi kata sandi di server sekaligus di HP ini.
+    final reach = await _reachServer(email: email, password: password, mayRegister: localOk);
 
     // Orangnya keluar (atau berganti akun) selagi menunggu server. Sesi yang
     // mungkin baru tersimpan bukan lagi milik siapa pun yang sedang masuk.
@@ -135,8 +142,10 @@ class SyncedAccountStore implements AccountStore {
         return ConnectResult.connected;
       case _Reach.rejected:
         return localOk ? ConnectResult.rejected : ConnectResult.wrongPassword;
+      // Server tidak menjawab: kata sandi yang tidak lolos lokal mungkin memang
+      // kata sandi server. Belum bisa dipastikan salah.
       case _Reach.offline:
-        return localOk ? ConnectResult.unreachable : ConnectResult.wrongPassword;
+        return ConnectResult.unreachable;
     }
   }
 
@@ -182,8 +191,14 @@ class SyncedAccountStore implements AccountStore {
   }
 
   /// Jaringan, bukan penolakan: tidak ada jawaban yang bisa dipercaya.
-  static bool _offline(Object e) =>
-      e is TimeoutException || e is AuthRetryableFetchException || e is AuthUnknownException || e is! AuthException;
+  static bool _offline(Object e) {
+    if (e is TimeoutException || e is AuthRetryableFetchException || e is AuthUnknownException || e is! AuthException) {
+      return true;
+    }
+    // Dibatasi atau server sedang bermasalah: coba lagi nanti, bukan "ditolak".
+    final status = int.tryParse(e.statusCode ?? '') ?? 0;
+    return status == 429 || status >= 500;
+  }
 
   /// Minta sesi Supabase untuk kredensial ini.
   ///
@@ -194,7 +209,7 @@ class SyncedAccountStore implements AccountStore {
   ///
   /// Sesi dianggap ada hanya kalau memang milik email ini — sesi orang lain
   /// yang tertinggal di perangkat bukan "tersambung".
-  Future<_Reach> _reachServer({required String email, required String password}) async {
+  Future<_Reach> _reachServer({required String email, required String password, bool mayRegister = true}) async {
     final address = LocalAccountStore.normalise(email);
     final epoch = _epoch;
     try {
@@ -203,6 +218,10 @@ class SyncedAccountStore implements AccountStore {
       if (_offline(e)) {
         debugPrint('tidak bisa menghubungi Supabase: $e');
         return _Reach.offline;
+      }
+      if (!mayRegister) {
+        debugPrint('masuk ke Supabase ditolak: $e');
+        return _Reach.rejected;
       }
       debugPrint('masuk ke Supabase ditolak ($e); mencoba mendaftar');
       try {

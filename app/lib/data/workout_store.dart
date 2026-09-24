@@ -20,6 +20,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -82,6 +83,16 @@ class WorkoutStore extends ChangeNotifier {
   /// diterima server. Tidak ada = tidak tahu, dan itu dianggap berubah.
   static String _kPlanDirty(String account) => 'state.$account.planDirty';
 
+  /// Cursor rotasi bergeser di HP ini (sesi dicatat, lewati, jadikan
+  /// berikutnya) sejak dorongan terakhir yang diterima. Terpisah dari
+  /// [_kPlanDirty]: mengikuti program bukan mengubah program.
+  static String _kCursorDirty(String account) => 'state.$account.cursorDirty';
+
+  /// Dokumen berubah di HP ini sejak dorongan terakhir yang diterima. Kalau
+  /// tidak, sinkron cukup bertanya revisi server — bukan mengunggah seluruh
+  /// riwayat setiap kali layar dibuka.
+  static String _kDocDirty(String account) => 'state.$account.docDirty';
+
   /// Berapa banyak sesi terhapus yang diingat. Cukup untuk menutup jeda antar
   /// sinkron dua perangkat, dan tidak membuat dokumennya membengkak.
   static const _removedCap = 500;
@@ -129,6 +140,11 @@ class WorkoutStore extends ChangeNotifier {
   /// Berapa kali rencana diubah. Dipakai untuk tahu apakah ada perubahan baru
   /// selagi dorongan sedang di jalan.
   int _planEdits = 0;
+
+  bool _cursorDirty = true;
+  int _cursorEdits = 0;
+  bool _docDirty = true;
+  int _docEdits = 0;
 
   Future<void> _initialSync = Future.value();
 
@@ -202,6 +218,8 @@ class WorkoutStore extends ChangeNotifier {
     _serverSeen = prefs.getInt(_kRev(account)) != null;
     _planBeforeServer = account.isNotEmpty && (prefs.getBool(_kPlanLocal(account)) ?? false);
     _planDirty = prefs.getBool(_kPlanDirty(account)) ?? true;
+    _cursorDirty = prefs.getBool(_kCursorDirty(account)) ?? true;
+    _docDirty = prefs.getBool(_kDocDirty(account)) ?? true;
     final raw = prefs.getString(_kDoc(account));
     if (raw != null) {
       try {
@@ -244,6 +262,8 @@ class WorkoutStore extends ChangeNotifier {
     _serverSeen = false;
     _planBeforeServer = false;
     _planDirty = true;
+    _cursorDirty = true;
+    _docDirty = true;
     _workouts = const [];
     _routines = const [];
     _program = null;
@@ -281,7 +301,7 @@ class WorkoutStore extends ChangeNotifier {
     final p = _program;
     if (p != null) {
       _program = advanceAfter(p, routineId);
-      if (routineId != null) await _markPlan();
+      if (routineId != null) await _markCursor();
     }
     await _commit();
   }
@@ -377,7 +397,7 @@ class WorkoutStore extends ChangeNotifier {
     final idx = p.order.indexOf(routineId);
     if (idx < 0) return;
     _program = p.copyWith(cursor: idx, clearSkip: true);
-    await _markPlan();
+    await _markCursor();
     await _commit();
   }
 
@@ -387,7 +407,7 @@ class WorkoutStore extends ChangeNotifier {
     final next = nextSessionOn(today);
     if (p == null || next == null) return;
     _program = skipNextIn(p, next);
-    await _markPlan();
+    await _markCursor();
     await _commit();
   }
 
@@ -426,6 +446,7 @@ class WorkoutStore extends ChangeNotifier {
       'r${DateTime.now().microsecondsSinceEpoch.toRadixString(36)}${(_idSeq++).toRadixString(36)}';
 
   Future<void> _commit() async {
+    await _markDoc();
     await _persist();
     notifyListeners();
     unawaited(syncNow());
@@ -444,18 +465,45 @@ class WorkoutStore extends ChangeNotifier {
   Future<void> _markPlan() async {
     _planEdits++;
     _planDirty = true;
+    await _flag(_kPlanDirty, true);
+  }
+
+  Future<void> _markCursor() async {
+    _cursorEdits++;
+    _cursorDirty = true;
+    await _flag(_kCursorDirty, true);
+  }
+
+  Future<void> _markDoc() async {
+    _docEdits++;
+    _docDirty = true;
+    await _flag(_kDocDirty, true);
+  }
+
+  Future<void> _flag(String Function(String) key, bool value) async {
     final account = _account;
     if (account == null) return;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_kPlanDirty(account), true);
+    await prefs.setBool(key(account), value);
   }
 
-  /// Dorongan diterima server. Kalau rencana tidak diubah lagi selagi
-  /// dorongan itu di jalan, salinan server sekarang sama dengan milik HP ini.
-  Future<void> _planSent(SharedPreferences prefs, String account, int editsAtSend) async {
-    if (_planEdits != editsAtSend) return;
-    _planDirty = false;
-    await prefs.setBool(_kPlanDirty(account), false);
+  /// Dorongan diterima server. Tanda "berubah" hanya dilepas untuk bagian
+  /// yang tidak diubah lagi selagi dorongan itu di jalan — perubahan yang
+  /// datang di tengahnya belum ada di server.
+  Future<void> _sent((int, int, int) atSend) async {
+    final (plan, cursor, doc) = atSend;
+    if (_planEdits == plan && _planDirty) {
+      _planDirty = false;
+      await _flag(_kPlanDirty, false);
+    }
+    if (_cursorEdits == cursor && _cursorDirty) {
+      _cursorDirty = false;
+      await _flag(_kCursorDirty, false);
+    }
+    if (_docEdits == doc && _docDirty) {
+      _docDirty = false;
+      await _flag(_kDocDirty, false);
+    }
   }
 
   static List<String> _capRemoved(List<String> keys) {
@@ -467,6 +515,7 @@ class WorkoutStore extends ChangeNotifier {
   Future<void> clear() async {
     _empty();
     await _markPlan();
+    await _markDoc();
     await _persist();
     notifyListeners();
   }
@@ -588,7 +637,9 @@ class WorkoutStore extends ChangeNotifier {
       // dan digabung dulu. Tanpa langkah ini, push pertama membawa baseRev
       // kosong, dan push_state memperlakukannya sebagai "timpa": riwayat di
       // server diganti dokumen kosong milik HP baru.
+      var pulledNow = false;
       if (baseRev == null) {
+        pulledNow = true;
         final pulled = await backend.pull();
         if (stale()) return;
         if (wrongSession()) throw const NotSignedIn();
@@ -608,8 +659,23 @@ class WorkoutStore extends ChangeNotifier {
         baseRev = pulled?.rev ?? 0;
       }
 
+      // Tidak ada yang berubah di HP ini: cukup tanya revisi server. Sama
+      // dengan yang terakhir diterima = tidak ada yang perlu ditarik maupun
+      // didorong. Ini jalur yang dilewati setiap kali aplikasi dibuka lagi.
+      if (!pulledNow && !_docDirty) {
+        final serverRev = await backend.getRev();
+        if (stale()) return;
+        if (serverRev == baseRev) {
+          _serverSeen = true;
+          _sync = SyncStatus.synced;
+          _lastSyncedAt = DateTime.now();
+          notifyListeners();
+          return;
+        }
+      }
+
       if (wrongSession()) throw const NotSignedIn();
-      var edits = _planEdits;
+      var snap = (_planEdits, _cursorEdits, _docEdits);
       final result = await backend.push(baseRev: baseRev, state: toDocument());
       if (stale()) return;
 
@@ -617,7 +683,7 @@ class WorkoutStore extends ChangeNotifier {
       switch (result) {
         case PushAccepted(rev: final rev):
           await prefs.setInt(_kRev(account), rev);
-          await _planSent(prefs, account, edits);
+          await _sent(snap);
           accepted = true;
 
         // Perangkat lain menulis lebih dulu. Riwayat lokal digabung dengan
@@ -630,12 +696,12 @@ class WorkoutStore extends ChangeNotifier {
           if (stale()) return;
           notifyListeners();
           if (wrongSession()) throw const NotSignedIn();
-          edits = _planEdits;
+          snap = (_planEdits, _cursorEdits, _docEdits);
           final retry = await backend.push(baseRev: rev, state: toDocument());
           if (stale()) return;
           if (retry case PushAccepted(rev: final newRev)) {
             await prefs.setInt(_kRev(account), newRev);
-            await _planSent(prefs, account, edits);
+            await _sent(snap);
             accepted = true;
           } else {
             // Ditolak lagi: perangkat lain menulis di antara dua dorongan.
@@ -674,8 +740,17 @@ class WorkoutStore extends ChangeNotifier {
     // (baru dipasang), rencananya dipilih sebelum server sempat ditanya, atau
     // perangkat ini tidak mengubah apa pun sementara HP lain mengubahnya.
     if (_program == null || (theirs['program'] is Map && (preferServerPlan || !_planDirty))) {
-      _program = _programIn(theirs);
+      final mine = _program;
+      final server = _programIn(theirs);
+      _program = server;
       _routines = _routinesIn(theirs);
+      // Struktur rencana diambil dari server, tapi sesi yang dicatat di HP ini
+      // menggeser cursor-nya. Selama urutan rutinitasnya masih sama, posisi
+      // rotasi dari HP ini yang dipakai; kalau urutannya diganti di HP lain,
+      // posisi lama tidak berarti apa-apa lagi dan milik server yang dipakai.
+      if (mine != null && server != null && _cursorDirty && !preferServerPlan && listEquals(mine.order, server.order)) {
+        _program = server.copyWith(cursor: mine.cursor, skippedOn: mine.skippedOn, clearSkip: mine.skippedOn == null);
+      }
     }
     // Gerakan custom digabung per id: gerakan yang dibuat di HP lain dipakai
     // riwayat di sana, dan membuangnya membuat sesi itu kehilangan nama

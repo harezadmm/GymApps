@@ -62,8 +62,14 @@ class _Server implements Backend {
   @override
   String? get signedInEmail => email;
 
+  int revChecks = 0;
+
   @override
-  Future<int?> getRev() async => rev;
+  Future<int?> getRev() async {
+    if (!session) throw const NotSignedIn();
+    revChecks++;
+    return rev;
+  }
 
   @override
   Future<PulledState?> pull() async {
@@ -441,6 +447,82 @@ void main() {
       await tablet.syncNow();
       expect(tablet.program!.name, 'Heavy Duty');
       expect((server.state!['program'] as Map)['name'], 'Heavy Duty');
+    });
+
+    test('HP yang cuma mencatat sesi offline tidak menimpa split baru dari HP lain', () async {
+      // Temuan review: pergeseran cursor dulu dihitung "mengubah program".
+      final server = _Server();
+      final hp = WorkoutStore(server);
+      await hp.load('hp@x.com');
+      await hp.applyTemplate('ppl');
+      await hp.syncNow();
+      final tablet = WorkoutStore(server);
+      await tablet.load('tablet@x.com');
+      await tablet.syncNow();
+
+      await tablet.applyTemplate('upper-lower');
+      await tablet.syncNow();
+
+      // HP di gym tanpa sinyal: mencatat Push dari rencana lama.
+      server.session = false;
+      await hp.addWorkout(_sesi('2026-09-24', rutinitas: 'Push'), routineId: 'ppl-0');
+      server.session = true;
+      await hp.syncNow();
+
+      expect(hp.program!.name, 'Upper / Lower');
+      expect(hp.routines.map((r) => r.name), ['Upper', 'Lower']);
+      expect((server.state!['program'] as Map)['name'], 'Upper / Lower');
+      expect(server.dates, ['2026-09-24']);
+    });
+
+    test('struktur dari HP lain, posisi rotasi dari HP ini kalau urutannya sama', () async {
+      final server = _Server();
+      final hp = WorkoutStore(server);
+      await hp.load('hp@x.com');
+      await hp.applyTemplate('ppl');
+      await hp.syncNow();
+      final tablet = WorkoutStore(server);
+      await tablet.load('tablet@x.com');
+      await tablet.syncNow();
+
+      await tablet.updateProgram(tablet.program!.copyWith(name: 'PPL baru'));
+      await tablet.syncNow();
+
+      await hp.addWorkout(_sesi('2026-09-24', rutinitas: 'Push'), routineId: 'ppl-0');
+      await hp.syncNow();
+      expect(hp.program!.name, 'PPL baru');
+      expect(hp.program!.cursor, 1);
+      expect((server.state!['program'] as Map)['cursor'], 1);
+    });
+
+    test('dibuka lagi tanpa perubahan: tanya revisi, tidak mengunggah ulang', () async {
+      final server = _Server();
+      final store = WorkoutStore(server);
+      await store.load('a@x.com');
+      await store.addWorkout(_sesi('2026-09-16'));
+      await store.syncNow();
+      final pushes = server.pushes;
+
+      await store.syncNow();
+      await store.syncNow();
+      expect(server.pushes, pushes);
+      expect(server.revChecks, greaterThan(0));
+      expect(store.syncStatus, SyncStatus.synced);
+    });
+
+    test('dibuka lagi tanpa perubahan tapi HP lain menulis: tetap ditarik', () async {
+      final server = _Server();
+      final hp = WorkoutStore(server);
+      await hp.load('hp@x.com');
+      await hp.syncNow();
+      final tablet = WorkoutStore(server);
+      await tablet.load('tablet@x.com');
+      await tablet.syncNow();
+
+      await tablet.addWorkout(_sesi('2026-09-20'));
+      await tablet.syncNow();
+      await hp.syncNow();
+      expect(hp.workouts.map((w) => w.date), ['2026-09-20']);
     });
 
     test('status "berubah" bertahan setelah aplikasi ditutup', () async {
