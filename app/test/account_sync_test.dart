@@ -403,6 +403,58 @@ void main() {
     });
   });
 
+  group('program diganti di HP lain', () {
+    test('HP yang tidak mengubah apa pun mengambil program baru dari server', () async {
+      final server = _Server();
+      final hp = WorkoutStore(server);
+      await hp.load('hp@x.com');
+      await hp.applyTemplate('ppl');
+      await hp.syncNow();
+
+      final tablet = WorkoutStore(server);
+      await tablet.load('tablet@x.com');
+      await tablet.syncNow();
+      expect(tablet.program!.name, 'Push / Pull / Legs');
+
+      await hp.applyTemplate('upper-lower');
+      await hp.syncNow();
+
+      // Tablet cuma dibuka lagi — sinkron saat kembali ke aplikasi.
+      await tablet.syncNow();
+      expect(tablet.program!.name, 'Upper / Lower');
+      expect((server.state!['program'] as Map)['name'], 'Upper / Lower');
+    });
+
+    test('dua-duanya mengubah: perubahan HP yang sinkron belakangan yang dipakai', () async {
+      final server = _Server();
+      final hp = WorkoutStore(server);
+      await hp.load('hp@x.com');
+      await hp.applyTemplate('ppl');
+      await hp.syncNow();
+      final tablet = WorkoutStore(server);
+      await tablet.load('tablet@x.com');
+      await tablet.syncNow();
+
+      await hp.applyTemplate('upper-lower');
+      await hp.syncNow();
+      await tablet.applyTemplate('heavy-duty');
+      await tablet.syncNow();
+      expect(tablet.program!.name, 'Heavy Duty');
+      expect((server.state!['program'] as Map)['name'], 'Heavy Duty');
+    });
+
+    test('status "berubah" bertahan setelah aplikasi ditutup', () async {
+      final server = _Server()..session = false;
+      final hp = WorkoutStore(server);
+      await hp.load('hp@x.com');
+      await hp.applyTemplate('ppl');
+      await hp.syncNow();
+
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getBool('state.hp@x.com.planDirty'), isTrue);
+    });
+  });
+
   group('pilih sesi lain hari ini', () {
     test('jadwal Push, dikerjakan Legs: berikutnya kembali ke Push', () async {
       final store = WorkoutStore();

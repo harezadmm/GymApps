@@ -15,15 +15,23 @@
 /// * Kata sandi yang salah untuk akun yang ada di HP ini tidak pernah sampai
 ///   ke jaringan.
 ///
-/// Satu pengecualian: email yang belum pernah masuk di HP ini. Itu HP baru
-/// atau aplikasi yang dipasang ulang, dan akunnya hanya ada di server — maka
-/// server yang memeriksa kata sandinya, lalu akun lokal dibuat dengannya.
-/// Tanpa jalur ini, orang yang ganti HP disuruh "membuat akun" untuk email
-/// yang sudah mereka punya.
+/// Dua pengecualian, dua-duanya karena server yang tahu jawabannya:
+///
+/// * Email yang belum pernah masuk di HP ini. Itu HP baru atau aplikasi yang
+///   dipasang ulang, dan akunnya hanya ada di server — maka server yang
+///   memeriksa kata sandinya, lalu akun lokal dibuat dengannya. Tanpa jalur
+///   ini, orang yang ganti HP disuruh "membuat akun" untuk email yang sudah
+///   mereka punya.
+/// * [connect] dari Profil, yang memang perintah "sambungkan ke server". Kalau
+///   akun yang sama pernah dibuat di HP lain dengan kata sandi berbeda, kata
+///   sandi server yang menang dan kata sandi lokal ikut diganti — kalau tidak,
+///   HP ini tidak akan pernah bisa tersambung.
 ///
 /// Sesi Supabase-nya adalah *tambahan*, bukan syarat. Gagal menyambung berarti
 /// kehilangan sinkron, bukan kehilangan aplikasi.
 library;
+
+import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -31,7 +39,20 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'account_store.dart';
 
 /// Hasil menyambungkan akun yang sudah masuk ke server.
-enum ConnectResult { connected, wrongPassword, unreachable }
+enum ConnectResult {
+  connected,
+  wrongPassword,
+
+  /// Server menjawab, tapi menolak kata sandi ini untuk email ini — biasanya
+  /// akun yang sama pernah dibuat di HP lain dengan kata sandi berbeda.
+  rejected,
+
+  /// Tidak ada jawaban dari server: jaringan mati atau terlalu lambat.
+  unreachable,
+}
+
+/// Apa yang terjadi saat meminta sesi server.
+enum _Reach { session, rejected, offline }
 
 class SyncedAccountStore implements AccountStore {
   SyncedAccountStore({required this.local, required this.auth, this.onSignedIn});
@@ -46,6 +67,14 @@ class SyncedAccountStore implements AccountStore {
   /// bukan menunggu sesi latihan berikutnya.
   final VoidCallback? onSignedIn;
 
+  /// Batas waktu tiap panggilan ke server auth. Tanpa ini, sinyal gym yang
+  /// putus-putus membuat layar menunggu sampai batas TCP sistem.
+  static const _timeout = Duration(seconds: 15);
+
+  /// Naik setiap kali keluar. Jawaban server yang datang sesudahnya — sesi
+  /// yang disimpan gotrue untuk orang yang sudah keluar — dibuang lagi.
+  int _epoch = 0;
+
   @override
   Future<Account?> signedIn() => local.signedIn();
 
@@ -54,7 +83,7 @@ class SyncedAccountStore implements AccountStore {
     final result = await local.signUp(email: email, password: password);
     // Akun lokal gagal dibuat (email sudah terpakai) — jangan sentuh server.
     if (result is! SignUpOk) return result;
-    await _reachServer(email: email, password: password);
+    if (await _reachServer(email: email, password: password) == _Reach.session) onSignedIn?.call();
     return result;
   }
 
@@ -62,16 +91,17 @@ class SyncedAccountStore implements AccountStore {
   Future<SignInResult> signIn({required String email, required String password}) async {
     final result = await local.signIn(email: email, password: password);
     if (result is SignInOk) {
-      await _reachServer(email: email, password: password);
+      if (await _reachServer(email: email, password: password) == _Reach.session) onSignedIn?.call();
       return result;
     }
     if (result case SignInError(reason: SignInFailure.noAccount || SignInFailure.wrongEmail)) {
-      if (await _serverAccepts(email: email, password: password)) {
+      if (await _reachServer(email: email, password: password) == _Reach.session) {
         final made = await local.signUp(email: email, password: password);
         if (made case SignUpOk(:final account)) {
           onSignedIn?.call();
           return SignInOk(account);
         }
+        await _dropSession();
       }
     }
     return result;
@@ -81,42 +111,46 @@ class SyncedAccountStore implements AccountStore {
   ///
   /// Untuk orang yang masuknya terjadi tanpa sinyal, atau sebelum build ini
   /// punya server — mereka tetap masuk, tapi tanpa sesi Supabase, dan kata
-  /// sandinya tidak disimpan di mana pun untuk dipakai ulang. Kata sandi
-  /// diperiksa lokal dulu, sama seperti saat masuk.
+  /// sandinya tidak disimpan di mana pun untuk dipakai ulang.
+  ///
+  /// Kata sandi diperiksa lokal dulu. Kalau lokal menolak tapi server
+  /// menerima, kata sandi server yang menang dan yang lokal diganti.
   Future<ConnectResult> connect(String password) async {
     final account = await local.signedIn();
     if (account == null) return ConnectResult.unreachable;
-    final check = await local.signIn(email: account.email, password: password);
-    if (check is! SignInOk) return ConnectResult.wrongPassword;
-    await _reachServer(email: account.email, password: password);
-    return auth.currentSession != null ? ConnectResult.connected : ConnectResult.unreachable;
-  }
+    final email = account.email;
+    final epoch = _epoch;
+    final localOk = await local.signIn(email: email, password: password) is SignInOk;
+    final reach = await _reachServer(email: email, password: password);
 
-  /// true kalau server menerima kredensial ini dan sesinya sekarang ada.
-  /// Jaringan mati atau kata sandi salah sama-sama false — pemanggil lalu
-  /// menampilkan kesalahan lokal seperti biasa.
-  Future<bool> _serverAccepts({required String email, required String password}) async {
-    try {
-      await auth.signInWithPassword(email: LocalAccountStore.normalise(email), password: password);
-    } catch (e) {
-      debugPrint('server menolak atau tidak terjangkau: $e');
-      return false;
+    // Orangnya keluar (atau berganti akun) selagi menunggu server. Sesi yang
+    // mungkin baru tersimpan bukan lagi milik siapa pun yang sedang masuk.
+    if (epoch != _epoch || (await local.signedIn())?.email != email) {
+      if (reach == _Reach.session) await _dropSession();
+      return ConnectResult.unreachable;
     }
-    return auth.currentSession != null;
+    switch (reach) {
+      case _Reach.session:
+        if (!localOk) await local.replacePassword(email: email, password: password);
+        return ConnectResult.connected;
+      case _Reach.rejected:
+        return localOk ? ConnectResult.rejected : ConnectResult.wrongPassword;
+      case _Reach.offline:
+        return localOk ? ConnectResult.unreachable : ConnectResult.wrongPassword;
+    }
   }
 
   @override
+  Future<void> replacePassword({required String email, required String password}) =>
+      local.replacePassword(email: email, password: password);
+
+  @override
   Future<void> signOut() async {
+    _epoch++;
     await local.signOut();
     // Sesi server dibuang juga. Kalau tidak, perangkat yang dipinjamkan ke
     // orang lain akan tetap mendorong riwayat ke akun pemilik sebelumnya.
-    // Sesi lokal Supabase dibuang sebelum permintaan logout dikirim, jadi
-    // batas waktu di sini aman: yang terpotong hanya pemberitahuan ke server.
-    try {
-      await auth.signOut().timeout(const Duration(seconds: 5));
-    } catch (e) {
-      debugPrint('gagal keluar dari Supabase: $e');
-    }
+    await _dropSession();
   }
 
   @override
@@ -127,38 +161,65 @@ class SyncedAccountStore implements AccountStore {
     await signOut();
   }
 
-  /// Dapatkan sesi Supabase untuk kredensial yang **sudah** lolos di lokal.
+  /// Sesi lokal Supabase dibuang sebelum permintaan logout dikirim, jadi batas
+  /// waktu di sini aman: yang terpotong hanya pemberitahuan ke server.
+  Future<void> _dropSession() async {
+    try {
+      await auth.signOut().timeout(const Duration(seconds: 5));
+    } catch (e) {
+      debugPrint('gagal keluar dari Supabase: $e');
+    }
+  }
+
+  /// Panggilan auth dengan batas waktu. Kalau jawabannya baru datang setelah
+  /// orangnya keluar, sesi yang terlanjur disimpan gotrue dibuang.
+  Future<T> _call<T>(Future<T> request) {
+    final epoch = _epoch;
+    unawaited(request.then((_) {
+      if (epoch != _epoch) unawaited(_dropSession());
+    }, onError: (_) {}));
+    return request.timeout(_timeout);
+  }
+
+  /// Jaringan, bukan penolakan: tidak ada jawaban yang bisa dipercaya.
+  static bool _offline(Object e) =>
+      e is TimeoutException || e is AuthRetryableFetchException || e is AuthUnknownException || e is! AuthException;
+
+  /// Minta sesi Supabase untuk kredensial ini.
   ///
   /// Mencoba masuk dulu, lalu mendaftar kalau akunnya belum ada di server.
   /// Urutan itu penting: akun yang dibuat saat offline tidak punya padanan di
   /// server, dan orang tidak boleh diminta mendaftar ulang hanya karena
   /// kebetulan tidak ada sinyal waktu pertama kali membuka aplikasi.
   ///
-  /// Mendaftar di sini aman karena lokal sudah membuktikan kata sandinya —
-  /// jalur ini tidak pernah dilewati kredensial yang salah.
-  Future<void> _reachServer({required String email, required String password}) async {
+  /// Sesi dianggap ada hanya kalau memang milik email ini — sesi orang lain
+  /// yang tertinggal di perangkat bukan "tersambung".
+  Future<_Reach> _reachServer({required String email, required String password}) async {
     final address = LocalAccountStore.normalise(email);
+    final epoch = _epoch;
     try {
-      await auth.signInWithPassword(email: address, password: password);
-    } on AuthException catch (e) {
-      debugPrint('masuk ke Supabase gagal (${e.message}); mencoba mendaftar');
-      try {
-        await auth.signUp(email: address, password: password);
-      } on AuthException catch (e) {
-        // Kata sandi lokal berbeda dari yang ada di server, atau email ditolak.
-        // Aplikasi tetap jalan; yang hilang cuma sinkronnya.
-        debugPrint('mendaftar ke Supabase gagal: ${e.message}');
-        return;
-      } catch (e) {
-        debugPrint('mendaftar ke Supabase gagal: $e');
-        return;
-      }
+      await _call(auth.signInWithPassword(email: address, password: password));
     } catch (e) {
-      // Biasanya jaringan. Bukan alasan untuk menghalangi orang masuk.
-      debugPrint('tidak bisa menghubungi Supabase: $e');
-      return;
+      if (_offline(e)) {
+        debugPrint('tidak bisa menghubungi Supabase: $e');
+        return _Reach.offline;
+      }
+      debugPrint('masuk ke Supabase ditolak ($e); mencoba mendaftar');
+      try {
+        await _call(auth.signUp(email: address, password: password));
+      } catch (e) {
+        if (_offline(e)) return _Reach.offline;
+        // Email sudah punya akun server dengan kata sandi lain, atau ditolak.
+        // Aplikasi tetap jalan; yang hilang cuma sinkronnya.
+        debugPrint('mendaftar ke Supabase ditolak: $e');
+        return _Reach.rejected;
+      }
     }
-
-    if (auth.currentSession != null) onSignedIn?.call();
+    if (epoch != _epoch) {
+      await _dropSession();
+      return _Reach.offline;
+    }
+    final who = auth.currentSession?.user.email?.trim().toLowerCase();
+    return who == address ? _Reach.session : _Reach.rejected;
   }
 }
