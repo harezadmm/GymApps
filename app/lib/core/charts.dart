@@ -76,7 +76,9 @@ class BarSeries extends StatelessWidget {
                     if (i > 0) const SizedBox(width: gap),
                     Container(
                       width: w,
-                      height: math.max(6, ((v - floor) / (hi - floor)) * box.maxHeight),
+                      // Semua nilai sama (mis. semuanya nol) → hi == floor.
+                      // Tanpa penjaga ini tingginya NaN dan layarnya gagal digambar.
+                      height: hi <= floor ? 6 : math.max(6, ((v - floor) / (hi - floor)) * box.maxHeight),
                       decoration: BoxDecoration(
                         color: i == values.length - 1 ? (highlightColor ?? c.accent) : idle,
                         borderRadius: BorderRadius.circular(GymRadius.bar),

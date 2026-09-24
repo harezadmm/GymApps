@@ -1,4 +1,4 @@
-/// Tab History — artboard `11 History`.
+/// Tab History â€” artboard `11 History`.
 ///
 /// Membaca riwayat asli dari [WorkoutStore]. Susunan dan tokennya tetap sama
 /// dengan artboard; yang berubah cuma sumber angkanya. Ini juga layar tempat
@@ -9,13 +9,14 @@ library;
 import 'package:flutter/material.dart';
 
 import '../../core/charts.dart';
+import '../../core/format.dart';
 import '../../core/strings.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
-import '../../data/demo.dart';
+import '../../data/exercise_catalog.dart';
 import '../../data/workout_store.dart';
 import '../../domain/models.dart';
-import '../session/session_screen.dart';
+import '../session/session_launcher.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -27,17 +28,28 @@ class HistoryScreen extends StatefulWidget {
 class _HistoryScreenState extends State<HistoryScreen> {
   int _filter = 0;
 
-  static const _filters = ['All', 'Push', 'Pull', 'Legs'];
+  /// Filter diambil dari nama rutinitas yang benar-benar ada di riwayat â€”
+  /// dulu tertulis Push/Pull/Legs apa pun program orangnya.
+  static List<String> _filtersFor(List<Workout> all) {
+    final seen = <String>[];
+    for (final w in all) {
+      final r = w.routine;
+      if (r != null && r.isNotEmpty && !seen.contains(r)) seen.add(r);
+    }
+    return ['All', ...seen.take(6)];
+  }
 
   @override
   Widget build(BuildContext context) {
     final c = context.gym;
     final store = context.workouts;
     final all = store.workouts;
+    final filters = _filtersFor(all);
+    if (_filter >= filters.length) _filter = 0;
 
     final sessions = _filter == 0
         ? all
-        : all.where((w) => w.routine == _filters[_filter]).toList();
+        : all.where((w) => w.routine == filters[_filter]).toList();
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
@@ -45,18 +57,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
         ScreenHeader(
           title: context.t.history,
           actions: [
-            // Kalender bulanan belum ada — kotak aktivitas di bawah sudah
+            // Kalender bulanan belum ada â€” kotak aktivitas di bawah sudah
             // menjawab "kapan saja aku latihan". Tombol + mencatat sesi baru.
             SquareIconButton(
               icon: Icons.add,
               tone: c.accent,
-              onPressed: () => Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) => SessionScreen(
-                  routineName: 'Freestyle',
-                  exercises: demoExercises(),
-                  history: store.workouts,
-                ),
-              )),
+              onPressed: () => openFreestyleSession(context, context.t.freestyle),
             ),
           ],
         ),
@@ -82,7 +88,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         ),
         const SizedBox(height: 16),
         FilterChips(
-          labels: [context.t.all, ..._filters.skip(1)],
+          labels: [context.t.all, ...filters.skip(1)],
           index: _filter,
           onChanged: (i) => setState(() => _filter = i),
         ),
@@ -93,7 +99,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         ],
         if (!store.loaded)
           // Riwayat masih dibaca dari disk. Jangan tulis "belum ada sesi" di
-          // sini — itu kalimat yang paling menakutkan untuk dibaca keliru.
+          // sini â€” itu kalimat yang paling menakutkan untuk dibaca keliru.
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 30),
             child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
@@ -104,7 +110,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 30),
             child: Center(
-              child: Text(context.t.noSessionsOf(_filters[_filter]),
+              child: Text(context.t.noSessionsOf(filters[_filter]),
                   style: TextStyle(fontSize: 13.5, color: c.text2)),
             ),
           )
@@ -223,7 +229,7 @@ class _SessionRow extends StatelessWidget {
       color: c.surface,
       borderRadius: BorderRadius.circular(GymRadius.card),
       child: InkWell(
-        onTap: () {},
+        onTap: () => _showDetail(context, workout),
         borderRadius: BorderRadius.circular(GymRadius.card),
         child: Container(
           padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
@@ -262,7 +268,7 @@ class _SessionRow extends StatelessWidget {
                         if (workout.durationSeconds != null) _clock(workout.durationSeconds!),
                         '${(volume / 1000).toStringAsFixed(1)} t',
                         context.t.setsSuffix(_workingSets.length),
-                      ].join(' · '),
+                      ].join(' Â· '),
                       style: TextStyle(fontSize: 12.5, color: c.text2),
                     ),
                   ],
@@ -284,4 +290,103 @@ class _SessionRow extends StatelessWidget {
     final ss = s.toString().padLeft(2, '0');
     return h > 0 ? '$h:$mm:$ss' : '$m:$ss';
   }
+}
+
+
+/// Detail satu sesi: gerakan dan setnya, plus hapus (FR-F1).
+Future<void> _showDetail(BuildContext context, Workout workout) async {
+  final store = WorkoutScope.read(context);
+  final catalog = await ExerciseCatalog.load();
+  if (!context.mounted) return;
+  await showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: context.gym.surface,
+    showDragHandle: true,
+    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(GymRadius.large))),
+    builder: (sheetContext) {
+      final c = sheetContext.gym;
+      final t = sheetContext.t;
+      return DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.6,
+        maxChildSize: 0.92,
+        builder: (context, scroll) => ListView(
+          controller: scroll,
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+          children: [
+            Text(workout.routine ?? t.freestyleSession, style: Theme.of(context).textTheme.headlineSmall),
+            const SizedBox(height: 4),
+            Text(
+              [
+                workout.date,
+                if (workout.durationSeconds != null) '${workout.durationSeconds! ~/ 60} min',
+              ].join(' Â· '),
+              style: TextStyle(fontSize: 13, color: c.text2),
+            ),
+            const SizedBox(height: 16),
+            for (final e in workout.entries) ...[
+              Text(catalog.nameOf(e.exerciseId), style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 6),
+              for (final (i, s) in e.sets.indexed)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 34,
+                        child: Text(s.isWarmup ? 'W' : '${e.sets.take(i + 1).where((x) => !x.isWarmup).length}',
+                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: s.isWarmup ? c.warn : c.text2)),
+                      ),
+                      Expanded(
+                        child: Text('${weightLabel(s.weight, bodyweight: e.target?.bodyweight ?? false)} kg Ã— ${s.reps}',
+                            style: TextStyle(fontSize: 14, color: s.done ? c.text : c.text3)),
+                      ),
+                      Icon(s.done ? Icons.check_circle : Icons.circle_outlined,
+                          size: 18, color: s.done ? c.doneInk : c.text3),
+                    ],
+                  ),
+                ),
+              const SizedBox(height: 12),
+            ],
+            const SizedBox(height: 8),
+            GymButton(
+              label: t.delete,
+              icon: Icons.delete_outline,
+              tone: GymButtonTone.danger,
+              height: 44,
+              onPressed: () async {
+                final ok = await showDialog<bool>(
+                  context: sheetContext,
+                  builder: (context) => AlertDialog(
+                    backgroundColor: c.surface,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(GymRadius.large)),
+                    title: Text('${t.delete}?', style: Theme.of(context).textTheme.titleLarge),
+                    content: Text('${workout.routine ?? t.freestyleSession} Â· ${workout.date}',
+                        style: TextStyle(fontSize: 14, color: c.text2)),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(false),
+                        child: Text(t.cancel, style: TextStyle(fontWeight: FontWeight.w700, color: c.text2)),
+                      ),
+                      GymButton(
+                        label: t.delete,
+                        height: 42,
+                        expand: false,
+                        tone: GymButtonTone.danger,
+                        onPressed: () => Navigator.of(context).pop(true),
+                      ),
+                    ],
+                  ),
+                );
+                if (ok != true) return;
+                await store.removeWorkout(workout);
+                if (sheetContext.mounted) Navigator.of(sheetContext).pop();
+              },
+            ),
+          ],
+        ),
+      );
+    },
+  );
 }

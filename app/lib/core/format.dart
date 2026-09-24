@@ -20,3 +20,11 @@ String formatDelta(double w) => w == w.roundToDouble() ? w.toStringAsFixed(0) : 
 /// 1324 → "1,324". Daftar sepanjang katalog gerakan sulit dibaca tanpa ini.
 String formatCount(int n) =>
     n.toString().replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+$)'), (m) => '${m[1]},');
+
+/// Beban untuk teks target: `72.5`, `BW` untuk gerakan bodyweight, `—` untuk
+/// gerakan berbeban yang bebannya belum diisi. Menulis "BW" untuk bench press
+/// yang belum punya beban terbaca seolah bench-nya tanpa barbel.
+String weightLabel(double w, {required bool bodyweight}) {
+  if (w > 0) return formatWeight(w);
+  return bodyweight ? 'BW' : '—';
+}

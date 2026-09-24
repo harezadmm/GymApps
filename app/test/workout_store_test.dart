@@ -212,4 +212,82 @@ void main() {
       expect(store.workouts.first.entries.length, 4);
     });
   });
+  group('program dan rutinitas', () {
+    test('template terpasang dan bertahan setelah aplikasi ditutup', () async {
+      final a = WorkoutStore();
+      await a.load();
+      expect(a.hasProgram, isFalse);
+      expect(await a.applyTemplate('ppl'), isTrue);
+
+      final b = WorkoutStore();
+      await b.load();
+      expect(b.hasProgram, isTrue);
+      expect(b.program!.name, 'Push / Pull / Legs');
+      expect(b.routines.map((r) => r.name), ['Push', 'Pull', 'Legs']);
+      expect(b.routines.first.exercises, isNotEmpty);
+    });
+
+    test('sesi dari program menggeser cursor, freestyle tidak', () async {
+      final store = WorkoutStore();
+      await store.load();
+      await store.applyTemplate('ppl');
+      final push = store.routines.first;
+
+      await store.addWorkout(_sesi('2026-09-20'), routineId: push.id);
+      expect(store.program!.cursor, 1);
+      await store.addWorkout(_sesi('2026-09-21'));
+      expect(store.program!.cursor, 1);
+    });
+
+    test('rutinitas baru masuk urutan program, hapus mengeluarkannya', () async {
+      final store = WorkoutStore();
+      await store.load();
+      await store.applyTemplate('upper-lower');
+      const extra = Routine(id: 'arms', name: 'Arms');
+      await store.saveRoutine(extra);
+      expect(store.program!.order.last, 'arms');
+
+      await store.deleteRoutine('arms');
+      expect(store.program!.order, isNot(contains('arms')));
+      expect(store.routines.map((r) => r.id), isNot(contains('arms')));
+    });
+
+    test('hapus rutinitas sebelum cursor tidak menggeser sesi berikutnya', () async {
+      final store = WorkoutStore();
+      await store.load();
+      await store.applyTemplate('ppl');
+      await store.setNext('ppl-2'); // Legs berikutnya
+      await store.deleteRoutine('ppl-0'); // hapus Push
+      final next = store.nextSessionOn(DateTime(2026, 9, 21))!;
+      expect(next.routine.name, 'Legs');
+    });
+
+    test('duplikat masuk tepat di belakang aslinya', () async {
+      final store = WorkoutStore();
+      await store.load();
+      await store.applyTemplate('ppl');
+      await store.duplicateRoutine('ppl-0', 'Push copy');
+      expect(store.routines.map((r) => r.name).take(2), ['Push', 'Push copy']);
+      expect(store.program!.order.length, 4);
+    });
+
+    test('rutinitas dan program ikut terkirim ke server', () async {
+      final server = _FakeBackend();
+      final store = WorkoutStore(server);
+      await store.load();
+      await store.applyTemplate('heavy-duty');
+      await store.syncNow();
+      expect((server.state['routines'] as List).length, 4);
+      expect((server.state['program'] as Map)['rest'], 3);
+    });
+
+    test('riwayat kronologis terlama dulu', () async {
+      final store = WorkoutStore();
+      await store.load();
+      await store.addWorkout(_sesi('2026-09-10'));
+      await store.addWorkout(_sesi('2026-09-20'));
+      expect(store.workouts.first.date, '2026-09-20');
+      expect(store.chronological.first.date, '2026-09-10');
+    });
+  });
 }

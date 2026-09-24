@@ -9,6 +9,11 @@ android {
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
+    // Dipakai untuk nama tampilan per build type (resValue di bawah).
+    buildFeatures {
+        resValues = true
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -27,9 +32,20 @@ android {
         // flag during build.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        // Nama tampilan di launcher (PRD FR-I1). Build debug menimpanya.
+        resValue("string", "app_name", "GymApps")
     }
 
     buildTypes {
+        // Build debug terpasang berdampingan dengan build rilis: id dan nama
+        // berbeda, jadi menguji di HP atau emulator tidak pernah memaksa
+        // menghapus aplikasi rilis beserta datanya karena kunci tanda tangan
+        // yang tidak cocok.
+        debug {
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+            resValue("string", "app_name", "GymApps Debug")
+        }
         release {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.

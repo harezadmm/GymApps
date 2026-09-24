@@ -14,7 +14,12 @@ import '../../core/widgets.dart';
 import '../../data/exercise_catalog.dart';
 
 class ExerciseLibraryScreen extends StatefulWidget {
-  const ExerciseLibraryScreen({super.key});
+  const ExerciseLibraryScreen({super.key, this.picking = false});
+
+  /// Dibuka untuk memilih gerakan (tambah/ganti di sesi, isi rutinitas).
+  /// Ketukan mengembalikan gerakannya. Kalau false, library dibuka untuk
+  /// dijelajahi dan ketukan menampilkan detail gerakan.
+  final bool picking;
 
   @override
   State<ExerciseLibraryScreen> createState() => _ExerciseLibraryScreenState();
@@ -59,6 +64,36 @@ class _ExerciseLibraryScreenState extends State<ExerciseLibraryScreen> {
     return list;
   }
 
+  void _showDetails(BuildContext context, Exercise e) {
+    final c = context.gym;
+    final t = context.t;
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: c.surface,
+      showDragHandle: true,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(GymRadius.large))),
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(e.name, style: Theme.of(context).textTheme.headlineSmall),
+              const SizedBox(height: 14),
+              _DetailLine(label: t.targetMuscle, value: t.muscle(_cap(e.target))),
+              if (e.secondary.isNotEmpty)
+                _DetailLine(label: t.secondaryMuscles, value: e.secondary.map(_cap).join(', ')),
+              _DetailLine(label: t.equipmentLabel, value: _cap(e.equipment)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  static String _cap(String s) => s.isEmpty ? s : '${s[0].toUpperCase()}${s.substring(1)}';
+
   @override
   Widget build(BuildContext context) {
     final c = context.gym;
@@ -77,8 +112,7 @@ class _ExerciseLibraryScreenState extends State<ExerciseLibraryScreen> {
                     tooltip: context.t.back,
                   ),
                   Expanded(child: _SearchField(controller: _query, onChanged: (_) => setState(() {}))),
-                  IconButton(onPressed: () {}, icon: Icon(Icons.tune, color: c.text2), tooltip: context.t.filters),
-                  IconButton(onPressed: () {}, icon: Icon(Icons.add, color: c.accent), tooltip: context.t.customExercise),
+                  const SizedBox(width: 6),
                 ],
               ),
             ),
@@ -124,7 +158,10 @@ class _ExerciseLibraryScreenState extends State<ExerciseLibraryScreen> {
                               Icon(Icons.filter_alt_outlined, size: 15, color: c.text2),
                               const SizedBox(width: 8),
                               Expanded(
-                                child: Text(context.t.equipmentProfile('Gym A'),
+                                // Dulu tertulis "disaring untuk Gym A" padahal
+                                // tidak ada yang disaring. Sekarang hanya
+                                // mengatakan apa yang memang terjadi.
+                                child: Text(widget.picking ? context.t.pickExercise : context.t.exerciseLibrary,
                                     style: TextStyle(fontSize: 12.5, color: c.text2)),
                               ),
                               Text(context.t.shownCount(formatCount(list.length)),
@@ -149,7 +186,9 @@ class _ExerciseLibraryScreenState extends State<ExerciseLibraryScreen> {
                                     starred: _starred.contains(e.id),
                                     onStar: () => setState(() =>
                                         _starred.contains(e.id) ? _starred.remove(e.id) : _starred.add(e.id)),
-                                    onTap: () => Navigator.of(context).pop(e),
+                                    onTap: () => widget.picking
+                                        ? Navigator.of(context).pop(e)
+                                        : _showDetails(context, e),
                                   );
                                 },
                               ),
@@ -261,6 +300,28 @@ class _ExerciseRow extends StatelessWidget {
             Icon(Icons.chevron_right, size: 18, color: c.text3),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _DetailLine extends StatelessWidget {
+  const _DetailLine({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gym;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(width: 96, child: Text(label, style: TextStyle(fontSize: 13, color: c.text2))),
+          Expanded(child: Text(value, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.text))),
+        ],
       ),
     );
   }

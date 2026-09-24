@@ -13,6 +13,7 @@ import 'features/auth/register_screen.dart';
 import 'features/history/history_screen.dart';
 import 'features/home/home_screen.dart';
 import 'features/onboarding/onboarding_screens.dart';
+import 'features/onboarding/program_flow.dart';
 import 'features/profile/profile_screen.dart';
 import 'features/stats/stats_screen.dart';
 import 'features/workout/workout_screen.dart';
@@ -124,7 +125,6 @@ class AppFlow extends StatefulWidget {
 
 class _AppFlowState extends State<AppFlow> {
   AppStage _stage = AppStage.booting;
-  ProgramTemplate? _program;
 
   /// Akun yang sedang masuk. Dipegang di sini supaya layar Profil menampilkan
   /// email yang sebenarnya, bukan alamat contoh.
@@ -162,15 +162,33 @@ class _AppFlowState extends State<AppFlow> {
     });
   }
 
-  /// Dipanggil setelah masuk atau mendaftar berhasil — store-nya sudah tahu
-  /// siapa yang masuk, tinggal dibaca ulang.
-  Future<void> _enter(AppStage next) async {
+  /// Dipanggil setelah masuk atau mendaftar berhasil.
+  ///
+  /// Onboarding hanya dijalankan kalau program memang belum pernah dipilih.
+  /// Dulu setiap kali masuk ulang, orang disuruh memilih program lagi — dan
+  /// pilihannya tidak disimpan ke mana pun.
+  Future<void> _enter() async {
+    final store = WorkoutScope.read(context);
     final account = await _accounts.signedIn();
+    await store.ready;
     if (!mounted) return;
     setState(() {
       _account = account;
-      _stage = next;
+      _stage = store.hasProgram ? AppStage.home : AppStage.program;
     });
+  }
+
+  Future<void> _pickTemplate(ProgramTemplate t) async {
+    await WorkoutScope.read(context).applyTemplate(t.id);
+    if (mounted) setState(() => _stage = AppStage.equipment);
+  }
+
+  Future<void> _buildOwn() async {
+    final store = WorkoutScope.read(context);
+    final built = await buildOwnSplit(context);
+    if (built == null || !mounted) return;
+    await store.setProgram(built.program, built.routines);
+    if (mounted) setState(() => _stage = AppStage.equipment);
   }
 
   @override
@@ -181,22 +199,20 @@ class _AppFlowState extends State<AppFlow> {
       AppStage.booting => Scaffold(backgroundColor: context.gym.bg),
       AppStage.login => LoginScreen(
           store: _accounts,
-          onSignedIn: () => _enter(AppStage.program),
+          onSignedIn: _enter,
           onCreateAccount: () => setState(() => _stage = AppStage.register),
         ),
       // Akun baru selalu lewat onboarding; akun lama juga, sampai lapisan
       // penyimpanan bisa menjawab "program orang ini sudah dipilih belum".
       AppStage.register => RegisterScreen(
           store: _accounts,
-          onRegistered: () => _enter(AppStage.program),
+          onRegistered: _enter,
           onSignInInstead: () => setState(() => _stage = AppStage.login),
         ),
       AppStage.program => ProgramPickerScreen(
           onBack: () => setState(() => _stage = AppStage.login),
-          onContinue: (t) => setState(() {
-            _program = t;
-            _stage = AppStage.equipment;
-          }),
+          onContinue: _pickTemplate,
+          onBuildOwn: _buildOwn,
         ),
       AppStage.equipment => EquipmentScreen(
           onBack: () => setState(() => _stage = AppStage.program),
@@ -204,7 +220,6 @@ class _AppFlowState extends State<AppFlow> {
           onContinue: () => setState(() => _stage = AppStage.home),
         ),
       AppStage.home => HomeShell(
-          programName: _program?.name ?? 'Push / Pull / Legs',
           language: widget.language,
           onLanguageChanged: widget.onLanguageChanged,
           email: _account?.email,
@@ -227,14 +242,12 @@ class _AppFlowState extends State<AppFlow> {
 class HomeShell extends StatefulWidget {
   const HomeShell({
     super.key,
-    required this.programName,
     required this.language,
     required this.onLanguageChanged,
     required this.onSignOut,
     required this.email,
   });
 
-  final String programName;
   final AppLanguage language;
   final ValueChanged<AppLanguage> onLanguageChanged;
   final VoidCallback onSignOut;
@@ -273,7 +286,7 @@ class _HomeShellState extends State<HomeShell> {
           index: _tab,
           children: [
             const WorkoutScreen(),
-            HomeScreen(programName: widget.programName),
+            const HomeScreen(),
             const StatsScreen(),
             const HistoryScreen(),
             ProfileScreen(

@@ -1,9 +1,9 @@
 /// Dua langkah onboarding — artboard `02 Onboarding · Program` dan
 /// `03 Onboarding · Equipment`.
 ///
-/// Urutannya: Login → pilih program → daftar peralatan → Home. Dua pertanyaan
-/// ini yang harus dijawab sebelum aplikasi bisa menyusun sesi pertama, dan
-/// keduanya bisa diubah lagi belakangan.
+/// Urutannya: pilih program (template atau susun sendiri) → daftar peralatan →
+/// Home. Dua pertanyaan ini yang harus dijawab sebelum aplikasi bisa menyusun
+/// sesi pertama, dan keduanya bisa diubah lagi belakangan.
 library;
 
 import 'package:flutter/material.dart';
@@ -118,9 +118,13 @@ const programTemplates = <ProgramTemplate>[
 ];
 
 class ProgramPickerScreen extends StatefulWidget {
-  const ProgramPickerScreen({super.key, required this.onContinue, this.onBack});
+  const ProgramPickerScreen({super.key, required this.onContinue, required this.onBuildOwn, this.onBack});
 
   final ValueChanged<ProgramTemplate> onContinue;
+
+  /// "Build my own": susun split sendiri alih-alih memakai template.
+  final VoidCallback onBuildOwn;
+
   final VoidCallback? onBack;
 
   @override
@@ -157,7 +161,7 @@ class _ProgramPickerScreenState extends State<ProgramPickerScreen> {
                     const SizedBox(height: 10),
                   ],
                   const SizedBox(height: 4),
-                  _OutlinedAction(icon: Icons.add, label: context.t.buildMyOwn, onTap: () {}),
+                  _OutlinedAction(icon: Icons.add, label: context.t.buildMyOwn, onTap: widget.onBuildOwn),
                 ],
               ),
             ),

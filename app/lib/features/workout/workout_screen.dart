@@ -8,10 +8,13 @@ import '../../core/motion.dart';
 import '../../core/strings.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
-import '../../data/demo.dart';
+import '../../data/exercise_catalog.dart';
 import '../../data/workout_store.dart';
+import '../../domain/models.dart';
+import '../../domain/program.dart';
 import '../library/library_screen.dart';
-import '../session/session_screen.dart';
+import '../onboarding/program_flow.dart';
+import '../session/session_launcher.dart';
 import 'routine_editor_screen.dart';
 
 class WorkoutScreen extends StatefulWidget {
@@ -24,77 +27,68 @@ class WorkoutScreen extends StatefulWidget {
 class _WorkoutScreenState extends State<WorkoutScreen> {
   int _tab = 0;
 
-  /// Salinan yang bisa diubah. Saat store Supabase masuk, daftar ini diganti
-  /// oleh state asli dan CRUD di bawah menulis ke sana.
-  late final List<DemoRoutine> _routines = demoRoutines();
-
   Future<String?> _askName(String title, {String initial = ''}) => showDialog<String>(
         context: context,
         builder: (_) => _NameDialog(title: title, initial: initial),
       );
 
   Future<void> _newRoutine() async {
+    final store = context.workouts;
     final name = await _askName(context.t.newRoutineTitle);
-    if (name == null || name.trim().isEmpty) return;
-    // Rutinitas baru mulai kosong — 0 gerakan, bukan menyalin diam-diam isi
-    // rutinitas lain yang kebetulan ada.
-    setState(() => _routines.add(DemoRoutine(name.trim(), 0, 0)));
+    if (name == null || name.trim().isEmpty || !mounted) return;
+    // Rutinitas baru mulai kosong dan langsung dibuka di editor — rutinitas
+    // tanpa gerakan tidak berguna, jadi langkah berikutnya jelas.
+    // Double progression: gerakan baru di editor datang dengan rentang 8–12,
+    // dan linear mengabaikan rentang itu.
+    final routine = Routine(id: WorkoutStore.newRoutineId(), name: name.trim(), policy: ProgressionPolicy.double_);
+    await store.saveRoutine(routine);
+    if (mounted) await _openEditor(routine);
   }
 
-  Future<void> _openEditor(DemoRoutine r) async {
+  Future<void> _openEditor(Routine r) async {
+    final store = context.workouts;
     final result = await Navigator.of(context).push<RoutineEditorResult>(
-      MaterialPageRoute(builder: (_) => RoutineEditorScreen(routineName: r.name)),
+      MaterialPageRoute(builder: (_) => RoutineEditorScreen(routine: r)),
     );
-    if (!mounted) return;
     switch (result) {
       case RoutineDeleted():
-        setState(() {
-          final wasNext = r.isNext;
-          _routines.remove(r);
-          if (wasNext && _routines.isNotEmpty) _routines.first.isNext = true;
-        });
-      case RoutineSaved(:final name) when name.isNotEmpty:
-        setState(() => r.name = name);
-      case _:
+        await store.deleteRoutine(r.id);
+      case RoutineSaved(:final routine):
+        await store.saveRoutine(routine);
+      case null:
         break;
     }
   }
 
-  Future<void> _rename(DemoRoutine r) async {
+  Future<void> _rename(Routine r) async {
+    final store = context.workouts;
     final name = await _askName(context.t.renameRoutine, initial: r.name);
     if (name == null || name.trim().isEmpty) return;
-    setState(() => r.name = name.trim());
+    await store.saveRoutine(r.copyWith(name: name.trim()));
   }
 
-  void _duplicate(DemoRoutine r) {
-    setState(() => _routines.insert(_routines.indexOf(r) + 1, r.copy('${r.name} copy')));
-  }
+  Future<void> _duplicate(Routine r) => context.workouts.duplicateRoutine(r.id, '${r.name} copy');
 
-  Future<void> _delete(DemoRoutine r) async {
+  Future<void> _delete(Routine r) async {
+    final store = context.workouts;
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => _ConfirmDeleteDialog(name: r.name),
     );
     if (ok != true) return;
-    setState(() {
-      final wasNext = r.isNext;
-      _routines.remove(r);
-      // Kalau yang dihapus adalah rutinitas berikutnya, cursor harus pindah —
-      // kalau tidak, program kehilangan penunjuk dan Home tidak tahu apa-apa
-      // yang harus dikerjakan.
-      if (wasNext && _routines.isNotEmpty) _routines.first.isNext = true;
-    });
+    await store.deleteRoutine(r.id);
   }
 
-  void _openSession(String routineName) {
-    Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => SessionScreen(
-        routineName: routineName,
-        exercises: demoExercises(),
-        history: context.workouts.workouts,
-      ),
-    ));
+  Future<void> _start(Routine r) async {
+    if (r.exercises.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.t.emptyRoutineHint)));
+      await _openEditor(r);
+      return;
+    }
+    await openRoutineSession(context, r);
   }
+
+  Future<void> _changeProgram() => chooseProgram(context);
 
   @override
   Widget build(BuildContext context) {
@@ -129,6 +123,11 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
   List<Widget> _tracker(BuildContext context) {
     final c = context.gym;
+    final store = context.workouts;
+    final program = store.program;
+    final routines = program == null ? store.routines : programRoutines(program, store.routines);
+    final next = store.nextSessionOn(DateTime.now());
+
     return [
       GymCard(
         radius: GymRadius.large,
@@ -141,8 +140,13 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                 children: [
                   Text(context.t.exerciseLibrary, style: Theme.of(context).textTheme.titleLarge),
                   const SizedBox(height: 3),
-                  Text(context.t.libraryFiltered(formatCount(demoExerciseCount), 'Gym A'),
-                      style: TextStyle(fontSize: 12.5, color: c.text2)),
+                  FutureBuilder<ExerciseCatalog>(
+                    future: ExerciseCatalog.load(),
+                    builder: (context, snap) => Text(
+                      context.t.libraryCount(formatCount(snap.data?.all.length ?? 1324)),
+                      style: TextStyle(fontSize: 12.5, color: c.text2),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -171,7 +175,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
               icon: Icons.edit_note_outlined,
               title: context.t.startEmpty,
               detail: context.t.freestyleLog,
-              onTap: () => _openSession('Freestyle'),
+              onTap: () => openFreestyleSession(context, context.t.freestyle),
             ),
           ),
           const SizedBox(width: 10),
@@ -179,8 +183,8 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
             child: _StartCard(
               icon: Icons.playlist_play,
               title: context.t.fromProgram,
-              detail: context.t.isNext(demoRoutineName),
-              onTap: () => _openSession(demoRoutineName),
+              detail: next == null ? context.t.noProgramYet : context.t.isNext(next.routine.name),
+              onTap: next == null ? () => setState(() => _tab = 1) : () => _start(next.routine),
             ),
           ),
         ],
@@ -197,42 +201,50 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         ],
       ),
       const SizedBox(height: 4),
-      Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-        decoration: BoxDecoration(
-          color: c.bgNested,
-          borderRadius: BorderRadius.circular(GymRadius.control),
+      if (program != null && routines.isNotEmpty)
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+          decoration: BoxDecoration(
+            color: c.bgNested,
+            borderRadius: BorderRadius.circular(GymRadius.control),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                    program.mode == ProgramMode.weekday
+                        ? context.t.weekdayOf(program.name)
+                        : context.t.rotationOf(program.name),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 13, color: c.text2)),
+              ),
+              // Posisi cursor di rotasi (FR-B3) — "rutinitas ke berapa dari
+              // berapa", bukan progres sesi hari ini.
+              if (next != null)
+                Text('${routines.indexWhere((r) => r.id == next.routine.id) + 1} / ${routines.length}',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: c.accent)),
+            ],
+          ),
         ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(context.t.rotationOf('Push / Pull / Legs'), style: TextStyle(fontSize: 13, color: c.text2)),
-            ),
-            // Posisi cursor di rotasi (FR-B3) — "rutinitas ke berapa dari
-            // berapa", bukan progres sesi hari ini.
-            Text('${_routines.indexWhere((r) => r.isNext) + 1} / ${_routines.length}',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: c.accent)),
-          ],
-        ),
-      ),
       const SizedBox(height: 10),
-      if (_routines.isEmpty)
+      if (routines.isEmpty)
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 24),
-          child: Center(
-            child: Text(context.t.noRoutines,
-                style: TextStyle(fontSize: 13.5, color: c.text2)),
-          ),
+          child: Center(child: Text(context.t.noRoutines, style: TextStyle(fontSize: 13.5, color: c.text2))),
         )
       else
-        for (final r in _routines) ...[
+        for (final r in routines) ...[
           _RoutineRow(
             routine: r,
-            onTap: () => _openSession(r.name),
+            isNext: next?.routine.id == r.id,
+            canMakeNext: program?.mode == ProgramMode.rotation && next?.routine.id != r.id,
+            onTap: () => _start(r),
             onAction: (action) => switch (action) {
               _RoutineAction.edit => _openEditor(r),
               _RoutineAction.rename => _rename(r),
               _RoutineAction.duplicate => _duplicate(r),
+              _RoutineAction.makeNext => store.setNext(r.id),
               _RoutineAction.delete => _delete(r),
             },
           ),
@@ -245,37 +257,123 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
   List<Widget> _plan(BuildContext context) {
     final c = context.gym;
+    final t = context.t;
+    final store = context.workouts;
+    final program = store.program;
+
+    if (program == null) {
+      return [
+        GymCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(t.noProgramYet, style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 4),
+              Text(t.noProgramHint, style: TextStyle(fontSize: 13, color: c.text2)),
+              const SizedBox(height: 14),
+              GymButton(label: t.choosePlan, onPressed: _changeProgram),
+            ],
+          ),
+        ),
+      ];
+    }
+
+    final routines = programRoutines(program, store.routines);
+    final next = store.nextSessionOn(DateTime.now());
+
+    Future<void> move(int i, int delta) async {
+      final order = [...program.order];
+      final j = i + delta;
+      if (j < 0 || j >= order.length) return;
+      final nextId = next?.routine.id;
+      final item = order.removeAt(i);
+      order.insert(j, item);
+      // Cursor tetap menunjuk rutinitas yang sama setelah urutannya diubah.
+      final cursor = nextId == null ? program.cursor : order.indexOf(nextId);
+      await store.updateProgram(program.copyWith(order: order, cursor: cursor < 0 ? 0 : cursor));
+    }
+
     return [
       GymCard(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SectionLabel(context.t.activeProgram),
+            SectionLabel(t.activeProgram),
             const SizedBox(height: 10),
-            Text('Push / Pull / Legs', style: Theme.of(context).textTheme.titleLarge),
+            Text(program.name, style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 4),
-            Text(context.t.rotationNote,
-                style: TextStyle(fontSize: 13, color: c.text2)),
+            Text(
+              program.mode == ProgramMode.weekday
+                  ? '${t.weekdayMode} · ${[for (final d in [...program.days]..sort()) t.weekdayShort(d)].join(', ')}'
+                  : '${t.rotationMode} · ${t.restRule(program.minRestDays)}',
+              style: TextStyle(fontSize: 13, color: c.text2),
+            ),
+            const SizedBox(height: 14),
+            GymButton(
+              label: t.changeProgram.toUpperCase(),
+              icon: Icons.swap_horiz,
+              tone: GymButtonTone.neutral,
+              height: 44,
+              onPressed: _changeProgram,
+            ),
           ],
         ),
       ),
-      const SizedBox(height: 12),
+      if (program.mode == ProgramMode.rotation) ...[
+        const SizedBox(height: 12),
+        GymCard(
+          padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(t.restDaysBetween, style: Theme.of(context).textTheme.bodyLarge),
+                    Text(t.restDaysValue(program.minRestDays), style: TextStyle(fontSize: 12.5, color: c.text2)),
+                  ],
+                ),
+              ),
+              IconButton(
+                onPressed: program.minRestDays <= 0
+                    ? null
+                    : () => store.updateProgram(program.copyWith(minRestDays: program.minRestDays - 1)),
+                icon: Icon(Icons.remove, color: c.accent),
+                tooltip: t.fewer,
+              ),
+              IconButton(
+                onPressed: program.minRestDays >= 7
+                    ? null
+                    : () => store.updateProgram(program.copyWith(minRestDays: program.minRestDays + 1)),
+                icon: Icon(Icons.add, color: c.accent),
+                tooltip: t.more,
+              ),
+            ],
+          ),
+        ),
+      ],
+      const SizedBox(height: 18),
+      SectionLabel(t.order),
+      const SizedBox(height: 8),
       SettingsGroup(
         children: [
-          for (final r in _routines)
-            SettingsTile(
-              icon: r.isNext ? Icons.play_circle_outline : Icons.circle_outlined,
-              label: r.name,
-              value: '${r.exercises} exercises',
+          for (final (i, r) in routines.indexed)
+            _OrderRow(
+              name: r.name,
+              detail: [
+                t.exerciseCount(r.exercises.length),
+                if (program.mode == ProgramMode.weekday)
+                  [for (final d in weekdaysOf(program, store.routines, r.id)) t.weekdayShort(d)].join(', '),
+              ].where((s) => s.isNotEmpty).join(' · '),
+              isNext: next?.routine.id == r.id,
+              canUp: i > 0,
+              canDown: i < routines.length - 1,
               onTap: () => _openEditor(r),
+              onUp: () => move(i, -1),
+              onDown: () => move(i, 1),
+              onMakeNext: program.mode == ProgramMode.rotation ? () => store.setNext(r.id) : null,
             ),
         ],
-      ),
-      const SizedBox(height: 14),
-      NoteBanner(
-        text: 'Rotation order and the rest-day rule are not wired up yet — the cursor above is fixed.',
-        icon: Icons.construction_outlined,
-        tone: c.warn,
       ),
     ];
   }
@@ -479,12 +577,20 @@ class _StartCard extends StatelessWidget {
   }
 }
 
-enum _RoutineAction { edit, rename, duplicate, delete }
+enum _RoutineAction { edit, rename, duplicate, makeNext, delete }
 
 class _RoutineRow extends StatelessWidget {
-  const _RoutineRow({required this.routine, required this.onTap, required this.onAction});
+  const _RoutineRow({
+    required this.routine,
+    required this.isNext,
+    required this.canMakeNext,
+    required this.onTap,
+    required this.onAction,
+  });
 
-  final DemoRoutine routine;
+  final Routine routine;
+  final bool isNext;
+  final bool canMakeNext;
   final VoidCallback onTap;
   final ValueChanged<_RoutineAction> onAction;
 
@@ -503,7 +609,7 @@ class _RoutineRow extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 13, 6, 13),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(GymRadius.card),
-            border: Border.all(color: routine.isNext ? c.accent : c.border),
+            border: Border.all(color: isNext ? c.accent : c.border),
           ),
           child: Row(
             children: [
@@ -513,8 +619,11 @@ class _RoutineRow extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        Text(routine.name, style: Theme.of(context).textTheme.titleLarge),
-                        if (routine.isNext) ...[
+                        Flexible(
+                          child: Text(routine.name,
+                              maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleLarge),
+                        ),
+                        if (isNext) ...[
                           const SizedBox(width: 10),
                           Pill(
                             color: c.accentSoft,
@@ -525,7 +634,7 @@ class _RoutineRow extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 3),
-                    Text(context.t.routineMeta(routine.exercises, routine.sets),
+                    Text(context.t.routineMeta(routine.exercises.length, routine.setCount),
                         style: TextStyle(fontSize: 12.5, color: c.text2)),
                   ],
                 ),
@@ -540,6 +649,7 @@ class _RoutineRow extends StatelessWidget {
                   _item(c, _RoutineAction.edit, Icons.tune, context.t.editExercises),
                   _item(c, _RoutineAction.rename, Icons.drive_file_rename_outline, context.t.rename),
                   _item(c, _RoutineAction.duplicate, Icons.copy_all_outlined, context.t.duplicate),
+                  if (canMakeNext) _item(c, _RoutineAction.makeNext, Icons.skip_next_outlined, context.t.setAsNext),
                   _item(c, _RoutineAction.delete, Icons.delete_outline, context.t.deleteWord, tone: c.danger),
                 ],
               ),
@@ -547,6 +657,79 @@ class _RoutineRow extends StatelessWidget {
           ),
         ),
       ),
+      ),
+    );
+  }
+}
+
+/// Satu baris di urutan program: ketuk untuk mengedit, panah untuk memindah.
+class _OrderRow extends StatelessWidget {
+  const _OrderRow({
+    required this.name,
+    required this.detail,
+    required this.isNext,
+    required this.canUp,
+    required this.canDown,
+    required this.onTap,
+    required this.onUp,
+    required this.onDown,
+    this.onMakeNext,
+  });
+
+  final String name;
+  final String detail;
+  final bool isNext;
+  final bool canUp;
+  final bool canDown;
+  final VoidCallback onTap;
+  final VoidCallback onUp;
+  final VoidCallback onDown;
+
+  /// null di mode hari tetap: di sana hari yang menentukan, bukan cursor.
+  final VoidCallback? onMakeNext;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gym;
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 6, 4, 6),
+        child: Row(
+          children: [
+            InkWell(
+              onTap: isNext ? null : onMakeNext,
+              customBorder: const CircleBorder(),
+              child: Padding(
+                padding: const EdgeInsets.all(4),
+                child: Icon(isNext ? Icons.play_circle : Icons.circle_outlined,
+                    size: 20, color: isNext ? c.accent : c.text3),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(name, style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w700)),
+                  Text(detail, style: TextStyle(fontSize: 12, color: c.text2)),
+                ],
+              ),
+            ),
+            IconButton(
+              onPressed: canUp ? onUp : null,
+              visualDensity: VisualDensity.compact,
+              icon: Icon(Icons.arrow_upward, size: 18, color: canUp ? c.text2 : c.text3),
+              tooltip: context.t.moveUp,
+            ),
+            IconButton(
+              onPressed: canDown ? onDown : null,
+              visualDensity: VisualDensity.compact,
+              icon: Icon(Icons.arrow_downward, size: 18, color: canDown ? c.text2 : c.text3),
+              tooltip: context.t.moveDown,
+            ),
+          ],
+        ),
       ),
     );
   }

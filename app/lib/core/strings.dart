@@ -138,7 +138,7 @@ class Strings {
   String get e1rmUp => _('e1RM up', 'e1RM naik');
   String get sinceLast => _('Since last', 'Sejak terakhir');
   String moreItems(int n) => _('+$n more', '+$n lagi');
-  String exerciseCount(int n) => _('$n exercises', '$n gerakan');
+  String exerciseCount(int n) => _(n == 1 ? '1 exercise' : '$n exercises', '$n gerakan');
 
   // ── Workout ─────────────────────────────────────────────────────────────
   String get workout => _('Workout', 'Latihan');
@@ -204,7 +204,7 @@ class Strings {
   String targetLine(String weight, int reps, String policy) =>
       _('Target $weight kg × $reps · $policy', 'Target $weight kg × $reps · $policy');
   String setsTarget(int n, String weight, int reps) =>
-      _('$n sets · target $weight kg × $reps', '$n set · target $weight kg × $reps');
+      _('${n == 1 ? '1 set' : '$n sets'} · target $weight kg × $reps', '$n set · target $weight kg × $reps');
   String get warmupLabel => _('warm-up', 'pemanasan');
   String setLabel(int n) => _('set $n', 'set $n');
   String nextUpLine(String what, String weight, int reps) =>
@@ -299,7 +299,7 @@ class Strings {
   String get all => _('All', 'Semua');
   String noSessionsOf(String filter) =>
       _('No $filter sessions logged yet', 'Belum ada sesi $filter tercatat');
-  String setsSuffix(int n) => _('$n sets', '$n set');
+  String setsSuffix(int n) => _(n == 1 ? '1 set' : '$n sets', '$n set');
   // Kosong karena belum pernah latihan itu keadaan yang berbeda dari kosong
   // karena filternya terlalu sempit — dan jawabannya juga berbeda.
   String get noSessionsYet =>
@@ -401,8 +401,10 @@ class Strings {
         '$exercises exercises · ~$minutes min · last done $daysAgo days ago',
         '$exercises gerakan · ~$minutes mnt · terakhir $daysAgo hari lalu',
       );
-  String routineMeta(int exercises, int sets) =>
-      _('$exercises exercises · $sets sets', '$exercises gerakan · $sets set');
+  String routineMeta(int exercises, int sets) => _(
+        '${exercises == 1 ? '1 exercise' : '$exercises exercises'} · ${sets == 1 ? '1 set' : '$sets sets'}',
+        '$exercises gerakan · $sets set',
+      );
   String libraryFiltered(String count, String gym) => _(
         '$count exercises · filtered by $gym',
         '$count gerakan · disaring untuk $gym',
@@ -458,6 +460,124 @@ class Strings {
     'Machines': 'Mesin',
     'Other': 'Lainnya',
   };
+
+  // ── Split buatan sendiri, rutinitas, dan sesi (perbaikan 2026-09) ────────
+  String get customSplit => _('Build your split', 'Susun split-mu');
+  String get customSplitSub => _(
+        'Name each training day, then add its exercises. You can change all of it later.',
+        'Beri nama setiap hari latihan, lalu isi gerakannya. Semuanya bisa diubah nanti.',
+      );
+  String get splitName => _('Split name', 'Nama split');
+  String get splitNameHint => _('e.g. My PPL', 'mis. PPL-ku');
+  String get mySplit => _('My split', 'Split-ku');
+  String get scheduling => _('Scheduling', 'Penjadwalan');
+  String get rotationMode => _('Rotation', 'Rotasi');
+  String get weekdayMode => _('Fixed days', 'Hari tetap');
+  String get rotationModeNote => _(
+        'Sessions follow the order below. A missed day never shifts the plan.',
+        'Sesi mengikuti urutan di bawah. Hari yang terlewat tidak menggeser rencana.',
+      );
+  String get weekdayModeNote => _(
+        'Pick your training days. Routines are assigned to them in order.',
+        'Pilih hari latihanmu. Rutinitas dibagikan ke hari-hari itu berurutan.',
+      );
+  String get restDaysBetween => _('Rest days after a session', 'Hari istirahat setelah sesi');
+  String restDaysValue(int n) =>
+      n == 0 ? _('None', 'Tidak ada') : _(n == 1 ? '1 day' : '$n days', '$n hari');
+  String get trainingDays => _('Training days', 'Hari latihan');
+  String get days => _('Days', 'Hari');
+  String dayName(int i) => _('Day $i', 'Hari $i');
+  String get addDay => _('ADD DAY', 'TAMBAH HARI');
+  String get tapToAddExercises => _('Tap to add exercises', 'Ketuk untuk isi gerakan');
+  String get needOneDay => _('Add at least one training day.', 'Tambahkan minimal satu hari latihan.');
+  String get needOneWeekday => _('Pick at least one training day.', 'Pilih minimal satu hari latihan.');
+  String get emptyDaysNote => _(
+        'Days without exercises can be filled later from the Workout tab.',
+        'Hari tanpa gerakan bisa diisi nanti dari tab Latihan.',
+      );
+  String get removeDay => _('Remove day', 'Hapus hari');
+  String weekdayShort(int d) => _(
+        const ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][d - 1],
+        const ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'][d - 1],
+      );
+  String weekdayLong(int d) => _(
+        const ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'][d - 1],
+        const ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'][d - 1],
+      );
+  String monthShort(int m) => _(
+        const ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][m - 1],
+        const ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'][m - 1],
+      );
+  String get dueTomorrow => _('TOMORROW', 'BESOK');
+  String dueOn(String day) => _('DUE $day', day.toUpperCase());
+  String recoverUntil(String day) => _('Recover first — due $day', 'Pulih dulu — jatuh tempo $day');
+  String nextTrainingDay(String day) => _('Next training day: $day', 'Hari latihan berikutnya: $day');
+  String weekdayOf(String program) => _('$program · fixed days', '$program · hari tetap');
+  String get noProgramYet => _('No program yet', 'Belum ada program');
+  String get noProgramHint => _(
+        'Pick a template or build your own split from the Workout tab.',
+        'Pilih template atau susun split sendiri dari tab Latihan.',
+      );
+  String get emptyRoutineHint => _(
+        'This routine has no exercises yet. Add some before starting.',
+        'Rutinitas ini belum punya gerakan. Isi dulu sebelum mulai.',
+      );
+  String get choosePlan => _('CHOOSE PROGRAM', 'PILIH PROGRAM');
+  String routineOverview(int exercises, int sets) => _(
+        '${exercises == 1 ? '1 exercise' : '$exercises exercises'} · ${sets == 1 ? '1 working set' : '$sets working sets'}',
+        '$exercises gerakan · $sets set kerja',
+      );
+  String get notTrainedYet => _('not trained yet', 'belum pernah dilatih');
+  String lastTrained(int days) => days == 0
+      ? _('last trained today', 'terakhir dilatih hari ini')
+      : _('last trained $days days ago', 'terakhir dilatih $days hari lalu');
+  String get skipped => _('Session skipped.', 'Sesi dilewati.');
+  String get setAsNext => _('Make next', 'Jadikan berikutnya');
+  String get changeProgram => _('Change program', 'Ganti program');
+  String get changeProgramBody => _(
+        'Your routines are replaced by the new program. Logged sessions stay in your history.',
+        'Rutinitasmu diganti dengan program baru. Sesi yang sudah tercatat tetap ada di riwayat.',
+      );
+  String get replace => _('REPLACE', 'GANTI');
+  String restRule(int n) => n == 0
+      ? _('No minimum rest between sessions', 'Tanpa istirahat minimum antar sesi')
+      : _(n == 1 ? 'At least 1 rest day between sessions' : 'At least $n rest days between sessions',
+          'Minimal $n hari istirahat antar sesi');
+  String get order => _('Order', 'Urutan');
+  String get moveUp => _('Move up', 'Naikkan');
+  String get moveDown => _('Move down', 'Turunkan');
+  String get replaceExercise => _('Replace exercise', 'Ganti gerakan');
+  String get removeExercise => _('Remove exercise', 'Hapus gerakan');
+  String get addWarmup => _('Add warm-up set', 'Tambah set warm-up');
+  String get removeLastSet => _('Remove last set', 'Hapus set terakhir');
+  String get exerciseActions => _('Exercise actions', 'Aksi gerakan');
+  String get pickExercise => _('Pick an exercise', 'Pilih gerakan');
+  String get startingWeight => _('Starting weight', 'Beban awal');
+  String get warmups => _('Warm-up sets', 'Set warm-up');
+  String get repRange => _('Rep range', 'Rentang rep');
+  String get noExercisesYet => _('No exercises yet.', 'Belum ada gerakan.');
+  String get leaveSessionTitle => _('Leave this session?', 'Tinggalkan sesi ini?');
+  String get leaveSessionBody => _(
+        'Finish saves it to your history. Discard throws away everything logged in this session.',
+        'Selesai menyimpannya ke riwayat. Buang menghapus semua yang tercatat di sesi ini.',
+      );
+  String get keepTraining => _('KEEP TRAINING', 'LANJUT LATIHAN');
+  String get discard => _('DISCARD', 'BUANG');
+  String get finishAndSave => _('FINISH & SAVE', 'SELESAI & SIMPAN');
+  String get emptySessionHint => _(
+        'No exercises yet — add the first one below.',
+        'Belum ada gerakan — tambah yang pertama di bawah.',
+      );
+  String get exerciseDetails => _('Exercise details', 'Detail gerakan');
+  String get targetMuscle => _('Target', 'Otot target');
+  String get secondaryMuscles => _('Also works', 'Ikut terlatih');
+  String get equipmentLabel => _('Equipment', 'Alat');
+  String get comingSoonTitle => _('Not available yet', 'Belum tersedia');
+  String get discardChangesTitle => _('Save your changes?', 'Simpan perubahanmu?');
+  String sessionDiffers(String routine) =>
+      _('This session differs from $routine', 'Sesi ini berbeda dari $routine');
+  String libraryCount(String n) => _('$n exercises', '$n gerakan');
+  String sessionsCount(int n) => n == 1 ? _('1 session', '1 sesi') : _('$n sessions', '$n sesi');
 
   String catalogue(String en) => _(en, _catalogueId[en] ?? en);
 

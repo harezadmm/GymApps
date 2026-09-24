@@ -14,9 +14,11 @@ import '../../core/theme.dart';
 import '../../core/widgets.dart';
 import '../../domain/models.dart';
 import '../../data/exercise_catalog.dart';
+import '../../data/workout_store.dart';
 import '../../domain/muscle_volume.dart';
 import '../../domain/onerm.dart';
 import '../../domain/progression.dart';
+import '../../domain/session_plan.dart';
 import 'session_screen.dart';
 
 class FinishScreen extends StatefulWidget {
@@ -28,9 +30,19 @@ class FinishScreen extends StatefulWidget {
     required this.elapsed,
     required this.dateLabel,
     this.addedSetTo,
+    this.routineId,
+    this.drifted = false,
   });
 
+  /// Susunan sesi berbeda dari rutinitasnya — memunculkan pertanyaan
+  /// "perbarui rutinitas?" meski tidak ada set yang ditambah.
+  final bool drifted;
+
   final String routineName;
+
+  /// Rutinitas yang bisa diperbarui dari sesi ini. Diisi hanya kalau sesinya
+  /// menyimpang dari rutinitas itu (FR-B9).
+  final String? routineId;
   final List<SessionExercise> exercises;
   final List<Workout> history;
   final Duration elapsed;
@@ -59,6 +71,54 @@ class _FinishScreenState extends State<FinishScreen> {
   /// null = belum dijawab. Pertanyaannya tidak boleh punya jawaban default:
   /// menebak "update all" akan menulis ulang rutinitas diam-diam.
   String? _routineAnswer;
+
+  /// Rutinitas persis seperti sebelum ringkasan ini dibuka. Jawaban bisa
+  /// diganti — "Update all" lalu "Keep" harus mengembalikan yang asli, bukan
+  /// menumpuk perubahan di atas perubahan.
+  Routine? _original;
+
+  @override
+  void initState() {
+    super.initState();
+    final id = widget.routineId;
+    if (id != null) {
+      // Dibaca setelah frame pertama: store datang dari InheritedWidget, dan
+      // context belum boleh dipakai untuk itu di initState.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _original = WorkoutScope.read(context).routineById(id);
+      });
+    }
+  }
+
+  /// Terapkan jawaban ke rutinitas (FR-B9).
+  ///
+  /// * `Sets only` — jumlah set tiap gerakan disamakan dengan sesi ini.
+  /// * `Update all` — susunan gerakan ikut sesi ini: yang ditambah masuk,
+  ///   yang dibuang keluar, urutannya mengikuti.
+  /// * `Keep` — rutinitas kembali seperti semula.
+  Future<void> _answer(String option) async {
+    setState(() => _routineAnswer = option);
+    final original = _original;
+    if (original == null) return;
+    final store = WorkoutScope.read(context);
+    final counts = {for (final e in widget.exercises) e.config.exerciseId: e.workCount};
+    final Routine next;
+    switch (option) {
+      case 'Sets only':
+        next = original.copyWith(exercises: [
+          for (final cfg in original.exercises) cfg.copyWith(sets: counts[cfg.exerciseId] ?? cfg.sets),
+        ]);
+      case 'Update all':
+        final byId = {for (final cfg in original.exercises) cfg.exerciseId: cfg};
+        next = original.copyWith(exercises: [
+          for (final e in widget.exercises)
+            (byId[e.config.exerciseId] ?? e.config).copyWith(sets: e.workCount),
+        ]);
+      default:
+        next = original;
+    }
+    await store.saveRoutine(next);
+  }
 
   Iterable<SetRow> get _workingSets =>
       widget.exercises.expand((e) => e.sets).where((s) => s.done && !s.isWarmup);
@@ -213,14 +273,19 @@ class _FinishScreenState extends State<FinishScreen> {
                     ),
                   ),
                   const SizedBox(height: 14),
-                  _NextTargetsCard(exercises: widget.exercises, history: widget.history),
-                  if (widget.addedSetTo != null) ...[
+                  // Target berikutnya dihitung dengan sesi ini ikut di riwayat.
+                  // Tanpa sesi ini, "target berikutnya" hanya mengulang target
+                  // yang baru saja dikerjakan.
+                  _NextTargetsCard(exercises: widget.exercises, history: [...widget.history, ..._thisSession]),
+                  if (widget.drifted && widget.routineId != null) ...[
                     const SizedBox(height: 14),
                     _RoutineDriftCard(
-                      exerciseName: widget.addedSetTo!,
+                      title: widget.addedSetTo != null
+                          ? context.t.addedSetTo(widget.addedSetTo!)
+                          : context.t.sessionDiffers(widget.routineName),
                       routineName: widget.routineName,
                       answer: _routineAnswer,
-                      onAnswer: (a) => setState(() => _routineAnswer = a),
+                      onAnswer: _answer,
                     ),
                   ],
                 ],
@@ -360,13 +425,17 @@ class _NextTargetsCard extends StatelessWidget {
           for (final (i, ex) in exercises.indexed) ...[
             if (i > 0) const SizedBox(height: 10),
             Builder(builder: (context) {
-              final p = nextPrescription(workouts: history, cfg: ex.config);
-              final weight = p.weight ?? ex.config.weight;
-              final reps = p.reps ?? ex.config.reps;
+              // Fungsi yang sama dengan yang menyusun sesi berikutnya, supaya
+              // angka di sini persis angka yang akan terbuka nanti.
+              final plan = planExercise(ex.config, history);
+              final p = plan.prescription;
+              final work = plan.sets.firstWhere((s) => !s.isWarmup, orElse: () => const SetRow());
+              final weight = work.weight;
+              final reps = work.reps;
               return Row(
                 children: [
                   Expanded(child: Text(ex.name, style: Theme.of(context).textTheme.bodyLarge)),
-                  Text('${formatWeight(weight)} kg × $reps',
+                  Text('${weightLabel(weight, bodyweight: ex.config.bodyweight)} kg × $reps',
                       style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: c.text)),
                   const SizedBox(width: 8),
                   _DeltaTag(prescription: p, current: ex.config.weight),
@@ -412,13 +481,13 @@ class _DeltaTag extends StatelessWidget {
 /// Sesi menyimpang dari rutinitas — tanya sekali, jangan menyimpan diam-diam.
 class _RoutineDriftCard extends StatelessWidget {
   const _RoutineDriftCard({
-    required this.exerciseName,
+    required this.title,
     required this.routineName,
     required this.answer,
     required this.onAnswer,
   });
 
-  final String exerciseName;
+  final String title;
   final String routineName;
   final String? answer;
   final ValueChanged<String> onAnswer;
@@ -430,7 +499,7 @@ class _RoutineDriftCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(context.t.addedSetTo(exerciseName), style: Theme.of(context).textTheme.titleMedium),
+          Text(title, style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 3),
           Text(context.t.updateRoutine(routineName), style: TextStyle(fontSize: 12.5, color: c.text2)),
           const SizedBox(height: 12),

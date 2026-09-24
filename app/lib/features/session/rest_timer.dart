@@ -192,14 +192,23 @@ class RestTimerCard extends StatelessWidget {
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
-                            Text(
-                              formatRestWide(timer.remaining),
-                              style: TextStyle(
-                                fontSize: 34,
-                                fontWeight: FontWeight.w700,
-                                height: 1.1,
-                                color: c.text,
-                                fontFeatures: const [FontFeature.tabularFigures()],
+                            // Menyusut kalau ruangnya kurang — HP 360 dp dengan
+                            // ukuran huruf sistem diperbesar membuat baris ini
+                            // meluber keluar kartu.
+                            Flexible(
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.bottomLeft,
+                                child: Text(
+                                  formatRestWide(timer.remaining),
+                                  style: TextStyle(
+                                    fontSize: 34,
+                                    fontWeight: FontWeight.w700,
+                                    height: 1.1,
+                                    color: c.text,
+                                    fontFeatures: const [FontFeature.tabularFigures()],
+                                  ),
+                                ),
                               ),
                             ),
                             const SizedBox(width: 8),
@@ -223,7 +232,8 @@ class RestTimerCard extends StatelessWidget {
                           ],
                         ),
                         const SizedBox(height: 2),
-                        Text(nextLabel, style: TextStyle(fontSize: 12, color: c.text2)),
+                        Text(nextLabel,
+                            maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: c.text2)),
                       ],
                     ),
                   ),
