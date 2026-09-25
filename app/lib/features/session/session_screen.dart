@@ -274,7 +274,7 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
     _foreground = state == AppLifecycleState.resumed;
     if (state == AppLifecycleState.resumed && mounted) KeepAwake.holdIfEnabled();
     if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive || state == AppLifecycleState.hidden) {
-      _saveDraft();
+      _saveDraft(force: true);
     }
   }
 
@@ -306,13 +306,15 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
 
   /// Simpan sesi yang sedang berjalan supaya tidak hilang kalau aplikasi
   /// dimatikan. Tidak menulis apa pun kalau isinya tidak berubah.
-  Future<void> _saveDraft() async {
+  Future<void> _saveDraft({bool force = false}) async {
     final store = _store;
     if (_closed || store == null) return;
     if (_exercises.isEmpty && _notes.text.trim().isEmpty) return;
     final json = _draftJson();
-    final key = jsonEncode({...json, 'elapsed': 0, 'saved': 0});
-    if (key == _lastDraft) return;
+    // Waktu ikut kunci pembanding per setengah menit: cukup supaya durasi sesi
+    // yang dipulihkan tidak mulai dari nol, tanpa menulis tiap 5 detik.
+    final key = jsonEncode({...json, 'elapsed': (json['elapsed'] as int) ~/ 30, 'saved': 0});
+    if (!force && key == _lastDraft) return;
     _lastDraft = key;
     await store.saveDraft(json);
   }

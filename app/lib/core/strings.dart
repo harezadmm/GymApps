@@ -662,8 +662,8 @@ class Strings {
   String get rirPrompt => _('Reps in reserve', 'Sisa rep (RIR)');
   String get secCol => _('Sec', 'Detik');
   String get resumeTitle => _('Unfinished session', 'Sesi belum selesai');
-  String resumeDetail(String name, int sets, int minutes) =>
-      _('$name · $sets sets logged · $minutes min', '$name · $sets set tercatat · $minutes menit');
+  String resumeDetail(String name, int sets, int minutes) => _(
+      '$name · $sets set${sets == 1 ? '' : 's'} logged · $minutes min', '$name · $sets set tercatat · $minutes menit');
   String get resume => _('RESUME', 'LANJUTKAN');
   String get discardDraft => _('Discard', 'Buang');
   String get discardDraftConfirm => _('Discard the unfinished session? Its logged sets will be lost.',
@@ -694,7 +694,8 @@ class Strings {
         _ => key,
       };
   String get equipmentNote => _('Bodyweight exercises are always shown.', 'Gerakan bodyweight selalu ditampilkan.');
-  String get exportReady => _('Backup ready — choose where to keep it.', 'Cadangan siap — pilih tempat menyimpannya.');
+  String exportSaved(String name) => _('Backup saved: $name', 'Cadangan disimpan: $name');
+  String get exportFailed => _("Couldn't save the backup.", 'Cadangan gagal disimpan.');
   String importDone(int n) => _('Imported — $n new session${n == 1 ? '' : 's'}.', 'Diimpor — $n sesi baru.');
   String get importFailed => _('That file is not a GymApps backup.', 'File itu bukan cadangan GymApps.');
   String get importConfirmTitle => _('Import backup?', 'Impor cadangan?');

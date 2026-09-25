@@ -33,7 +33,7 @@ class RestAlert {
     if (!_supported || _ready) return;
     try {
       await _plugin.initialize(
-        settings: const InitializationSettings(android: AndroidInitializationSettings('@mipmap/ic_launcher')),
+        settings: const InitializationSettings(android: AndroidInitializationSettings('ic_stat_rest')),
       );
       _ready = true;
     } catch (e) {
@@ -69,6 +69,7 @@ class RestAlert {
         importance: Importance.high,
         priority: Priority.high,
         category: AndroidNotificationCategory.alarm,
+        icon: 'ic_stat_rest',
         visibility: NotificationVisibility.public,
       ),
     );
