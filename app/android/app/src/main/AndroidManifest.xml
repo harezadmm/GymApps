@@ -1,4 +1,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Notifikasi "istirahat selesai" saat layar terkunci atau HP di saku. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.VIBRATE"/>
+    <!-- Timer istirahat 90 detik harus berbunyi tepat waktu, bukan beberapa
+         menit kemudian saat Doze memutuskan. USE_EXACT_ALARM untuk aplikasi
+         timer (Android 13+); SCHEDULE_EXACT_ALARM untuk Android 12. -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM"/>
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" android:maxSdkVersion="32"/>
     <application
         android:label="@string/app_name"
         android:name="${applicationName}"
@@ -25,6 +33,8 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <receiver android:exported="false"
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

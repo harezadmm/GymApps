@@ -635,6 +635,132 @@ class Strings {
 
   String catalogue(String en) => _(en, _catalogueId[en] ?? en);
 
+
+  // ── v1.7: sesi, riwayat, setelan, fitur baru ─────────────────────────────
+  String get restOverTitle => _('Rest over', 'Istirahat selesai');
+  String restSavedFor(String name) =>
+      _('Rest for $name saved as your default.', 'Istirahat $name disimpan sebagai bawaan.');
+  String restOverBody(String next) => _(next.isEmpty ? 'Back to it.' : next, next.isEmpty ? 'Lanjut latihan.' : next);
+  String nextExerciseLine(String name) => _('Next: $name', 'Berikutnya: $name');
+  String get replaceConfirmTitle => _('Replace exercise?', 'Ganti gerakan?');
+  String replaceConfirmBody(int n) => _(
+        '$n logged set${n == 1 ? '' : 's'} of this exercise will be removed from the session.',
+        '$n set yang sudah dicentang di gerakan ini akan dibuang dari sesi.',
+      );
+  String get removeSetConfirmTitle => _('Remove a logged set?', 'Hapus set yang sudah dicentang?');
+  String get removeSetConfirmBody =>
+      _('The last set is already ticked. It will be removed.', 'Set terakhir sudah dicentang. Set itu akan dihapus.');
+  String get addDropSet => _('Add drop set', 'Tambah drop set');
+  String get addRestPause => _('Add rest-pause', 'Tambah rest-pause');
+  String get supersetWithNext => _('Superset with next', 'Superset dengan berikutnya');
+  String get endSuperset => _('End superset', 'Akhiri superset');
+  String get supersetBadge => _('SUPERSET', 'SUPERSET');
+  String get exerciseNote => _('Note', 'Catatan');
+  String get exerciseNoteHint => _('e.g. seat position 4, wide grip', 'mis. kursi posisi 4, grip lebar');
+  String lastNote(String n) => _('Last time: $n', 'Terakhir: $n');
+  String get exerciseHistory => _('History & records', 'Riwayat & rekor');
+  String get rirPrompt => _('Reps in reserve', 'Sisa rep (RIR)');
+  String get secCol => _('Sec', 'Detik');
+  String get resumeTitle => _('Unfinished session', 'Sesi belum selesai');
+  String resumeDetail(String name, int sets, int minutes) =>
+      _('$name · $sets sets logged · $minutes min', '$name · $sets set tercatat · $minutes menit');
+  String get resume => _('RESUME', 'LANJUTKAN');
+  String get discardDraft => _('Discard', 'Buang');
+  String get discardDraftConfirm => _('Discard the unfinished session? Its logged sets will be lost.',
+      'Buang sesi yang belum selesai? Set yang sudah dicentang akan hilang.');
+  String get prHeaviest => _('Heaviest', 'Terberat');
+  String get prBestE1rm => _('Best e1RM', 'e1RM terbaik');
+  String get prBestVolume => _('Best session', 'Sesi terbaik');
+  String get noExerciseHistory => _('No sessions logged for this exercise yet.', 'Belum ada sesi untuk gerakan ini.');
+  String get editSession => _('Edit session', 'Edit sesi');
+  String get edit => _('EDIT', 'EDIT');
+  String get sessionUpdated => _('Session updated.', 'Sesi diperbarui.');
+  String get notesLabel => _('Notes', 'Catatan');
+  String get on => _('On', 'Nyala');
+  String get unitsKgOnly => _('kg (lb not supported yet)', 'kg (lb belum didukung)');
+  String get logRir => _('Log reps in reserve (RIR)', 'Catat sisa rep (RIR)');
+  String get myEquipment => _('Equipment at my gym', 'Alat di gym-ku');
+  String get equipmentAll => _('All equipment', 'Semua alat');
+  String equipmentCount(int n) => _('$n groups', '$n kelompok');
+  String equipmentGroup(String key) => switch (key) {
+        'barbell' => _('Barbell & plates', 'Barbel & pelat'),
+        'dumbbell' => _('Dumbbells', 'Dumbel'),
+        'kettlebell' => _('Kettlebells', 'Kettlebell'),
+        'cable' => _('Cable station', 'Stasiun kabel'),
+        'machine' => _('Machines (lever, Smith, sled)', 'Mesin (lever, Smith, sled)'),
+        'band' => _('Resistance bands', 'Resistance band'),
+        'balls' => _('Balls & rollers', 'Bola & roller'),
+        'cardio' => _('Cardio machines', 'Mesin kardio'),
+        _ => key,
+      };
+  String get equipmentNote => _('Bodyweight exercises are always shown.', 'Gerakan bodyweight selalu ditampilkan.');
+  String get exportReady => _('Backup ready — choose where to keep it.', 'Cadangan siap — pilih tempat menyimpannya.');
+  String importDone(int n) => _('Imported — $n new session${n == 1 ? '' : 's'}.', 'Diimpor — $n sesi baru.');
+  String get importFailed => _('That file is not a GymApps backup.', 'File itu bukan cadangan GymApps.');
+  String get importConfirmTitle => _('Import backup?', 'Impor cadangan?');
+  String get importConfirmBody => _(
+        'Sessions and custom exercises are merged into this account. Nothing here is deleted.',
+        'Sesi dan gerakan custom digabung ke akun ini. Tidak ada yang dihapus.',
+      );
+  String get importAction => _('IMPORT', 'IMPOR');
+  String get accentBlue => _('Sky blue', 'Biru langit');
+  String get accentGreen => _('Green', 'Hijau');
+  String get accentOrange => _('Orange', 'Oranye');
+  String get accentPink => _('Pink', 'Merah muda');
+  String get accentViolet => _('Violet', 'Ungu');
+  String get aboutBody => _(
+        'Personal gym logger. Targets are calculated from your own history; data is stored on this device first and synced to your account.',
+        'Pencatat latihan pribadi. Target dihitung dari riwayatmu sendiri; data disimpan di perangkat dulu lalu disinkronkan ke akunmu.',
+      );
+  String get licences => _('Open-source licences', 'Lisensi open-source');
+  String get myEquipmentOnly => _('My equipment', 'Alat saya');
+  String get measuredBy => _('Measured by', 'Diukur dengan');
+  String get modeReps => _('Reps', 'Rep');
+  String get modeTime => _('Time', 'Waktu');
+  String get targetSeconds => _('Target time', 'Target waktu');
+  String get repCeiling => _('Rep ceiling, then add a set', 'Plafon rep, lalu tambah set');
+  String bodyPart(String key) => switch (key) {
+        'chest' => _('Chest', 'Dada'),
+        'back' => _('Back', 'Punggung'),
+        'shoulders' => _('Shoulders', 'Bahu'),
+        'upper arms' => _('Upper arms', 'Lengan atas'),
+        'lower arms' => _('Forearms', 'Lengan bawah'),
+        'upper legs' => _('Upper legs', 'Paha'),
+        'lower legs' => _('Calves', 'Betis'),
+        'waist' => _('Core', 'Perut'),
+        'cardio' => _('Cardio', 'Kardio'),
+        _ => key,
+      };
+  String get allMuscles => _('All muscles', 'Semua otot');
+  String get scheduleTitle => _('Schedule', 'Jadwal');
+  String get bodyweightTitle => _('Bodyweight', 'Berat badan');
+  String get logBodyweight => _('Log bodyweight', 'Catat berat badan');
+  String get bodyweightNone => _('No entries yet — log one to track the trend.', 'Belum ada catatan — catat untuk melihat tren.');
+  String bodyweightChange(String delta, int days) =>
+      _('$delta kg over $days days', '$delta kg dalam $days hari');
+  String get dashboard => _('Dashboard', 'Dashboard');
+  String get openDashboard => _('Open dashboard', 'Buka dashboard');
+  String get e1rmByWeek => _('e1RM by week — last 12 weeks', 'e1RM per minggu — 12 minggu terakhir');
+  String get stalledLifts => _('Stalled for 3+ weeks', 'Stagnan 3+ minggu');
+  String get noneStalled =>
+      _('Nothing stalled — every lift moved in the last 3 weeks.', 'Tidak ada yang stagnan — semua gerakan naik dalam 3 minggu terakhir.');
+  String get sessionsPerWeek => _('Sessions per week', 'Sesi per minggu');
+  String stalledSince(String kg, int weeks) => _('best $kg kg, flat for $weeks weeks', 'terbaik $kg kg, datar $weeks minggu');
+  String get forgotTitle => _('Reset password', 'Reset kata sandi');
+  String get forgotBody => _(
+        "We'll email you a link to set a new password. Open it, set the new password, then sign in here with it.",
+        'Link untuk kata sandi baru akan dikirim ke email-mu. Buka link-nya, setel kata sandi baru, lalu masuk di sini dengannya.',
+      );
+  String get sendLink => _('SEND LINK', 'KIRIM LINK');
+  String get forgotSent => _('If that email has an account, a reset link is on its way.',
+      'Kalau email itu punya akun, link reset sedang dikirim.');
+  String get forgotNoServer => _('Password reset needs the server, and this build has none.',
+      'Reset kata sandi butuh server, dan build ini tidak punya.');
+  String get newPasswordTitle => _('Set a new password', 'Setel kata sandi baru');
+  String get passwordUpdated => _('Password updated — you are signed in.', 'Kata sandi diperbarui — kamu sudah masuk.');
+  String get signUpConfirmEmail => _('Check your email to confirm the account, then sign in.',
+      'Cek email untuk konfirmasi akun, lalu masuk.');
+
   String muscle(String en) => _(en, _muscleId[en] ?? en);
   String region(String en) => _(en, _regionId[en] ?? en);
 }

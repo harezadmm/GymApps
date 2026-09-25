@@ -233,12 +233,27 @@ void main() {
       expect(auth.currentSession, isNull);
     });
 
-    test('kata sandi lokal salah tidak pernah dikirim ke server', () async {
+    test('kata sandi lokal salah dan ditolak server: tetap salah, tidak mendaftar', () async {
       await legacyAccount('a@gym.test', 'rahasia123');
+      auth.users['a@gym.test'] = 'rahasia123';
       await local.signOut();
       final r = await store.signIn(email: 'a@gym.test', password: 'salah');
-      expect(r, isA<SignInError>());
-      expect(auth.signIns, 0);
+      expect((r as SignInError).reason, SignInFailure.wrongPassword);
+      expect(auth.signUps, 0);
+      expect(auth.currentSession, isNull);
+    });
+
+    test('setelah reset kata sandi di server, kata sandi baru diterima dan lokal ikut diganti', () async {
+      // Lupa kata sandi → link reset → kata sandi baru disetel di web. HP ini
+      // masih memegang hash kata sandi lama.
+      await legacyAccount('a@gym.test', 'lamaSekali');
+      auth.users['a@gym.test'] = 'baruHasilReset';
+      await local.signOut();
+      final r = await store.signIn(email: 'a@gym.test', password: 'baruHasilReset');
+      expect(r, isA<SignInOk>());
+      expect(auth.currentSession?.user.email, 'a@gym.test');
+      await local.signOut();
+      expect(await local.signIn(email: 'a@gym.test', password: 'baruHasilReset'), isA<SignInOk>());
     });
 
     test('keluar melepas sesi server juga', () async {

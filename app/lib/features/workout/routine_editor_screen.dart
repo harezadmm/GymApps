@@ -377,6 +377,7 @@ class _ExerciseEditor extends StatelessWidget {
       bodyweight: config.bodyweight,
       heavyBodyPart: config.heavyBodyPart,
       warmupSets: config.warmupSets,
+      superset: config.superset,
     );
   }
 
@@ -474,6 +475,30 @@ class _ExerciseEditor extends StatelessWidget {
                     ),
                   ]),
                   const SizedBox(height: 10),
+                  SectionLabel(t.measuredBy),
+                  const SizedBox(height: 6),
+                  FilterChips(
+                    labels: [t.modeReps, t.modeTime],
+                    index: config.mode == LogMode.time ? 1 : 0,
+                    onChanged: (i) {
+                      final time = i == 1;
+                      if (time == (config.mode == LogMode.time)) return;
+                      onChanged(config.copyWith(
+                        mode: time ? LogMode.time : LogMode.reps,
+                        policy: time ? ProgressionPolicy.time : ProgressionPolicy.double_,
+                        seconds: time && config.seconds == 0 ? 30 : config.seconds,
+                      ));
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                  if (config.mode == LogMode.time)
+                    _StepperField(
+                      label: t.targetSeconds,
+                      value: '${config.seconds} s',
+                      onMinus: () => onChanged(config.copyWith(seconds: (config.seconds - 5).clamp(5, 600))),
+                      onPlus: () => onChanged(config.copyWith(seconds: (config.seconds + 5).clamp(5, 600))),
+                    )
+                  else ...[
                   SectionLabel(t.repRange),
                   const SizedBox(height: 6),
                   Row(children: [
@@ -496,6 +521,18 @@ class _ExerciseEditor extends StatelessWidget {
                       ),
                     ),
                   ]),
+                  ],
+                  if (config.bodyweight && config.mode == LogMode.reps) ...[
+                    const SizedBox(height: 10),
+                    _StepperField(
+                      label: t.repCeiling,
+                      value: '${config.repsMax ?? bodyweightRepCeiling}',
+                      onMinus: () => onChanged(config.copyWith(
+                          repsMax: ((config.repsMax ?? bodyweightRepCeiling) - 1).clamp(config.reps, 50))),
+                      onPlus: () => onChanged(config.copyWith(
+                          repsMax: ((config.repsMax ?? bodyweightRepCeiling) + 1).clamp(config.reps, 50))),
+                    ),
+                  ],
                   const SizedBox(height: 10),
                   Row(children: [
                     Expanded(
@@ -537,6 +574,15 @@ class _ExerciseEditor extends StatelessWidget {
                     mode: config.mode,
                     onChanged: (p) => onChanged(config.copyWith(policy: p)),
                   ),
+                  if (!isLast) ...[
+                    const SizedBox(height: 6),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(t.supersetWithNext, style: Theme.of(context).textTheme.bodyLarge),
+                      value: config.superset,
+                      onChanged: (v) => onChanged(config.copyWith(superset: v)),
+                    ),
+                  ],
                 ],
               ),
             ),

@@ -97,7 +97,7 @@ PlannedExercise planExercise(
   // kerja — kalau tidak, warm-up sesi lalu tampil di baris set kerja pertama.
   final last = lastEntryFor(history, cfg.exerciseId);
   final lastWarm = last?.sets.where((s) => s.isWarmup).toList() ?? const <SetRow>[];
-  final lastWork = last?.sets.where((s) => !s.isWarmup).toList() ?? const <SetRow>[];
+  final lastWork = last?.sets.where((s) => s.isWork).toList() ?? const <SetRow>[];
   final previous = <String>[
     for (var i = 0; i < warmups.length; i++) i < lastWarm.length ? _prevText(lastWarm[i], cfg.mode) : '—',
     for (var i = 0; i < work.length; i++) i < lastWork.length ? _prevText(lastWork[i], cfg.mode) : '—',

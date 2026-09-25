@@ -122,7 +122,8 @@ void main() {
     await tester.pumpWidget(_wrap(store, SessionScreen(routineName: 'Push', exercises: [ex])));
     await tester.pump();
 
-    await tester.enterText(find.byType(TextFormField).first, '62.5');
+    // Kotak pertama adalah catatan sesi; kolom KG set pertama sesudahnya.
+    await tester.enterText(find.byType(TextField).at(1), '62.5');
     await tester.pump();
     expect(ex.sets.first.weight, 62.5);
 
@@ -145,11 +146,11 @@ void main() {
     await tester.pumpWidget(_wrap(store, SessionScreen(routineName: 'Push', exercises: [ex])));
     await tester.pump();
 
-    await tester.enterText(find.byType(TextFormField).first, '60');
+    await tester.enterText(find.byType(TextField).at(1), '60');
     await tester.pump();
     expect(ex.sets.map((s) => s.weight), [60, 60, 60]);
     // Kotak input set 2 ikut menampilkan angka barunya.
-    expect(find.widgetWithText(TextFormField, '60'), findsNWidgets(3));
+    expect(find.widgetWithText(TextField, '60'), findsNWidgets(3));
   });
 
   testWidgets('BUILD MY OWN memanggil callback-nya', (tester) async {

@@ -17,6 +17,11 @@ import '../../core/widgets.dart';
 import '../../data/synced_account_store.dart';
 import '../../data/workout_store.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'dart:convert';
+import 'package:file_picker/file_picker.dart';
+import 'package:share_plus/share_plus.dart';
+import '../../domain/program.dart';
+import 'equipment_picker.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({
@@ -26,6 +31,7 @@ class ProfileScreen extends StatefulWidget {
     required this.onSignOut,
     required this.email,
     this.onConnect,
+    this.onAccentChanged,
   });
 
   final AppLanguage language;
@@ -35,6 +41,8 @@ class ProfileScreen extends StatefulWidget {
   /// Sambungkan akun ini ke server dengan kata sandinya. null kalau build ini
   /// tidak punya server.
   final Future<ConnectResult> Function(String password)? onConnect;
+
+  final ValueChanged<Color>? onAccentChanged;
 
   /// Email akun yang sedang masuk. null hanya selagi pemeriksaannya berjalan;
   /// sebelumnya di sini ada alamat contoh yang di-hardcode, dan itu berarti
@@ -71,9 +79,132 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return local.substring(0, local.length >= 2 ? 2 : 1).toUpperCase();
   }
 
-  void _todo(String what) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(context.t.notWired(what))),
+  /// Pemilih satu nilai dari daftar, dalam sheet. null kalau ditutup.
+  Future<T?> _pick<T>(String title, List<(T, String)> options, T current) => showModalBottomSheet<T>(
+        context: context,
+        backgroundColor: context.gym.surface,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(GymRadius.sheet)),
+        ),
+        builder: (sheet) => SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SectionLabel(title),
+                const SizedBox(height: 10),
+                for (final (v, label) in options)
+                  SelectRow(title: label, selected: v == current, onTap: () => Navigator.of(sheet).pop(v)),
+              ],
+            ),
+          ),
+        ),
+      );
+
+  Future<void> _pickDefaultRest() async {
+    final store = WorkoutScope.read(context);
+    final s = store.settings;
+    final v = await _pick(context.t.defaultRest, [
+      for (final sec in [45, 60, 90, 120, 150, 180, 240, 300]) (sec, _restText(sec)),
+    ], s.defaultRestSeconds);
+    if (v != null) await store.updateSettings(s.copyWith(defaultRestSeconds: v));
+  }
+
+  Future<void> _pickDeload() async {
+    final store = WorkoutScope.read(context);
+    final s = store.settings;
+    final v = await _pick(context.t.deloadFactor, [
+      for (final f in [0.8, 0.85, 0.9, 0.95]) (f, '${(f * 100).round()}%'),
+    ], s.deloadFactor);
+    if (v != null) await store.updateSettings(s.copyWith(deloadFactor: v));
+  }
+
+  Future<void> _pickWeekStart() async {
+    final store = WorkoutScope.read(context);
+    final s = store.settings;
+    final t = context.t;
+    final v = await _pick(t.weekStartsOn, [
+      for (final d in [DateTime.monday, DateTime.saturday, DateTime.sunday]) (d, t.weekdayLong(d)),
+    ], s.weekStartsOn);
+    if (v != null) await store.updateSettings(s.copyWith(weekStartsOn: v));
+  }
+
+  Future<void> _pickAccent() async {
+    final onChanged = widget.onAccentChanged;
+    if (onChanged == null) return;
+    final t = context.t;
+    final names = [t.accentBlue, t.accentGreen, t.accentOrange, t.accentPink, t.accentViolet];
+    final current = context.gym.accent;
+    final v = await _pick(t.accentColour, [
+      for (final (i, color) in accentChoices.indexed) (color, names[i]),
+    ], accentChoices.firstWhere((a) => a.toARGB32() == current.toARGB32(), orElse: () => accentChoices.first));
+    if (v != null) onChanged(v);
+  }
+
+  static String _restText(int sec) => sec % 60 == 0 ? '${sec ~/ 60} min' : '${sec ~/ 60}:${(sec % 60).toString().padLeft(2, '0')}';
+
+  /// Ekspor seluruh data akun sebagai JSON — bentuk yang sama dengan dokumen
+  /// yang disinkronkan, jadi bisa diimpor lagi di akun mana pun.
+  Future<void> _export() async {
+    final store = WorkoutScope.read(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final t = context.t;
+    final doc = {...store.toDocument(), 'exportedAt': DateTime.now().toIso8601String()};
+    final bytes = utf8.encode(const JsonEncoder.withIndent(' ').convert(doc));
+    final name = 'gymapps-backup-${isoDate(DateTime.now())}.json';
+    messenger.showSnackBar(SnackBar(content: Text(t.exportReady)));
+    await SharePlus.instance.share(ShareParams(
+      files: [XFile.fromData(bytes, mimeType: 'application/json', name: name)],
+      fileNameOverrides: [name],
+      subject: name,
+    ));
+  }
+
+  Future<void> _import() async {
+    final store = WorkoutScope.read(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final t = context.t;
+    final files = await FilePicker.pickFiles(type: FileType.custom, allowedExtensions: const ['json']);
+    if (files.isEmpty || !mounted) return;
+    Map<String, dynamic> doc;
+    try {
+      final raw = utf8.decode(await files.first.readAsBytes());
+      doc = Map<String, dynamic>.from(jsonDecode(raw) as Map);
+      if (doc['workouts'] is! List) throw const FormatException('bukan cadangan');
+    } catch (_) {
+      messenger.showSnackBar(SnackBar(content: Text(t.importFailed)));
+      return;
+    }
+    if (!mounted) return;
+    final c = context.gym;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: c.surface,
+        title: Text(t.importConfirmTitle),
+        content: Text(t.importConfirmBody),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: Text(t.cancel)),
+          GymButton(label: t.importAction, height: 42, expand: false, onPressed: () => Navigator.of(context).pop(true)),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final added = await store.importDocument(doc);
+    messenger.showSnackBar(SnackBar(content: Text(t.importDone(added))));
+  }
+
+  Future<void> _about() async {
+    final version = await _version;
+    if (!mounted) return;
+    final t = context.t;
+    showAboutDialog(
+      context: context,
+      applicationName: 'GymApps',
+      applicationVersion: version,
+      children: [Text(t.aboutBody)],
     );
   }
 
@@ -211,6 +342,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     final c = context.gym;
     final t = context.t;
+    final store = context.workouts;
+    final settings = store.settings;
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       children: [
@@ -284,15 +417,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
         const SizedBox(height: 8),
         SettingsGroup(
           children: [
-            SettingsTile(icon: Icons.straighten, label: t.units, value: 'kg', onTap: () => _todo(t.units)),
+            // Satuan hanya ditampilkan, bukan diketuk: lb belum didukung, dan
+            // baris yang tampak bisa diubah tapi tidak bisa itu menyesatkan.
             SettingsTile(
-                icon: Icons.timer_outlined, label: t.defaultRest, value: '90 s', onTap: () => _todo(t.defaultRest)),
+              icon: Icons.straighten,
+              label: t.units,
+              trailing: Text('kg', style: TextStyle(fontSize: 13.5, color: c.text2)),
+            ),
             SettingsTile(
-                icon: Icons.replay, label: t.restPauseRest, value: '15 s', onTap: () => _todo(t.restPauseRest)),
+                icon: Icons.timer_outlined,
+                label: t.defaultRest,
+                value: _restText(settings.defaultRestSeconds),
+                onTap: _pickDefaultRest),
             SettingsTile(
-                icon: Icons.trending_down, label: t.deloadFactor, value: '90%', onTap: () => _todo(t.deloadFactor)),
+                icon: Icons.trending_down,
+                label: t.deloadFactor,
+                value: '${(settings.deloadFactor * 100).round()}%',
+                onTap: _pickDeload),
             SettingsTile(
-                icon: Icons.speed, label: t.effortScale, value: t.off, onTap: () => _todo(t.effortScale)),
+              icon: Icons.speed,
+              label: t.logRir,
+              trailing: Switch(
+                value: settings.logRir,
+                onChanged: (v) => store.updateSettings(settings.copyWith(logRir: v)),
+              ),
+            ),
             SettingsTile(
               icon: Icons.lightbulb_outline,
               label: t.keepScreenAwake,
@@ -305,18 +454,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
             SettingsTile(
-                icon: Icons.calendar_view_week, label: t.weekStartsOn, value: t.monday, onTap: () => _todo(t.weekStartsOn)),
-          ],
-        ),
-        const SizedBox(height: 18),
-        SectionLabel(t.gyms),
-        const SizedBox(height: 8),
-        SettingsGroup(
-          children: [
-            SettingsTile(icon: Icons.place_outlined, label: 'Gym A', value: t.active, onTap: () => _todo('Gym A')),
-            SettingsTile(icon: Icons.place_outlined, label: 'Gym B', onTap: () => _todo('Gym B')),
+                icon: Icons.calendar_view_week,
+                label: t.weekStartsOn,
+                value: t.weekdayLong(settings.weekStartsOn),
+                onTap: _pickWeekStart),
             SettingsTile(
-                icon: Icons.add, label: t.addEquipmentProfile, onTap: () => _todo(t.addEquipmentProfile)),
+              icon: Icons.fitness_center,
+              label: t.myEquipment,
+              value: settings.equipment == null ? t.equipmentAll : t.equipmentCount(settings.equipment!.length),
+              onTap: () => editEquipment(context),
+            ),
           ],
         ),
         const SizedBox(height: 18),
@@ -324,9 +471,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         const SizedBox(height: 8),
         SettingsGroup(
           children: [
-            SettingsTile(
-                icon: Icons.download_outlined, label: t.exportBackup, onTap: () => _todo(t.exportBackup)),
-            SettingsTile(icon: Icons.upload_outlined, label: t.importBackup, onTap: () => _todo(t.importBackup)),
+            SettingsTile(icon: Icons.download_outlined, label: t.exportBackup, onTap: _export),
+            SettingsTile(icon: Icons.upload_outlined, label: t.importBackup, onTap: _import),
             SettingsTile(
               icon: Icons.sync,
               label: t.forceSync,
@@ -339,7 +485,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         const SizedBox(height: 8),
         SettingsGroup(
           children: [
-            SettingsTile(icon: Icons.dark_mode_outlined, label: t.theme, value: t.dark, onTap: () => _todo(t.theme)),
             SettingsTile(
               icon: Icons.palette_outlined,
               label: t.accentColour,
@@ -351,7 +496,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   Icon(Icons.chevron_right, size: 18, color: c.text3),
                 ],
               ),
-              onTap: () => _todo(t.accentColour),
+              onTap: widget.onAccentChanged == null ? null : _pickAccent,
             ),
             SettingsTile(
               icon: Icons.translate,
@@ -376,7 +521,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     Icon(Icons.chevron_right, size: 18, color: c.text3),
                   ],
                 ),
-                onTap: () => _todo(t.aboutApp)),
+                onTap: _about),
           ],
         ),
         const SizedBox(height: 20),

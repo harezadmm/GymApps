@@ -46,6 +46,14 @@ class RestTimer extends ChangeNotifier {
   DateTime? _deadline;
   Timer? _tick;
 
+  /// Dipanggil sekali saat istirahat habis dengan sendirinya — bukan saat
+  /// dilewati. Tempat membunyikan tanda.
+  VoidCallback? onFinished;
+
+  /// Dipanggil setiap tenggat berubah: sisa waktunya saat dimulai atau
+  /// digeser, null saat berhenti. Dipakai untuk menjadwalkan notifikasi.
+  void Function(Duration? remaining)? onDeadlineChanged;
+
   /// Durasi penuh istirahat ini — penyebut cincin progres.
   Duration get total => _total;
 
@@ -71,11 +79,12 @@ class RestTimer extends ChangeNotifier {
     _tick?.cancel();
     _tick = Timer.periodic(const Duration(milliseconds: 200), (_) {
       if (remaining == Duration.zero) {
-        skip();
+        _stop(finished: true);
       } else {
         notifyListeners();
       }
     });
+    onDeadlineChanged?.call(_total);
     notifyListeners();
   }
 
@@ -93,6 +102,7 @@ class RestTimer extends ChangeNotifier {
     }
     _total = clampRest(_total + delta);
     _deadline = clock.now().add(left > _total ? _total : left);
+    onDeadlineChanged?.call(remaining);
     notifyListeners();
   }
 
@@ -115,13 +125,24 @@ class RestTimer extends ChangeNotifier {
       return;
     }
     _deadline = clock.now().add(left);
+    onDeadlineChanged?.call(left);
     notifyListeners();
   }
 
-  void skip() {
+  void skip() => _stop(finished: false);
+
+  void _stop({required bool finished}) {
+    final wasRunning = _deadline != null;
     _tick?.cancel();
     _tick = null;
     _deadline = null;
+    if (wasRunning) {
+      if (finished) {
+        onFinished?.call();
+      } else {
+        onDeadlineChanged?.call(null);
+      }
+    }
     notifyListeners();
   }
 

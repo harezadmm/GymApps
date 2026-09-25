@@ -319,6 +319,57 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
           ],
         ),
       ),
+      const SizedBox(height: 12),
+      // Jadwal bisa diganti kapan saja — dulu mode dan hari latihan terkunci
+      // sejak program dibuat, dan satu-satunya jalan adalah menyusun ulang
+      // split dari nol.
+      GymCard(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SectionLabel(t.scheduleTitle),
+            const SizedBox(height: 10),
+            FilterChips(
+              labels: [t.rotationMode, t.weekdayMode],
+              index: program.mode == ProgramMode.weekday ? 1 : 0,
+              onChanged: (i) {
+                final weekday = i == 1;
+                if (weekday == (program.mode == ProgramMode.weekday)) return;
+                store.updateProgram(program.copyWith(
+                  mode: weekday ? ProgramMode.weekday : ProgramMode.rotation,
+                  days: weekday && program.days.isEmpty ? const [1, 3, 5] : program.days,
+                  clearSkip: true,
+                ));
+              },
+            ),
+            if (program.mode == ProgramMode.weekday) ...[
+              const SizedBox(height: 12),
+              Text(t.trainingDays, style: TextStyle(fontSize: 12.5, color: c.text2)),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (var d = 1; d <= 7; d++)
+                    FilterChip(
+                      label: Text(t.weekdayShort(d)),
+                      selected: program.days.contains(d),
+                      onSelected: (on) {
+                        final days = {...program.days};
+                        on ? days.add(d) : days.remove(d);
+                        // Paling tidak satu hari: jadwal tanpa hari latihan
+                        // bukan jadwal.
+                        if (days.isEmpty) return;
+                        store.updateProgram(program.copyWith(days: days.toList()..sort(), clearSkip: true));
+                      },
+                    ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
       if (program.mode == ProgramMode.rotation) ...[
         const SizedBox(height: 12),
         GymCard(

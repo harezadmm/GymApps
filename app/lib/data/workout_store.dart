@@ -26,6 +26,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../domain/models.dart';
 import '../domain/program.dart';
+import '../domain/settings.dart';
 import '../domain/templates.dart';
 import 'backend.dart';
 import 'exercise_catalog.dart';
@@ -93,6 +94,10 @@ class WorkoutStore extends ChangeNotifier {
   /// riwayat setiap kali layar dibuka.
   static String _kDocDirty(String account) => 'state.$account.docDirty';
 
+  /// Sesi yang sedang berjalan, disimpan terus selama sesi dibuka. Hanya di
+  /// HP ini: sesi setengah jalan bukan fakta yang perlu dikirim ke server.
+  static String _kDraft(String account) => account.isEmpty ? 'state.draft' : 'state.$account.draft';
+
   /// Berapa banyak sesi terhapus yang diingat. Cukup untuk menutup jeda antar
   /// sinkron dua perangkat, dan tidak membuat dokumennya membengkak.
   static const _removedCap = 500;
@@ -107,6 +112,13 @@ class WorkoutStore extends ChangeNotifier {
 
   /// Gerakan yang dibuat sendiri karena tidak ada di katalog (FR-C2).
   List<Exercise> _customEx = const [];
+
+  TrainingSettings _settings = const TrainingSettings();
+
+  /// Berat badan, terlama dulu.
+  List<BodyweightEntry> _bodyweight = const [];
+
+  Map<String, dynamic>? _draft;
 
   /// Sidik jari sesi yang dihapus di perangkat ini atau perangkat lain.
   /// Tanpa ini, sesi yang dihapus di HP muncul lagi begitu tablet yang masih
@@ -163,6 +175,17 @@ class WorkoutStore extends ChangeNotifier {
 
   List<Routine> get routines => List.unmodifiable(_routines);
   List<Exercise> get customExercises => List.unmodifiable(_customEx);
+  TrainingSettings get settings => _settings;
+
+  /// Catatan berat badan, terlama dulu.
+  List<BodyweightEntry> get bodyweightLog => List.unmodifiable(_bodyweight);
+
+  /// Berat badan terakhir yang dicatat, null kalau belum pernah.
+  double? get latestBodyweight => _bodyweight.isEmpty ? null : _bodyweight.last.kg;
+
+  /// Sesi yang belum selesai — ditinggal karena aplikasi ditutup atau HP
+  /// mati. null kalau tidak ada.
+  Map<String, dynamic>? get draft => _draft;
   Program? get program => _program;
 
   /// Program sudah dipilih — onboarding tidak perlu diulang.
@@ -220,6 +243,15 @@ class WorkoutStore extends ChangeNotifier {
     _planDirty = prefs.getBool(_kPlanDirty(account)) ?? true;
     _cursorDirty = prefs.getBool(_kCursorDirty(account)) ?? true;
     _docDirty = prefs.getBool(_kDocDirty(account)) ?? true;
+    final rawDraft = prefs.getString(_kDraft(account));
+    if (rawDraft != null) {
+      try {
+        _draft = Map<String, dynamic>.from(jsonDecode(rawDraft) as Map);
+      } catch (e) {
+        debugPrint('draft sesi rusak, dibuang: $e');
+        _draft = null;
+      }
+    }
     final raw = prefs.getString(_kDoc(account));
     if (raw != null) {
       try {
@@ -230,6 +262,8 @@ class WorkoutStore extends ChangeNotifier {
         _program = _programIn(doc);
         _customEx = _customIn(doc);
         _removed = _removedIn(doc);
+        _settings = _settingsIn(doc);
+        _bodyweight = _bodyweightIn(doc);
       } on FormatException catch (e) {
         // Dokumen rusak. Dibiarkan di disk, tidak ditimpa: kalau ini bug
         // penulisan, menghapusnya akan menghapus riwayat orang selamanya.
@@ -269,6 +303,9 @@ class WorkoutStore extends ChangeNotifier {
     _program = null;
     _customEx = const [];
     _removed = const [];
+    _settings = const TrainingSettings();
+    _bodyweight = const [];
+    _draft = null;
     ExerciseCatalog.registerCustom(const []);
   }
 
@@ -462,6 +499,107 @@ class WorkoutStore extends ChangeNotifier {
     await _commit();
   }
 
+  /// Ganti satu sesi yang sudah tercatat — salah ketik 600 kg yang mestinya
+  /// 60 tidak boleh jadi PR palsu selamanya. Versi lamanya dicatat sebagai
+  /// terhapus supaya perangkat lain yang masih memegangnya tidak
+  /// menghidupkannya lagi di samping versi yang sudah diperbaiki.
+  Future<void> replaceWorkout(Workout old, Workout updated) async {
+    final i = _workouts.indexWhere((w) => identical(w, old));
+    if (i < 0) return;
+    _workouts = [..._workouts]..[i] = updated;
+    _workouts.sort((a, b) => b.date.compareTo(a.date));
+    if (workoutKey(old) != workoutKey(updated)) {
+      _removed = _capRemoved([..._removed, workoutKey(old)]);
+    }
+    await _commit();
+  }
+
+  Future<void> updateSettings(TrainingSettings next) async {
+    _settings = next;
+    await _markPlan();
+    await _commit();
+  }
+
+  Future<void> toggleFavorite(String exerciseId) async {
+    final favs = [..._settings.favorites];
+    favs.contains(exerciseId) ? favs.remove(exerciseId) : favs.add(exerciseId);
+    await updateSettings(_settings.copyWith(favorites: favs));
+  }
+
+  /// Catat berat badan untuk satu tanggal; catatan di tanggal yang sama
+  /// ditimpa.
+  Future<void> logBodyweight(String date, double kg) async {
+    _bodyweight = [
+      for (final e in _bodyweight)
+        if (e.date != date) e,
+      BodyweightEntry(date: date, kg: kg),
+    ]..sort((a, b) => a.date.compareTo(b.date));
+    _removed = _removed.where((k) => k != 'bw:$date').toList();
+    await _commit();
+  }
+
+  Future<void> removeBodyweight(String date) async {
+    _bodyweight = [for (final e in _bodyweight) if (e.date != date) e];
+    _removed = _capRemoved([..._removed, 'bw:$date']);
+    await _commit();
+  }
+
+  /// Simpan sesi yang sedang berjalan. Dipanggil berkali-kali selama sesi.
+  Future<void> saveDraft(Map<String, dynamic> draft) async {
+    final account = _account;
+    if (account == null) return;
+    _draft = draft;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kDraft(account), jsonEncode(draft));
+  }
+
+  Future<void> clearDraft() async {
+    final account = _account;
+    _draft = null;
+    notifyListeners();
+    if (account == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_kDraft(account));
+  }
+
+  /// Gabungkan cadangan JSON (ekspor GymApps, atau dokumen openGym yang
+  /// bentuknya sama) ke akun ini. Tidak pernah menghapus apa pun: sesi
+  /// digabung, gerakan custom digabung per id, dan rencana dari cadangan
+  /// hanya dipakai kalau akun ini belum punya.
+  ///
+  /// Mengembalikan jumlah sesi yang benar-benar baru. Melempar
+  /// [FormatException] kalau isinya bukan dokumen yang dikenal.
+  Future<int> importDocument(Map<String, dynamic> doc) async {
+    if (doc['workouts'] is! List) throw const FormatException('bukan cadangan GymApps');
+    final before = {for (final w in _workouts) workoutKey(w)};
+    final incoming = _workoutsIn(doc);
+    _workouts = _merge(_workouts, incoming, _removed.toSet());
+    final added = _workouts.where((w) => !before.contains(workoutKey(w))).length;
+    if (_program == null && doc['program'] is Map) {
+      _program = _programIn(doc);
+      _routines = _routinesIn(doc);
+      await _markPlan();
+    }
+    final ids = {for (final e in _customEx) e.id};
+    _customEx = [..._customEx, for (final e in _customIn(doc)) if (!ids.contains(e.id)) e];
+    ExerciseCatalog.registerCustom(_customEx);
+    _bodyweight = _mergeBodyweight(_bodyweight, _bodyweightIn(doc), _removed.toSet());
+    await _commit();
+    return added;
+  }
+
+  static List<BodyweightEntry> _mergeBodyweight(
+      List<BodyweightEntry> mine, List<BodyweightEntry> theirs, Set<String> removed) {
+    final byDate = <String, BodyweightEntry>{
+      for (final e in theirs) e.date: e,
+      for (final e in mine) e.date: e,
+    };
+    return [
+      for (final e in byDate.values)
+        if (!removed.contains('bw:${e.date}')) e,
+    ]..sort((a, b) => a.date.compareTo(b.date));
+  }
+
   Future<void> _markPlan() async {
     _planEdits++;
     _planDirty = true;
@@ -538,7 +676,19 @@ class WorkoutStore extends ChangeNotifier {
         if (_program != null) 'program': _program!.toJson(),
         if (_customEx.isNotEmpty) 'customEx': [for (final e in _customEx) e.toJson()],
         if (_removed.isNotEmpty) 'removed': _removed,
+        if (_settings.toJson().isNotEmpty) 'settings': _settings.toJson(),
+        if (_bodyweight.isNotEmpty) 'bw': [for (final e in _bodyweight) e.toJson()],
       };
+
+  static TrainingSettings _settingsIn(Map doc) {
+    final s = doc['settings'];
+    return s is Map ? TrainingSettings.fromJson(Map<String, dynamic>.from(s)) : const TrainingSettings();
+  }
+
+  static List<BodyweightEntry> _bodyweightIn(Map doc) => [
+        for (final e in (doc['bw'] as List? ?? const []))
+          BodyweightEntry.fromJson(Map<String, dynamic>.from(e as Map)),
+      ]..sort((a, b) => a.date.compareTo(b.date));
 
   static List<String> _removedIn(Map doc) => [
         for (final k in (doc['removed'] as List? ?? const [])) if (k is String) k,
@@ -744,6 +894,9 @@ class WorkoutStore extends ChangeNotifier {
       final server = _programIn(theirs);
       _program = server;
       _routines = _routinesIn(theirs);
+      // Setelan ikut aturan rencana: diubah di HP ini sejak sinkron terakhir
+      // = milik HP ini, selain itu milik server.
+      if (theirs['settings'] is Map) _settings = _settingsIn(theirs);
       // Struktur rencana diambil dari server, tapi sesi yang dicatat di HP ini
       // menggeser cursor-nya. Selama urutan rutinitasnya masih sama, posisi
       // rotasi dari HP ini yang dipakai; kalau urutannya diganti di HP lain,
@@ -758,6 +911,7 @@ class WorkoutStore extends ChangeNotifier {
     final ids = {for (final e in _customEx) e.id};
     _customEx = [..._customEx, for (final e in _customIn(theirs)) if (!ids.contains(e.id)) e];
     ExerciseCatalog.registerCustom(_customEx);
+    _bodyweight = _mergeBodyweight(_bodyweight, _bodyweightIn(theirs), _removed.toSet());
   }
 
   /// Gabung dua riwayat: semua sesi dari keduanya, sesi yang sama persis

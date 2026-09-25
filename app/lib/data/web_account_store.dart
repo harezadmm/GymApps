@@ -66,9 +66,8 @@ class WebAccountStore implements AccountStore {
       final r = await _call(auth.signUp(email: address, password: password));
       if (r.session == null) {
         // Proyek meminta konfirmasi email: belum ada sesi. Tidak bisa masuk
-        // sampai tautannya diklik — dan aplikasi ini belum punya alur untuk
-        // itu, jadi disebut ditolak, bukan "berhasil".
-        return const SignUpError(SignUpFailure.rejected);
+        // sampai tautannya diklik — dan itu yang dikatakan.
+        return const SignUpError(SignUpFailure.confirmEmail);
       }
     } catch (e) {
       if (_offline(e)) return const SignUpError(SignUpFailure.offline);
