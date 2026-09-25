@@ -812,7 +812,9 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
             children: [
               _TopBar(
                 routineName: widget.routineName,
-                elapsed: _elapsed,
+                // Termasuk waktu sebelum draft dipulihkan; stopwatch sendiri
+                // mulai dari nol setiap layar ini dibuka.
+                elapsed: () => _elapsedTotal,
                 rest: _rest,
                 onLeave: _confirmLeave,
                 onFinish: _finish,
@@ -898,7 +900,7 @@ class _TopBar extends StatelessWidget {
   });
 
   final String routineName;
-  final Stopwatch elapsed;
+  final Duration Function() elapsed;
   final RestTimer rest;
   final VoidCallback onLeave;
   final VoidCallback onFinish;
@@ -926,7 +928,7 @@ class _TopBar extends StatelessWidget {
                 StreamBuilder<int>(
                   stream: Stream.periodic(const Duration(seconds: 1), (i) => i),
                   builder: (context, _) {
-                    final e = elapsed.elapsed;
+                    final e = elapsed();
                     final text = e.inHours > 0
                         ? '${e.inHours}:${(e.inMinutes % 60).toString().padLeft(2, '0')}:${(e.inSeconds % 60).toString().padLeft(2, '0')}'
                         : '${e.inMinutes}:${(e.inSeconds % 60).toString().padLeft(2, '0')}';
@@ -1098,7 +1100,7 @@ class _ExerciseCard extends StatelessWidget {
                       const SizedBox(height: 1),
                       Text(
                         ex.expanded
-                            ? t.targetLine(w, firstWork.reps, policyName[policy]!.toLowerCase())
+                            ? t.targetLine(w, firstWork.reps, t.policy(policyName[policy]!).toLowerCase())
                             : t.setsTarget(ex.workCount, w, firstWork.reps),
                         style: TextStyle(fontSize: 12, color: c.text2),
                       ),
@@ -1170,7 +1172,7 @@ class _ExerciseCard extends StatelessWidget {
                   _RestRow(exercise: ex, onEdit: onEditRest, onToggle: onToggleRest, onStart: onStartRest),
                   if (p != null) ...[
                     const SizedBox(height: 10),
-                    _WhyBanner(text: p.why, kind: p.kind),
+                    _WhyBanner(text: t.why(p.why), kind: p.kind),
                   ],
                   const SizedBox(height: 12),
                   _SetTable(exercise: ex, onToggled: onSetToggled, onEdited: onEdited, rirRow: rirRow, onRir: onRir),

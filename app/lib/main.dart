@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -147,6 +148,11 @@ class _GymAppState extends State<GymApp> with WidgetsBindingObserver {
           debugShowCheckedModeBanner: false,
           theme: buildGymTheme(accent: _accent),
           builder: _phoneWidthOnWeb,
+          // Teks bawaan Flutter (tombol dialog, tooltip Kembali, pemilih
+          // tanggal) ikut bahasa yang dipilih, bukan selalu bahasa Inggris.
+          locale: _lang == AppLanguage.indonesian ? const Locale('id') : const Locale('en'),
+          supportedLocales: const [Locale('en'), Locale('id')],
+          localizationsDelegates: GlobalMaterialLocalizations.delegates,
           home: AppFlow(
             language: _lang,
             onLanguageChanged: _setLanguage,

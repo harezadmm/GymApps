@@ -3,6 +3,7 @@
 library;
 
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -328,5 +329,53 @@ void main() {
       expect(bench.sets.first.rir, 2);
       expect(find.text('Reps in reserve'), findsNothing);
     });
+  });
+
+  group('bahasa Indonesia di layar sesi', () {
+    test('setiap kalimat alasan di progression.dart punya terjemahan', () {
+      // Kalimat alasan dibentuk di lapisan domain dalam bahasa Inggris. Test ini
+      // mengambil semua literalnya langsung dari sumber, mengisi variabelnya
+      // dengan angka, lalu memastikan tidak ada yang lolos tanpa terjemahan —
+      // supaya kalimat baru tidak diam-diam tampil berbahasa Inggris.
+      final src = File('lib/domain/progression.dart').readAsStringSync();
+      final literals = RegExp(r"'([^'\n]*)'")
+          .allMatches(src)
+          .map((m) => m.group(1)!)
+          .where((l) => l.contains(' — ') || l.startsWith('Automatic progression'))
+          .map((l) => l.replaceAll(RegExp(r'\$\{[^}]*\}'), '7').replaceAll(RegExp(r'\$\w+'), '7'))
+          .toList();
+      expect(literals.length, greaterThanOrEqualTo(20));
+      const id = Strings(AppLanguage.indonesian);
+      final missing = [for (final l in literals) if (id.why(l) == l) l];
+      expect(missing, isEmpty);
+    });
+
+    test('angka ikut terbawa ke terjemahan, bahasa Inggris tidak diubah', () {
+      const id = Strings(AppLanguage.indonesian);
+      expect(id.why('Top of the rep range on every set — +2.5 kg, reps back to 6.'),
+          'Batas atas rentang rep di semua set — +2.5 kg, rep kembali ke 6.');
+      expect(id.why('Kalimat lain'), 'Kalimat lain');
+      const en = Strings(AppLanguage.english);
+      expect(en.why('+2.5 kg — all reps hit last session.'), '+2.5 kg — all reps hit last session.');
+    });
+  });
+
+  testWidgets('sesi yang dilanjutkan dari draft menampilkan waktu yang sudah berjalan', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = WorkoutStore();
+    await store.load();
+    await tester.pumpWidget(WorkoutScope(
+      store: store,
+      child: AppStrings(
+        strings: const Strings(AppLanguage.english),
+        child: MaterialApp(
+          theme: buildGymTheme(),
+          home: const SessionScreen(routineName: 'Pull', exercises: [], initialElapsed: Duration(minutes: 3)),
+        ),
+      ),
+    ));
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.textContaining('3:0'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
   });
 }
