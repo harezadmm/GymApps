@@ -43,6 +43,11 @@ dependencies:
   package_info_plus: ^10.2.1
   wakelock_plus: ^1.8.0
   web: ^1.1.1
+  flutter_local_notifications: ^22.3.1
+  timezone: ^0.11.1
+  share_plus: ^13.3.0
+  file_picker: ^13.1.0
+  http: ^1.6.0
 
 dev_dependencies:
   flutter_test:

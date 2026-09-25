@@ -94,6 +94,21 @@ class SyncedAccountStore implements AccountStore {
       if (await _reachServer(email: email, password: password) == _Reach.session) onSignedIn?.call();
       return result;
     }
+    // Kata sandi lokal tidak cocok — mungkin kata sandinya baru saja diganti
+    // lewat "lupa kata sandi" (reset terjadi di server, HP ini masih memegang
+    // yang lama). Server yang memutuskan; kalau menerima, kata sandi lokal
+    // ikut diganti. Mendaftar tidak pernah dicoba di jalur ini.
+    if (result case SignInError(reason: SignInFailure.wrongPassword)) {
+      if (await _reachServer(email: email, password: password, mayRegister: false) == _Reach.session) {
+        await local.replacePassword(email: email, password: password);
+        final retry = await local.signIn(email: email, password: password);
+        if (retry is SignInOk) {
+          onSignedIn?.call();
+          return retry;
+        }
+      }
+      return result;
+    }
     // Email yang belum dikenal HP ini: server hanya ditanya "akun ini ada?",
     // tidak pernah disuruh membuat akun. Salah ketik email di layar masuk
     // tidak boleh diam-diam melahirkan akun kosong baru.

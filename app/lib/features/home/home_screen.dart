@@ -74,6 +74,10 @@ class HomeScreen extends StatelessWidget {
         const SizedBox(height: 4),
         Text(t.nextUp, style: Theme.of(context).textTheme.headlineMedium),
         const SizedBox(height: 16),
+        if (store.loaded && store.draft != null) ...[
+          _ResumeCard(draft: store.draft!),
+          const SizedBox(height: 12),
+        ],
         if (!store.loaded)
           const SizedBox(height: 200)
         else if (store.program == null || store.nextSessionOn(now) == null)
@@ -84,11 +88,13 @@ class HomeScreen extends StatelessWidget {
         Row(
           children: [
             Expanded(child: SectionLabel(t.thisWeek)),
-            Text(t.sessionsCount(_thisWeek(store.workouts, now)), style: TextStyle(fontSize: 12, color: c.text2)),
+            Text(t.sessionsCount(_thisWeek(store.workouts, now, store.settings.weekStartsOn)),
+                style: TextStyle(fontSize: 12, color: c.text2)),
           ],
         ),
         const SizedBox(height: 10),
-        _WeekStrip(history: store.workouts, today: now, program: store.program),
+        _WeekStrip(
+            history: store.workouts, today: now, program: store.program, weekStartsOn: store.settings.weekStartsOn),
         const SizedBox(height: 12),
         Row(
           children: [
@@ -121,11 +127,87 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  /// Sesi yang tercatat sejak Senin minggu ini.
-  static int _thisWeek(List<Workout> history, DateTime today) {
-    final monday = dateOnly(today).subtract(Duration(days: today.weekday - 1));
-    final from = isoDate(monday);
+  /// Sesi yang tercatat sejak awal minggu ini (setelan "Minggu mulai").
+  static int _thisWeek(List<Workout> history, DateTime today, int weekStartsOn) {
+    final from = isoDate(weekStart(today, weekStartsOn));
     return history.where((w) => w.date.compareTo(from) >= 0).length;
+  }
+}
+
+/// Hari pertama minggu yang memuat [day], menurut [weekStartsOn] (1 = Senin).
+DateTime weekStart(DateTime day, int weekStartsOn) {
+  final d = dateOnly(day);
+  final back = (d.weekday - weekStartsOn + 7) % 7;
+  return d.subtract(Duration(days: back));
+}
+
+/// Sesi yang ditinggal di tengah jalan — aplikasi dimatikan, HP mati.
+class _ResumeCard extends StatelessWidget {
+  const _ResumeCard({required this.draft});
+
+  final Map<String, dynamic> draft;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gym;
+    final t = context.t;
+    var logged = 0;
+    for (final e in (draft['ex'] as List? ?? const [])) {
+      for (final s in ((e as Map)['sets'] as List? ?? const [])) {
+        final m = s as Map;
+        if (m['done'] == true && m['phase'] != 'warmup') logged++;
+      }
+    }
+    final minutes = (((draft['elapsed'] as num?)?.toInt() ?? 0) / 60).round();
+    return GymCard(
+      radius: GymRadius.large,
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Icon(Icons.play_circle_outline, size: 18, color: c.warn),
+            const SizedBox(width: 8),
+            Expanded(child: SectionLabel(t.resumeTitle)),
+          ]),
+          const SizedBox(height: 8),
+          Text(t.resumeDetail(draft['name'] as String? ?? '', logged, minutes),
+              style: TextStyle(fontSize: 13.5, color: c.text)),
+          const SizedBox(height: 12),
+          Row(children: [
+            Expanded(
+              child: GymButton(
+                label: t.discardDraft,
+                tone: GymButtonTone.neutral,
+                height: 42,
+                onPressed: () async {
+                  final store = WorkoutScope.read(context);
+                  final ok = await showDialog<bool>(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      backgroundColor: c.surface,
+                      content: Text(t.discardDraftConfirm),
+                      actions: [
+                        TextButton(onPressed: () => Navigator.of(context).pop(false), child: Text(t.cancel)),
+                        TextButton(
+                          onPressed: () => Navigator.of(context).pop(true),
+                          child: Text(t.discardDraft, style: TextStyle(color: c.danger)),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (ok == true) await store.clearDraft();
+                },
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: GymButton(label: t.resume, height: 42, onPressed: () => resumeDraftSession(context)),
+            ),
+          ]),
+        ],
+      ),
+    );
   }
 }
 
@@ -445,17 +527,18 @@ Future<Routine?> pickOtherRoutine(BuildContext context, {required Program progra
 }
 
 class _WeekStrip extends StatelessWidget {
-  const _WeekStrip({required this.history, required this.today, required this.program});
+  const _WeekStrip({required this.history, required this.today, required this.program, this.weekStartsOn = 1});
 
   final List<Workout> history;
   final DateTime today;
   final Program? program;
+  final int weekStartsOn;
 
   @override
   Widget build(BuildContext context) {
     final c = context.gym;
     final day = dateOnly(today);
-    final monday = day.subtract(Duration(days: day.weekday - 1));
+    final monday = weekStart(day, weekStartsOn);
     final trained = {for (final w in history) w.date};
     final planned = program?.mode == ProgramMode.weekday ? program!.days.toSet() : const <int>{};
 

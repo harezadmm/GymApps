@@ -13,6 +13,7 @@ import '../../core/theme.dart';
 import '../../core/widgets.dart';
 import '../../data/exercise_catalog.dart';
 import '../../data/workout_store.dart';
+import '../session/exercise_history_sheet.dart';
 
 class ExerciseLibraryScreen extends StatefulWidget {
   const ExerciseLibraryScreen({super.key, this.picking = false});
@@ -31,9 +32,16 @@ class _ExerciseLibraryScreenState extends State<ExerciseLibraryScreen> {
   late Future<ExerciseCatalog> _catalog;
   int _sort = 0;
 
-  /// Gerakan yang ditandai bintang. Belum tersimpan di mana pun — hilang saat
-  /// layar ditutup, dan itu disebutkan di banner filter.
-  final _starred = <String>{};
+  /// Saring ke alat yang ada di gym (setelan Profil). Menyala dengan sendirinya
+  /// kalau alatnya pernah dipilih.
+  bool? _onlyMine;
+
+  /// Bagian tubuh yang dipilih, null = semua.
+  String? _bodyPart;
+
+  static const _bodyParts = [
+    'chest', 'back', 'shoulders', 'upper arms', 'lower arms', 'upper legs', 'lower legs', 'waist', 'cardio',
+  ];
 
   @override
   void initState() {
@@ -47,19 +55,39 @@ class _ExerciseLibraryScreenState extends State<ExerciseLibraryScreen> {
     super.dispose();
   }
 
-  List<Exercise> _arrange(ExerciseCatalog catalog) {
-    final found = catalog.search(_query.text);
-    final list = [...found];
+  List<Exercise> _arrange(ExerciseCatalog catalog, WorkoutStore store) {
+    final settings = store.settings;
+    final onlyMine = _onlyMine ?? settings.equipment != null;
+    final starred = settings.favorites.toSet();
+    final list = [
+      for (final e in catalog.search(_query.text))
+        if ((!onlyMine || e.custom || settings.hasEquipment(e.equipment)) &&
+            (_bodyPart == null || e.bodyPart == _bodyPart))
+          e,
+    ];
     switch (_sort) {
       case 1: // A–Z
         list.sort((a, b) => a.name.compareTo(b.name));
       case 2: // By muscle
         list.sort((a, b) => a.bodyPart == b.bodyPart ? a.name.compareTo(b.name) : a.bodyPart.compareTo(b.bodyPart));
-      default: // Performed — favorit dulu, sisanya urutan katalog
+      default:
+        // Performed — favorit dulu, lalu yang paling sering dicatat, sisanya
+        // urutan katalog. Dulu "Performed" tidak pernah melihat riwayat.
+        final count = <String, int>{};
+        for (final w in store.workouts) {
+          for (final e in w.entries) {
+            count[e.exerciseId] = (count[e.exerciseId] ?? 0) + 1;
+          }
+        }
+        final order = {for (final (i, e) in list.indexed) e.id: i};
         list.sort((a, b) {
-          final sa = _starred.contains(a.id) ? 0 : 1;
-          final sb = _starred.contains(b.id) ? 0 : 1;
-          return sa == sb ? 0 : sa - sb;
+          final sa = starred.contains(a.id) ? 0 : 1;
+          final sb = starred.contains(b.id) ? 0 : 1;
+          if (sa != sb) return sa - sb;
+          final ca = count[a.id] ?? 0;
+          final cb = count[b.id] ?? 0;
+          if (ca != cb) return cb - ca;
+          return order[a.id]! - order[b.id]!;
         });
     }
     return list;
@@ -107,6 +135,14 @@ class _ExerciseLibraryScreenState extends State<ExerciseLibraryScreen> {
               if (e.secondary.isNotEmpty)
                 _DetailLine(label: t.secondaryMuscles, value: e.secondary.map(_cap).join(', ')),
               _DetailLine(label: t.equipmentLabel, value: _cap(e.equipment)),
+              const SizedBox(height: 12),
+              GymButton(
+                label: t.exerciseHistory,
+                icon: Icons.history,
+                tone: GymButtonTone.neutral,
+                height: 44,
+                onPressed: () => showExerciseHistory(context, exerciseId: e.id, name: e.name),
+              ),
             ],
           ),
         ),
@@ -150,7 +186,43 @@ class _ExerciseLibraryScreenState extends State<ExerciseLibraryScreen> {
                 onChanged: (i) => setState(() => _sort = i),
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 36,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                children: [
+                  if (context.workouts.settings.equipment != null)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: FilterChip(
+                        label: Text(context.t.myEquipmentOnly),
+                        selected: _onlyMine ?? true,
+                        onSelected: (v) => setState(() => _onlyMine = v),
+                      ),
+                    ),
+                  Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: ChoiceChip(
+                      label: Text(context.t.allMuscles),
+                      selected: _bodyPart == null,
+                      onSelected: (_) => setState(() => _bodyPart = null),
+                    ),
+                  ),
+                  for (final bp in _bodyParts)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: ChoiceChip(
+                        label: Text(context.t.bodyPart(bp)),
+                        selected: _bodyPart == bp,
+                        onSelected: (_) => setState(() => _bodyPart = _bodyPart == bp ? null : bp),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
             Expanded(
               child: FutureBuilder<ExerciseCatalog>(
                 future: _catalog,
@@ -168,7 +240,8 @@ class _ExerciseLibraryScreenState extends State<ExerciseLibraryScreen> {
                     return Center(child: CircularProgressIndicator(color: c.accent));
                   }
 
-                  final list = _arrange(snap.data!);
+                  final store = context.workouts;
+                  final list = _arrange(snap.data!, store);
                   return Column(
                     children: [
                       Padding(
@@ -237,9 +310,8 @@ class _ExerciseLibraryScreenState extends State<ExerciseLibraryScreen> {
                                   final e = list[i];
                                   return _ExerciseRow(
                                     exercise: e,
-                                    starred: _starred.contains(e.id),
-                                    onStar: () => setState(() =>
-                                        _starred.contains(e.id) ? _starred.remove(e.id) : _starred.add(e.id)),
+                                    starred: store.settings.favorites.contains(e.id),
+                                    onStar: () => store.toggleFavorite(e.id),
                                     onTap: () => widget.picking
                                         ? Navigator.of(context).pop(e)
                                         : _showDetails(context, e),

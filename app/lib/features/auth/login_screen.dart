@@ -16,11 +16,15 @@ class LoginScreen extends StatefulWidget {
     required this.store,
     required this.onSignedIn,
     required this.onCreateAccount,
+    this.onForgotPassword,
   });
 
   final AccountStore store;
   final VoidCallback onSignedIn;
   final VoidCallback onCreateAccount;
+
+  /// Kirim link reset ke email ini. null = build tanpa server.
+  final Future<bool> Function(String email)? onForgotPassword;
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -62,6 +66,27 @@ class _LoginScreenState extends State<LoginScreen> {
               SignInFailure.offline => t.authOffline,
             });
     }
+  }
+
+  /// Lupa kata sandi: kirim link reset. Dulu tombolnya tidak berbuat apa-apa.
+  Future<void> _forgot() async {
+    final t = context.t;
+    final messenger = ScaffoldMessenger.of(context);
+    final send = widget.onForgotPassword;
+    if (send == null) {
+      messenger.showSnackBar(SnackBar(content: Text(t.forgotNoServer)));
+      return;
+    }
+    final email = await showDialog<String>(
+      context: context,
+      builder: (_) => _ForgotDialog(initial: _email.text.trim()),
+    );
+    if (email == null || email.isEmpty || !mounted) return;
+    setState(() => _busy = true);
+    final ok = await send(email);
+    if (!mounted) return;
+    setState(() => _busy = false);
+    messenger.showSnackBar(SnackBar(content: Text(ok ? t.forgotSent : t.authOffline)));
   }
 
   @override
@@ -139,7 +164,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 Center(
                   child: TextButton(
-                    onPressed: () {},
+                    onPressed: _forgot,
                     child: Text(context.t.forgotPassword,
                         style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: c.accent)),
                   ),
@@ -185,3 +210,60 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 }
 
+class _ForgotDialog extends StatefulWidget {
+  const _ForgotDialog({required this.initial});
+
+  final String initial;
+
+  @override
+  State<_ForgotDialog> createState() => _ForgotDialogState();
+}
+
+class _ForgotDialogState extends State<_ForgotDialog> {
+  late final _controller = TextEditingController(text: widget.initial);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gym;
+    final t = context.t;
+    return AlertDialog(
+      backgroundColor: c.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(GymRadius.large)),
+      title: Text(t.forgotTitle, style: Theme.of(context).textTheme.titleLarge),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(t.forgotBody, style: TextStyle(fontSize: 13.5, height: 1.45, color: c.text2)),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _controller,
+            autofocus: widget.initial.isEmpty,
+            keyboardType: TextInputType.emailAddress,
+            autocorrect: false,
+            decoration: const InputDecoration(labelText: 'Email'),
+          ),
+        ],
+      ),
+      actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(t.cancel, style: TextStyle(fontWeight: FontWeight.w700, color: c.text2)),
+        ),
+        GymButton(
+          label: t.sendLink,
+          height: 42,
+          expand: false,
+          onPressed: () => Navigator.of(context).pop(_controller.text.trim()),
+        ),
+      ],
+    );
+  }
+}

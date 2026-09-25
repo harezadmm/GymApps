@@ -82,8 +82,11 @@ enum SignUpFailure {
   offline,
 
   /// Server menjawab tapi menolak (kata sandi terlalu lemah, pendaftaran
-  /// ditutup, perlu konfirmasi email).
+  /// ditutup).
   rejected,
+
+  /// Akun dibuat tapi server meminta email dikonfirmasi dulu.
+  confirmEmail,
 }
 
 enum SignInFailure {

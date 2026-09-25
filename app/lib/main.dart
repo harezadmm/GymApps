@@ -2,14 +2,19 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'core/layout.dart';
 import 'core/motion.dart';
+import 'core/rest_alert.dart';
 import 'core/safe_area_stub.dart' if (dart.library.js_interop) 'core/safe_area_web.dart';
 import 'core/strings.dart';
 import 'core/theme.dart';
+import 'core/widgets.dart';
 import 'data/account_store.dart';
 import 'data/backend.dart';
+import 'data/password_reset.dart';
 import 'data/synced_account_store.dart';
 import 'data/web_account_store.dart';
 import 'data/workout_store.dart';
@@ -33,12 +38,20 @@ const _supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
 
 bool get supabaseConfigured => _supabaseUrl.isNotEmpty && _supabaseAnonKey.isNotEmpty;
 
+/// Halaman dibuka dari link reset kata sandi. Dibaca sebelum Supabase
+/// memproses (dan membersihkan) alamatnya.
+bool _pendingPasswordRecovery = false;
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Aplikasi harus tetap jalan tanpa kredensial: seluruh logging bersifat
   // offline-first (FR-A3), dan sebuah build tanpa Supabase masih berguna untuk
   // meninjau UI. Yang hilang hanya sinkronnya.
+  if (kIsWeb) {
+    final u = Uri.base;
+    _pendingPasswordRecovery = u.fragment.contains('type=recovery') || u.queryParameters['type'] == 'recovery';
+  }
   if (supabaseConfigured) {
     await Supabase.initialize(
       url: _supabaseUrl,
@@ -49,21 +62,47 @@ Future<void> main() async {
     );
   }
 
-  runApp(const GymApp());
+  // Setelan perangkat dibaca sebelum bingkai pertama, supaya aplikasi tidak
+  // sempat tampil dalam bahasa Inggris lalu berkedip ke bahasa Indonesia.
+  final prefs = await SharedPreferences.getInstance();
+  final lang = prefs.getString(_kLang) == 'id' ? AppLanguage.indonesian : AppLanguage.english;
+  final accent = prefs.getInt(_kAccent);
+  await RestAlert.init();
+
+  runApp(GymApp(initialLanguage: lang, initialAccent: accent == null ? null : Color(accent)));
 }
 
+const _kLang = 'settings.lang';
+const _kAccent = 'settings.accent';
+
 class GymApp extends StatefulWidget {
-  const GymApp({super.key});
+  const GymApp({super.key, this.initialLanguage = AppLanguage.english, this.initialAccent});
+
+  final AppLanguage initialLanguage;
+  final Color? initialAccent;
 
   @override
   State<GymApp> createState() => _GymAppState();
 }
 
 class _GymAppState extends State<GymApp> with WidgetsBindingObserver {
-  /// Bahasa dipegang di akar supaya satu setState memperbarui seluruh aplikasi.
-  /// Belum disimpan ke disk — pilihannya kembali ke bawaan setelah app ditutup,
-  /// dan itu ikut store Supabase nanti bersama setelan lain.
-  AppLanguage _lang = AppLanguage.english;
+  /// Bahasa dipegang di akar supaya satu setState memperbarui seluruh aplikasi,
+  /// dan disimpan sebagai setelan perangkat — dulu kembali ke Inggris setiap
+  /// kali aplikasi dibuka.
+  late AppLanguage _lang = widget.initialLanguage;
+  late Color? _accent = widget.initialAccent;
+
+  Future<void> _setLanguage(AppLanguage l) async {
+    setState(() => _lang = l);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kLang, l == AppLanguage.indonesian ? 'id' : 'en');
+  }
+
+  Future<void> _setAccent(Color c) async {
+    setState(() => _accent = c);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_kAccent, c.toARGB32());
+  }
 
   /// Satu store untuk seluruh aplikasi, dibuat di akar supaya riwayatnya tidak
   /// ikut dibuang saat tab berpindah atau layar sesi ditutup.
@@ -106,11 +145,13 @@ class _GymAppState extends State<GymApp> with WidgetsBindingObserver {
         child: MaterialApp(
           title: 'GymApps',
           debugShowCheckedModeBanner: false,
-          theme: buildGymTheme(),
+          theme: buildGymTheme(accent: _accent),
           builder: _phoneWidthOnWeb,
           home: AppFlow(
             language: _lang,
-            onLanguageChanged: (l) => setState(() => _lang = l),
+            onLanguageChanged: _setLanguage,
+            accent: _accent,
+            onAccentChanged: _setAccent,
           ),
         ),
       ),
@@ -136,18 +177,25 @@ Widget _phoneWidthOnWeb(BuildContext context, Widget? child) {
     mq = mq.copyWith(padding: css, viewPadding: css);
   }
   if (mq.size.width <= 600) return MediaQuery(data: mq, child: child);
-  const width = 480.0;
-  return ColoredBox(
-    color: Theme.of(context).scaffoldBackgroundColor,
-    child: Center(
-      child: SizedBox(
-        width: width,
-        child: MediaQuery(
-          data: mq.copyWith(size: Size(width, mq.size.height)),
-          child: child,
+  final data = mq;
+  return ValueListenableBuilder<bool>(
+    valueListenable: wideLayout,
+    builder: (context, wide, _) {
+      // Dashboard boleh melebar sampai 1100 px; layar lain tetap selebar ponsel.
+      final width = (wide ? 1100.0 : 480.0).clamp(0.0, data.size.width);
+      return ColoredBox(
+        color: Theme.of(context).scaffoldBackgroundColor,
+        child: Center(
+          child: SizedBox(
+            width: width,
+            child: MediaQuery(
+              data: data.copyWith(size: Size(width, data.size.height)),
+              child: child,
+            ),
+          ),
         ),
-      ),
-    ),
+      );
+    },
   );
 }
 
@@ -163,10 +211,18 @@ enum AppStage { booting, login, register, program, equipment, home, unconfigured
 /// hanya jalan sekali, dan tombol kembali dari Home tidak boleh mendarat lagi di
 /// layar pilih program.
 class AppFlow extends StatefulWidget {
-  const AppFlow({super.key, required this.language, required this.onLanguageChanged});
+  const AppFlow({
+    super.key,
+    required this.language,
+    required this.onLanguageChanged,
+    this.accent,
+    this.onAccentChanged,
+  });
 
   final AppLanguage language;
   final ValueChanged<AppLanguage> onLanguageChanged;
+  final Color? accent;
+  final ValueChanged<Color>? onAccentChanged;
 
   @override
   State<AppFlow> createState() => _AppFlowState();
@@ -300,8 +356,32 @@ class _AppFlowState extends State<AppFlow> {
         _awaitingPlan = !store.hasProgram;
         _stage = store.hasProgram ? AppStage.home : AppStage.program;
       });
+      if (_pendingPasswordRecovery) {
+        _pendingPasswordRecovery = false;
+        WidgetsBinding.instance.addPostFrameCallback((_) => _askNewPassword());
+      }
     } finally {
       _entering = false;
+    }
+  }
+
+  /// Dibuka dari link reset: sesinya sudah ada (token di link), tinggal
+  /// menyetel kata sandi baru.
+  Future<void> _askNewPassword() async {
+    if (!mounted || !supabaseConfigured) return;
+    final password = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const _NewPasswordDialog(),
+    );
+    if (password == null || password.length < 8 || !mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final t = context.t;
+    try {
+      await Supabase.instance.client.auth.updateUser(UserAttributes(password: password));
+      messenger.showSnackBar(SnackBar(content: Text(t.passwordUpdated)));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(t.authOffline)));
     }
   }
 
@@ -355,6 +435,9 @@ class _AppFlowState extends State<AppFlow> {
           store: _accounts,
           onSignedIn: _enter,
           onCreateAccount: () => setState(() => _stage = AppStage.register),
+          onForgotPassword: supabaseConfigured
+              ? (email) => requestPasswordReset(supabaseUrl: _supabaseUrl, anonKey: _supabaseAnonKey, email: email)
+              : null,
         ),
       // Akun baru selalu lewat onboarding; akun lama juga, sampai lapisan
       // penyimpanan bisa menjawab "program orang ini sudah dipilih belum".
@@ -387,6 +470,7 @@ class _AppFlowState extends State<AppFlow> {
       AppStage.home => HomeShell(
           language: widget.language,
           onLanguageChanged: widget.onLanguageChanged,
+          onAccentChanged: widget.onAccentChanged,
           email: _account?.email,
           onSignOut: _signOut,
           onConnect: switch (_accounts) {
@@ -408,6 +492,7 @@ class HomeShell extends StatefulWidget {
     required this.onSignOut,
     required this.email,
     this.onConnect,
+    this.onAccentChanged,
   });
 
   final AppLanguage language;
@@ -415,6 +500,7 @@ class HomeShell extends StatefulWidget {
   final VoidCallback onSignOut;
   final String? email;
   final Future<ConnectResult> Function(String password)? onConnect;
+  final ValueChanged<Color>? onAccentChanged;
 
   @override
   State<HomeShell> createState() => _HomeShellState();
@@ -458,6 +544,7 @@ class _HomeShellState extends State<HomeShell> {
               onSignOut: widget.onSignOut,
               email: widget.email,
               onConnect: widget.onConnect,
+              onAccentChanged: widget.onAccentChanged,
             ),
           ],
         ),
@@ -474,6 +561,56 @@ class _HomeShellState extends State<HomeShell> {
           destinations: destinations,
         ),
       ),
+    );
+  }
+}
+
+class _NewPasswordDialog extends StatefulWidget {
+  const _NewPasswordDialog();
+
+  @override
+  State<_NewPasswordDialog> createState() => _NewPasswordDialogState();
+}
+
+class _NewPasswordDialogState extends State<_NewPasswordDialog> {
+  final _controller = TextEditingController();
+  String? _error;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    if (_controller.text.length < 8) {
+      setState(() => _error = context.t.passwordTooShort(8));
+      return;
+    }
+    Navigator.of(context).pop(_controller.text);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gym;
+    final t = context.t;
+    return AlertDialog(
+      backgroundColor: c.surface,
+      title: Text(t.newPasswordTitle, style: Theme.of(context).textTheme.titleLarge),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        obscureText: true,
+        onSubmitted: (_) => _submit(),
+        decoration: InputDecoration(labelText: t.password, errorText: _error),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(t.cancel, style: TextStyle(fontWeight: FontWeight.w700, color: c.text2)),
+        ),
+        GymButton(label: t.save, height: 42, expand: false, onPressed: _submit),
+      ],
     );
   }
 }

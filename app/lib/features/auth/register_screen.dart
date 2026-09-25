@@ -103,6 +103,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
         setState(() => _emailError = t.authOffline);
       case SignUpError(reason: SignUpFailure.rejected):
         setState(() => _passwordError = t.signUpRejected);
+      case SignUpError(reason: SignUpFailure.confirmEmail):
+        setState(() => _emailError = t.signUpConfirmEmail);
     }
   }
 

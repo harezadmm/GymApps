@@ -110,7 +110,7 @@ void main() {
   test('proyek minta konfirmasi email: tidak diklaim berhasil', () async {
     auth.confirmationRequired = true;
     final r = await store.signUp(email: 'a@gym.test', password: 'rahasia123');
-    expect((r as SignUpError).reason, SignUpFailure.rejected);
+    expect((r as SignUpError).reason, SignUpFailure.confirmEmail);
     expect(await store.signedIn(), isNull);
   });
 

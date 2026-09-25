@@ -11,6 +11,9 @@ import 'package:flutter/material.dart';
 import '../../core/strings.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
+import '../../data/workout_store.dart';
+import '../../domain/settings.dart';
+import '../profile/equipment_picker.dart';
 
 /// Bar progres dua langkah di puncak layar onboarding.
 class _OnboardingTop extends StatelessWidget {
@@ -213,14 +216,7 @@ class _ProgramCard extends StatelessWidget {
   }
 }
 
-/// Satu alat di daftar peralatan.
-class Equipment {
-  Equipment(this.name, {this.owned = true});
-  final String name;
-  bool owned;
-}
-
-/// Profil gym (FR-C2): daftar alat yang menyaring library gerakan.
+/// Profil gym (FR-C3): kelompok alat yang ada, dipakai menyaring library.
 class EquipmentScreen extends StatefulWidget {
   const EquipmentScreen({super.key, required this.onContinue, this.onBack, this.onSkip, this.gymName = 'Gym A'});
 
@@ -238,37 +234,14 @@ class EquipmentScreen extends StatefulWidget {
 }
 
 class _EquipmentScreenState extends State<EquipmentScreen> {
-  final _groups = <String, List<Equipment>>{
-    'Free weights': [
-      Equipment('Barbell + plates'),
-      Equipment('Dumbbells'),
-      Equipment('EZ bar'),
-      Equipment('Kettlebells', owned: false),
-    ],
-    'Machines': [
-      Equipment('Cable station'),
-      Equipment('Lat pulldown'),
-      Equipment('Leg press'),
-      Equipment('Pec deck', owned: false),
-    ],
-    'Other': [
-      Equipment('Pull-up bar'),
-      Equipment('Bench (adjustable)'),
-      Equipment('Treadmill', owned: false),
-    ],
-  };
+  /// Mesin kardio dan bola tidak dicentang dari awal: kebanyakan gym beban
+  /// punya, tapi jarang dipakai untuk latihan kekuatan.
+  var _selected = {for (final k in equipmentGroups.keys) if (k != 'cardio' && k != 'balls') k};
 
-  /// Tambah alat yang tidak ada di daftar bawaan.
-  ///
-  /// Langsung ditandai dimiliki: orang tidak akan repot mengetik nama alat yang
-  /// tidak dia punya.
-  Future<void> _addCustom(String group) async {
-    final name = await showDialog<String>(
-      context: context,
-      builder: (context) => const _CustomEquipmentDialog(),
-    );
-    if (name == null || name.trim().isEmpty) return;
-    setState(() => _groups[group]!.add(Equipment(name.trim())));
+  Future<void> _continue() async {
+    final store = WorkoutScope.read(context);
+    await store.updateSettings(store.settings.copyWith(equipment: _selected.toList()));
+    widget.onContinue();
   }
 
   @override
@@ -286,129 +259,19 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                 children: [
                   Text(context.t.whatsInYourGym, style: Theme.of(context).textTheme.headlineMedium),
                   const SizedBox(height: 6),
-                  Text(context.t.gymFilterNote(widget.gymName),
-                      style: TextStyle(fontSize: 13.5, height: 1.4, color: c.text2)),
+                  Text(context.t.equipmentNote, style: TextStyle(fontSize: 13.5, height: 1.4, color: c.text2)),
                   const SizedBox(height: 18),
-                  for (final entry in _groups.entries) ...[
-                    SectionLabel(context.t.catalogue(entry.key)),
-                    const SizedBox(height: 8),
-                    SettingsGroup(
-                      children: [
-                        for (final item in entry.value)
-                          SelectRow(
-                            title: item.name,
-                            selected: item.owned,
-                            square: true,
-                            dimWhenOff: true,
-                            onTap: () => setState(() => item.owned = !item.owned),
-                          ),
-                        // Baris terakhir di dalam kartu, bukan kotak terpisah
-                        // di bawahnya: alat tambahan masuk ke grup ini, dan
-                        // menaruhnya di dalam membuat hubungan itu terlihat.
-                        _AddCustomRow(
-                          label: context.t.addGroup(context.t.catalogue(entry.key)),
-                          onTap: () => _addCustom(entry.key),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 18),
-                  ],
+                  EquipmentGroupsList(selected: _selected, onChanged: (s) => setState(() => _selected = s)),
                 ],
               ),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 14),
-              child: GymButton(label: context.t.cont, onPressed: widget.onContinue),
+              child: GymButton(label: context.t.cont, onPressed: _continue),
             ),
           ],
         ),
       ),
-    );
-  }
-}
-
-/// Baris terakhir di kartu grup peralatan: tambah alat yang tidak ada di daftar.
-class _AddCustomRow extends StatelessWidget {
-  const _AddCustomRow({required this.label, required this.onTap});
-
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.gym;
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        child: Row(
-          children: [
-            Icon(Icons.add, size: 18, color: c.accent),
-            const SizedBox(width: 8),
-            Text(label,
-                style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: c.accent)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _CustomEquipmentDialog extends StatefulWidget {
-  const _CustomEquipmentDialog();
-
-  @override
-  State<_CustomEquipmentDialog> createState() => _CustomEquipmentDialogState();
-}
-
-class _CustomEquipmentDialogState extends State<_CustomEquipmentDialog> {
-  final _controller = TextEditingController();
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _submit() => Navigator.of(context).pop(_controller.text);
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.gym;
-    OutlineInputBorder border(Color colour) => OutlineInputBorder(
-          borderRadius: BorderRadius.circular(GymRadius.control),
-          borderSide: BorderSide(color: colour),
-        );
-
-    return AlertDialog(
-      backgroundColor: c.surface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(GymRadius.large)),
-      title: Text(context.t.addEquipment, style: Theme.of(context).textTheme.titleLarge),
-      content: TextField(
-        controller: _controller,
-        autofocus: true,
-        textCapitalization: TextCapitalization.sentences,
-        onSubmitted: (_) => _submit(),
-        style: TextStyle(fontSize: 15, color: c.text),
-        decoration: InputDecoration(
-          hintText: context.t.equipmentHint,
-          hintStyle: TextStyle(fontSize: 15, color: c.text2),
-          filled: true,
-          fillColor: c.bgNested,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-          border: border(c.border),
-          enabledBorder: border(c.border),
-          focusedBorder: border(c.accent),
-        ),
-      ),
-      actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(context.t.cancel, style: TextStyle(fontWeight: FontWeight.w700, color: c.text2)),
-        ),
-        GymButton(label: context.t.add, height: 42, expand: false, onPressed: _submit),
-      ],
     );
   }
 }

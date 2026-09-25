@@ -7,7 +7,17 @@ library;
 
 /// Fase satu baris set. Warm-up tidak pernah ikut dihitung untuk progresi,
 /// 1RM, maupun fatigue (FR-D6).
-enum SetPhase { work, warmup }
+///
+/// Drop set dan rest-pause (FR-D7) adalah kerja sungguhan — ikut volume — tapi
+/// bukan set kerja yang dinilai progresi: satu drop set dengan rep sedikit di
+/// beban yang lebih ringan bukan tanda gagal.
+enum SetPhase { work, warmup, drop, restPause }
+
+const _phaseKey = <SetPhase, String>{
+  SetPhase.warmup: 'warmup',
+  SetPhase.drop: 'drop',
+  SetPhase.restPause: 'rp',
+};
 
 /// Bagaimana satu gerakan diukur. `reps` beban×rep, `time` detik (plank, hang),
 /// `cardio` menit+kecepatan.
@@ -38,14 +48,28 @@ class SetRow {
 
   bool get isWarmup => phase == SetPhase.warmup;
 
-  SetRow copyWith({double? weight, int? reps, int? seconds, bool? done, SetPhase? phase, int? rir}) {
+  /// Set kerja yang dinilai progresi. Bukan warm-up, bukan drop/rest-pause.
+  bool get isWork => phase == SetPhase.work;
+
+  /// Drop set atau rest-pause: ikut volume, tidak ikut penilaian progresi.
+  bool get isExtra => phase == SetPhase.drop || phase == SetPhase.restPause;
+
+  SetRow copyWith({
+    double? weight,
+    int? reps,
+    int? seconds,
+    bool? done,
+    SetPhase? phase,
+    int? rir,
+    bool clearRir = false,
+  }) {
     return SetRow(
       weight: weight ?? this.weight,
       reps: reps ?? this.reps,
       seconds: seconds ?? this.seconds,
       done: done ?? this.done,
       phase: phase ?? this.phase,
-      rir: rir ?? this.rir,
+      rir: clearRir ? null : (rir ?? this.rir),
     );
   }
 
@@ -54,7 +78,7 @@ class SetRow {
         'r': reps,
         if (seconds > 0) 'sec': seconds,
         'done': done,
-        if (phase == SetPhase.warmup) 'phase': 'warmup',
+        if (_phaseKey[phase] != null) 'phase': _phaseKey[phase],
         if (rir != null) 'rir': rir,
       };
 
@@ -64,7 +88,12 @@ class SetRow {
         seconds: (j['sec'] as num?)?.toInt() ?? 0,
         done: j['done'] == true,
         // Riwayat lama memakai boolean `warmup`; `phase` menang kalau ada.
-        phase: (j['phase'] == 'warmup' || j['warmup'] == true) ? SetPhase.warmup : SetPhase.work,
+        phase: switch (j['phase']) {
+          'warmup' => SetPhase.warmup,
+          'drop' => SetPhase.drop,
+          'rp' => SetPhase.restPause,
+          _ => j['warmup'] == true ? SetPhase.warmup : SetPhase.work,
+        },
         rir: (j['rir'] as num?)?.toInt(),
       );
 }
@@ -89,6 +118,7 @@ class ExerciseConfig {
     this.bodyweight = false,
     this.heavyBodyPart = false,
     this.warmupSets = 0,
+    this.superset = false,
   });
 
   final String exerciseId;
@@ -124,11 +154,18 @@ class ExerciseConfig {
   /// sendiri kalau perlu.
   final int warmupSets;
 
+  /// Superset dengan gerakan sesudahnya (FR-D7): istirahat baru dimulai
+  /// setelah set gerakan pasangannya.
+  final bool superset;
+
   ExerciseConfig copyWith({
     ProgressionPolicy? policy,
+    LogMode? mode,
     int? sets,
     int? reps,
     int? repsMin,
+    int? repsMax,
+    bool clearRepsMax = false,
     double? weight,
     int? seconds,
     double? increment,
@@ -136,16 +173,18 @@ class ExerciseConfig {
     double? deloadFactor,
     int? warmupSets,
     bool? bodyweight,
+    bool? superset,
     String? exerciseId,
   }) {
     return ExerciseConfig(
       exerciseId: exerciseId ?? this.exerciseId,
       policy: policy ?? this.policy,
-      mode: mode,
+      mode: mode ?? this.mode,
       sets: sets ?? this.sets,
       reps: reps ?? this.reps,
       repsMin: repsMin ?? this.repsMin,
-      repsMax: repsMax,
+      repsMax: clearRepsMax ? null : (repsMax ?? this.repsMax),
+      superset: superset ?? this.superset,
       weight: weight ?? this.weight,
       seconds: seconds ?? this.seconds,
       increment: increment ?? this.increment,
@@ -176,6 +215,7 @@ class ExerciseConfig {
         if (bodyweight) 'bw': true,
         if (heavyBodyPart) 'heavy': true,
         if (warmupSets > 0) 'wu': warmupSets,
+        if (superset) 'ss': true,
       };
 
   factory ExerciseConfig.fromJson(Map<String, dynamic> j) => ExerciseConfig(
@@ -197,6 +237,7 @@ class ExerciseConfig {
         bodyweight: j['bw'] == true,
         heavyBodyPart: j['heavy'] == true,
         warmupSets: (j['wu'] as num?)?.toInt() ?? 0,
+        superset: j['ss'] == true,
       );
 }
 
@@ -211,7 +252,7 @@ T? _byName<T extends Enum>(List<T> values, Object? name) {
 
 /// Satu gerakan di dalam satu sesi yang sudah selesai.
 class WorkoutEntry {
-  const WorkoutEntry({required this.exerciseId, required this.sets, this.target, this.excluded = false});
+  const WorkoutEntry({required this.exerciseId, required this.sets, this.target, this.excluded = false, this.note});
 
   final String exerciseId;
   final List<SetRow> sets;
@@ -224,11 +265,24 @@ class WorkoutEntry {
   /// tidak boleh jadi dasar target berikutnya.
   final bool excluded;
 
+  /// Catatan untuk gerakan ini di sesi ini ("kursi posisi 4"). Ditampilkan
+  /// lagi di sesi berikutnya gerakan yang sama.
+  final String? note;
+
+  WorkoutEntry copyWith({List<SetRow>? sets, String? note, bool clearNote = false}) => WorkoutEntry(
+        exerciseId: exerciseId,
+        sets: sets ?? this.sets,
+        target: target,
+        excluded: excluded,
+        note: clearNote ? null : (note ?? this.note),
+      );
+
   Map<String, dynamic> toJson() => {
         'id': exerciseId,
         'sets': [for (final s in sets) s.toJson()],
         if (target != null) 'target': target!.toJson(),
         if (excluded) 'excl': true,
+        if (note != null && note!.isNotEmpty) 'note': note,
       };
 
   factory WorkoutEntry.fromJson(Map<String, dynamic> j) => WorkoutEntry(
@@ -241,6 +295,7 @@ class WorkoutEntry {
             ? null
             : ExerciseConfig.fromJson(Map<String, dynamic>.from(j['target'] as Map)),
         excluded: j['excl'] == true,
+        note: j['note'] as String?,
       );
 }
 
@@ -250,6 +305,7 @@ class Workout {
     required this.entries,
     this.routine,
     this.durationSeconds,
+    this.notes,
   });
 
   /// `YYYY-MM-DD`.
@@ -265,10 +321,22 @@ class Workout {
   /// antre di rak tidak meninggalkan jejak apa pun di data.
   final int? durationSeconds;
 
+  /// Catatan sesi dari kotak "Session notes".
+  final String? notes;
+
+  Workout copyWith({String? date, List<WorkoutEntry>? entries, String? notes, bool clearNotes = false}) => Workout(
+        date: date ?? this.date,
+        entries: entries ?? this.entries,
+        routine: routine,
+        durationSeconds: durationSeconds,
+        notes: clearNotes ? null : (notes ?? this.notes),
+      );
+
   Map<String, dynamic> toJson() => {
         'date': date,
         if (routine != null) 'routine': routine,
         if (durationSeconds != null) 'dur': durationSeconds,
+        if (notes != null && notes!.isNotEmpty) 'note': notes,
         'entries': [for (final e in entries) e.toJson()],
       };
 
@@ -276,6 +344,7 @@ class Workout {
         date: j['date'] as String? ?? '',
         routine: j['routine'] as String?,
         durationSeconds: (j['dur'] as num?)?.toInt(),
+        notes: j['note'] as String?,
         entries: [
           for (final e in (j['entries'] as List? ?? const []))
             WorkoutEntry.fromJson(Map<String, dynamic>.from(e as Map)),

@@ -73,6 +73,11 @@ const defaultSecondIncrement = 5;
 /// Batas di mana menambah satu set push-up berhenti jadi kemajuan.
 const maxBodyweightSets = 6;
 
+/// Plafon rep bodyweight kalau rutinitas tidak menentukannya sendiri. Tanpa
+/// plafon, target push-up naik satu rep per sesi selamanya — 40 push-up per
+/// set bukan lagi latihan kekuatan.
+const bodyweightRepCeiling = 20;
+
 /// Bulatkan ke kelipatan yang benar-benar bisa dipasang di gym.
 double snapWeight(double v, double step) {
   if (step <= 0) return _round2(v);
@@ -169,8 +174,10 @@ SessionRead readSession(WorkoutEntry entry, {required String date, ExerciseConfi
   final mode = target?.mode ?? LogMode.reps;
 
   // Warm-up disaring sekali di sini. Kalau tidak, satu warm-up yang tidak
-  // dicentang akan meracuni `ok` selamanya dan menyeret `low` ke bawah.
-  final sets = entry.sets.where((s) => !s.isWarmup).toList();
+  // dicentang akan meracuni `ok` selamanya dan menyeret `low` ke bawah. Drop
+  // set dan rest-pause juga: rep sedikit di sana adalah rancangannya, bukan
+  // kegagalan.
+  final sets = entry.sets.where((s) => s.isWork).toList();
   final planned = target?.sets ?? sets.length;
   final enough = sets.length >= planned;
 
@@ -349,8 +356,8 @@ Prescription _bodyweight(ProgressionPolicy policy, ExerciseConfig cfg, SessionRe
       why: 'Bodyweight — same target until every set is clean.',
     );
   }
-  final top = cfg.repsMax ?? 0;
-  if (top > 0 && goal >= top) {
+  final top = cfg.repsMax ?? bodyweightRepCeiling;
+  if (goal >= top) {
     final sets = math.max(1, cfg.sets > 0 ? cfg.sets : last.count) + 1;
     final bottom = math.max(1, math.min(cfg.reps > 0 ? cfg.reps : top, top));
     if (sets <= maxBodyweightSets) {
@@ -439,6 +446,27 @@ Prescription _hit(ProgressionPolicy policy, ExerciseConfig cfg, List<SessionRead
   final last = sessions.last;
   final w = last.weight;
   final reps = last.firstWorking;
+
+  // Dips, pull-up, push-up tanpa beban tambahan: tidak ada beban untuk
+  // dinaikkan atau diturunkan. Dulu di sini keluar "+2,5 kg" untuk dips.
+  if (w <= 0) {
+    if (reps >= hi) {
+      return Prescription(
+        policy: policy, kind: PrescriptionKind.hold, weight: 0, reps: hi,
+        why: '$reps reps on bodyweight — past the top of the range. Add load (belt, vest) or a harder variation.',
+      );
+    }
+    if (reps >= lo) {
+      return Prescription(
+        policy: policy, kind: PrescriptionKind.up, weight: 0, reps: reps + 1,
+        why: '$reps reps on bodyweight — go for ${reps + 1}.',
+      );
+    }
+    return Prescription(
+      policy: policy, kind: PrescriptionKind.hold, weight: 0, reps: lo,
+      why: '$reps reps, under $lo — same target. Consider an extra rest day.',
+    );
+  }
 
   if (reps >= hi) {
     final next = addStep(w, inc, inc);

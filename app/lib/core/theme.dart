@@ -188,8 +188,20 @@ abstract final class GymRadius {
   static const pill = 999.0;
 }
 
-ThemeData buildGymTheme() {
-  const c = GymColors.dark;
+/// Pilihan warna aksen di Profil. Semuanya cukup terang untuk teks gelap
+/// [GymColors.accentInk] di atasnya.
+const accentChoices = <Color>[
+  Color(0xFF5AC8FA),
+  Color(0xFF4ADE80),
+  Color(0xFFFF9F43),
+  Color(0xFFFF7AB6),
+  Color(0xFFA78BFA),
+];
+
+ThemeData buildGymTheme({Color? accent}) {
+  final c = accent == null
+      ? GymColors.dark
+      : GymColors.dark.copyWith(accent: accent, accentSoft: accent.withValues(alpha: 0.12));
   final scheme = ColorScheme.fromSeed(
     seedColor: c.accent,
     brightness: Brightness.dark,
@@ -213,7 +225,7 @@ ThemeData buildGymTheme() {
     scaffoldBackgroundColor: c.bg,
     canvasColor: c.bg,
     splashFactory: InkSparkle.splashFactory,
-    extensions: const [c],
+    extensions: [c],
     // iOS memakai geser bawaannya (ibu jari sudah hafal gerak kembali dari
     // tepi). Android memakai fade-forward Material 3, yang ikut predictive back.
     pageTransitionsTheme: const PageTransitionsTheme(builders: {

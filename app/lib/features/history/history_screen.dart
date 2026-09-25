@@ -17,6 +17,7 @@ import '../../data/exercise_catalog.dart';
 import '../../data/workout_store.dart';
 import '../../domain/models.dart';
 import '../session/session_launcher.dart';
+import 'workout_edit_screen.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -324,9 +325,17 @@ Future<void> _showDetail(BuildContext context, Workout workout) async {
               ].join(' · '),
               style: TextStyle(fontSize: 13, color: c.text2),
             ),
+            if (workout.notes != null) ...[
+              const SizedBox(height: 10),
+              Text(workout.notes!, style: TextStyle(fontSize: 13.5, height: 1.4, color: c.text)),
+            ],
             const SizedBox(height: 16),
             for (final e in workout.entries) ...[
               Text(catalog.nameOf(e.exerciseId), style: Theme.of(context).textTheme.titleMedium),
+              if (e.note != null) ...[
+                const SizedBox(height: 2),
+                Text(e.note!, style: TextStyle(fontSize: 12.5, color: c.warn)),
+              ],
               const SizedBox(height: 6),
               for (final (i, s) in e.sets.indexed)
                 Padding(
@@ -335,11 +344,22 @@ Future<void> _showDetail(BuildContext context, Workout workout) async {
                     children: [
                       SizedBox(
                         width: 34,
-                        child: Text(s.isWarmup ? 'W' : '${e.sets.take(i + 1).where((x) => !x.isWarmup).length}',
-                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: s.isWarmup ? c.warn : c.text2)),
+                        child: Text(
+                            switch (s.phase) {
+                              SetPhase.warmup => 'W',
+                              SetPhase.drop => 'D',
+                              SetPhase.restPause => 'RP',
+                              SetPhase.work => '${e.sets.take(i + 1).where((x) => x.isWork).length}',
+                            },
+                            style: TextStyle(
+                                fontSize: 13, fontWeight: FontWeight.w800, color: s.isWork ? c.text2 : c.warn)),
                       ),
                       Expanded(
-                        child: Text('${weightLabel(s.weight, bodyweight: e.target?.bodyweight ?? false)} kg × ${s.reps}',
+                        child: Text(
+                            (e.target?.mode ?? LogMode.reps) == LogMode.time
+                                ? '${s.seconds}s'
+                                : '${weightLabel(s.weight, bodyweight: e.target?.bodyweight ?? false)} kg × ${s.reps}'
+                                    '${s.rir == null ? '' : '  @${s.rir}'}',
                             style: TextStyle(fontSize: 14, color: s.done ? c.text : c.text3)),
                       ),
                       Icon(s.done ? Icons.check_circle : Icons.circle_outlined,
@@ -350,6 +370,23 @@ Future<void> _showDetail(BuildContext context, Workout workout) async {
               const SizedBox(height: 12),
             ],
             const SizedBox(height: 8),
+            GymButton(
+              label: t.edit,
+              icon: Icons.edit_outlined,
+              tone: GymButtonTone.neutral,
+              height: 44,
+              onPressed: () async {
+                final updated = await Navigator.of(sheetContext).push<Workout>(
+                  MaterialPageRoute(builder: (_) => WorkoutEditScreen(workout: workout, catalog: catalog)),
+                );
+                if (updated == null) return;
+                await store.replaceWorkout(workout, updated);
+                if (!sheetContext.mounted) return;
+                Navigator.of(sheetContext).pop();
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.sessionUpdated)));
+              },
+            ),
+            const SizedBox(height: 10),
             GymButton(
               label: t.delete,
               icon: Icons.delete_outline,

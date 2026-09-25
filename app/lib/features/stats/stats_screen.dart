@@ -17,6 +17,9 @@ import '../../data/workout_store.dart';
 import '../../domain/models.dart';
 import '../../domain/muscle_volume.dart';
 import '../../domain/stats.dart';
+import '../session/exercise_history_sheet.dart';
+import 'bodyweight_card.dart';
+import 'dashboard_screen.dart';
 
 class StatsScreen extends StatefulWidget {
   const StatsScreen({super.key});
@@ -327,6 +330,8 @@ class _StatsScreenState extends State<StatsScreen> {
           icon: Icons.info_outline,
           tone: c.text2,
         ),
+        const SizedBox(height: 14),
+        const BodyweightCard(),
       ];
     }
 
@@ -335,7 +340,7 @@ class _StatsScreenState extends State<StatsScreen> {
     final peak = series.last;
     final first = series.firstWhere((v) => v > 0, orElse: () => 0);
     final pct = first > 0 ? (peak - first) / first * 100 : 0.0;
-    final movements = strengthByMovement(history, now);
+    final movements = strengthByMovement(history, now, count: 12);
 
     return [
       GymCard(
@@ -352,7 +357,7 @@ class _StatsScreenState extends State<StatsScreen> {
                   color: c.surface2,
                   onSelected: (v) => setState(() => _e1rmId = v),
                   itemBuilder: (context) => [
-                    for (final x in logged.take(12))
+                    for (final x in logged)
                       PopupMenuItem(value: x, child: Text(catalog.nameOf(x))),
                   ],
                   child: Row(
@@ -416,23 +421,40 @@ class _StatsScreenState extends State<StatsScreen> {
             SectionLabel(t.strengthByMovement),
             const SizedBox(height: 12),
             for (final (i, m) in movements.indexed) ...[
-              if (i > 0) const SizedBox(height: 11),
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(catalog.nameOf(m.exerciseId),
-                        maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodyLarge),
+              if (i > 0) const SizedBox(height: 3),
+              // Ketuk untuk riwayat dan rekor gerakan itu.
+              InkWell(
+                onTap: () => showExerciseHistory(context, exerciseId: m.exerciseId, name: catalog.nameOf(m.exerciseId)),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(catalog.nameOf(m.exerciseId),
+                            maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodyLarge),
+                      ),
+                      const SizedBox(width: 8),
+                      Text('${m.best.toStringAsFixed(1)} kg',
+                          style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: c.text)),
+                      const SizedBox(width: 8),
+                      _Change(delta: double.parse(m.delta.toStringAsFixed(1))),
+                    ],
                   ),
-                  const SizedBox(width: 8),
-                  Text('${m.best.toStringAsFixed(1)} kg',
-                      style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: c.text)),
-                  const SizedBox(width: 8),
-                  _Change(delta: double.parse(m.delta.toStringAsFixed(1))),
-                ],
+                ),
               ),
             ],
           ],
         ),
+      ),
+      const SizedBox(height: 14),
+      const BodyweightCard(),
+      const SizedBox(height: 14),
+      GymButton(
+        label: t.openDashboard,
+        icon: Icons.space_dashboard_outlined,
+        tone: GymButtonTone.neutral,
+        height: 44,
+        onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DashboardScreen())),
       ),
     ];
   }
