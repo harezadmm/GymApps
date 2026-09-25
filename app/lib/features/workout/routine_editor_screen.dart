@@ -351,7 +351,12 @@ class _ExerciseEditor extends StatelessWidget {
 
   String _summary(BuildContext context) {
     final reps = config.repsMin == null ? '${config.reps}' : '${config.repsMin}–${config.reps}';
-    final policy = policyName[policyFor(config, routineDefault: routinePolicy)]!.split(' ').first.toLowerCase();
+    final name = policyName[policyFor(config, routineDefault: routinePolicy)]!;
+    // Bahasa Inggris cukup kata pertama ("linear", "double"); terjemahannya
+    // tidak bisa dipotong begitu ("progresi"), jadi pakai nama lengkapnya.
+    final policy = context.t.lang == AppLanguage.indonesian
+        ? context.t.policy(name).toLowerCase()
+        : name.split(' ').first.toLowerCase();
     final w = config.weight > 0 ? ' · ${formatWeight(config.weight)} kg' : '';
     return '${config.sets} × $reps$w · $policy';
   }
@@ -676,7 +681,7 @@ class _PolicyPicker extends StatelessWidget {
           icon: Icon(Icons.keyboard_arrow_down, color: c.text2),
           style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, color: c.text),
           items: [
-            for (final p in options) DropdownMenuItem(value: p, child: Text(policyName[p]!)),
+            for (final p in options) DropdownMenuItem(value: p, child: Text(context.t.policy(policyName[p]!))),
           ],
           onChanged: (p) => p == null ? null : onChanged(p),
         ),

@@ -206,9 +206,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       if (lifts.isEmpty)
                         Text(t.noSetsInRange, style: TextStyle(fontSize: 13, color: c.text2))
                       else
-                        SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: _E1rmTable(
+                        _E1rmTable(
                             rows: [
                               for (final m in lifts)
                                 (catalog?.nameOf(m.exerciseId) ?? '…', weeklyBest(history, m.exerciseId, now)),
@@ -216,7 +214,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             onTapRow: (i) => showExerciseHistory(context,
                                 exerciseId: lifts[i].exerciseId,
                                 name: catalog?.nameOf(lifts[i].exerciseId) ?? lifts[i].exerciseId),
-                          ),
                         ),
                     ],
                   ),
@@ -240,46 +237,79 @@ class _E1rmTable extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.gym;
     const cell = 54.0;
+    const rowHeight = 34.0;
     TextStyle head = TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: c.text2);
-    return Column(
+    // Nama gerakan tetap di kiri; kolom minggu digeser sendiri dan mulai dari
+    // ujung kanan, supaya di layar HP yang pertama terlihat minggu terbaru.
+    return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(children: [
-          const SizedBox(width: 170),
-          for (var i = 0; i < _weeks; i++)
-            SizedBox(width: cell, child: Text(i == _weeks - 1 ? 'now' : '-${_weeks - 1 - i}w', style: head)),
-        ]),
-        const SizedBox(height: 6),
-        for (final (r, (name, values)) in rows.indexed)
-          InkWell(
-            onTap: () => onTapRow(r),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 5),
-              child: Row(children: [
-                SizedBox(
-                  width: 170,
-                  child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodyLarge),
-                ),
-                for (var i = 0; i < values.length; i++)
-                  SizedBox(
-                    width: cell,
-                    child: Text(
-                      values[i] == null ? '·' : values[i]!.toStringAsFixed(0),
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w600,
-                        fontFeatures: const [FontFeature.tabularFigures()],
-                        color: values[i] == null
-                            ? c.text3
-                            : (i > 0 && _prevValue(values, i) != null && values[i]! > _prevValue(values, i)!)
-                                ? c.doneInk
-                                : c.text,
-                      ),
+        SizedBox(
+          width: 150,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 20),
+              for (final (r, (name, _)) in rows.indexed)
+                InkWell(
+                  onTap: () => onTapRow(r),
+                  child: SizedBox(
+                    height: rowHeight,
+                    width: double.infinity,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(name,
+                          maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodyLarge),
                     ),
                   ),
-              ]),
+                ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            reverse: true,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  height: 20,
+                  child: Row(children: [
+                    for (var i = 0; i < _weeks; i++)
+                      SizedBox(width: cell, child: Text(i == _weeks - 1 ? context.t.catalogue('now') : '-${_weeks - 1 - i}w', style: head)),
+                  ]),
+                ),
+                for (final (r, (_, values)) in rows.indexed)
+                  InkWell(
+                    onTap: () => onTapRow(r),
+                    child: SizedBox(
+                      height: rowHeight,
+                      child: Row(children: [
+                        for (var i = 0; i < values.length; i++)
+                          SizedBox(
+                            width: cell,
+                            child: Text(
+                              values[i] == null ? '·' : values[i]!.toStringAsFixed(0),
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w600,
+                                fontFeatures: const [FontFeature.tabularFigures()],
+                                color: values[i] == null
+                                    ? c.text3
+                                    : (i > 0 && _prevValue(values, i) != null && values[i]! > _prevValue(values, i)!)
+                                        ? c.doneInk
+                                        : c.text,
+                              ),
+                            ),
+                          ),
+                      ]),
+                    ),
+                  ),
+              ],
             ),
           ),
+        ),
       ],
     );
   }

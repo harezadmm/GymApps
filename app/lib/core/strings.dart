@@ -488,6 +488,10 @@ class Strings {
     '1 working set to failure, 3 rest days': '1 set kerja sampai gagal, 3 hari istirahat',
     'Everything every session': 'Semuanya tiap sesi',
     'Strength focus, linear progression': 'Fokus kekuatan, progresi linear',
+    'No automatic progression': 'Tanpa progresi otomatis',
+    'Linear progression': 'Progresi linear',
+    'Double progression': 'Progresi ganda',
+    'Add time': 'Tambah waktu',
     'Tuesday · 16 Sep': 'Selasa · 16 Sep',
     'September 2026': 'September 2026',
     '12 wk ago': '12 mgg lalu',
@@ -635,8 +639,22 @@ class Strings {
 
   String catalogue(String en) => _(en, _catalogueId[en] ?? en);
 
+  /// Alasan di balik target sesi ([Prescription.why]). Kalimatnya dibentuk
+  /// di lapisan domain dalam bahasa Inggris (angka sudah terisi), jadi di sini
+  /// dicocokkan pola per pola. Kalimat yang tak dikenal dibiarkan apa adanya —
+  /// lebih baik bahasa Inggris daripada kosong.
+  String why(String en) {
+    if (lang == AppLanguage.english) return en;
+    for (final (pattern, build) in _whyId) {
+      final m = pattern.firstMatch(en);
+      if (m != null) return build(m);
+    }
+    return en;
+  }
+
 
   // ── v1.7: sesi, riwayat, setelan, fitur baru ─────────────────────────────
+  String policy(String en) => catalogue(en);
   String get restOverTitle => _('Rest over', 'Istirahat selesai');
   String restSavedFor(String name) =>
       _('Rest for $name saved as your default.', 'Istirahat $name disimpan sebagai bawaan.');
@@ -786,3 +804,55 @@ class AppStrings extends InheritedWidget {
 extension StringsX on BuildContext {
   Strings get t => AppStrings.of(this);
 }
+
+String _g(Match m, int i) => m.group(i)!;
+
+final List<(RegExp, String Function(Match))> _whyId = [
+  (RegExp(r'^Automatic progression is off for this exercise\.$'),
+      (_) => 'Progresi otomatis dimatikan untuk gerakan ini.'),
+  (RegExp(r'^Nothing logged yet — this session is the starting point\.$'),
+      (_) => 'Belum ada catatan — sesi ini jadi titik awal.'),
+  (RegExp(r'^Full hold on every set — target up (\S+)s\.$'),
+      (m) => 'Tahan penuh di semua set — target naik ${_g(m, 1)} dtk.'),
+  (RegExp(r'^Short (\d+) sessions running — back to (\S+)s, then build again\.$'),
+      (m) => 'Kurang ${_g(m, 1)} sesi beruntun — kembali ke ${_g(m, 2)} dtk, lalu naik lagi.'),
+  (RegExp(r'^Came up short last time — same target again\.$'), (_) => 'Kemarin kurang — target sama lagi.'),
+  (RegExp(r'^Bodyweight — same target until every set is clean\.$'),
+      (_) => 'Bodyweight — target sama sampai semua set bersih.'),
+  (RegExp(r'^(\d+) reps on every set — add a set, reps back to (\d+)\.$'),
+      (m) => '${_g(m, 1)} rep di semua set — tambah satu set, rep kembali ke ${_g(m, 2)}.'),
+  (RegExp(r'^(\d+) × (\d+) — time for added load or a harder variation\.$'),
+      (m) => '${_g(m, 1)} × ${_g(m, 2)} — saatnya tambah beban atau variasi yang lebih berat.'),
+  (RegExp(r'^Bodyweight — all reps hit, go for (\d+) this time\.$'),
+      (m) => 'Bodyweight — semua rep tercapai, kejar ${_g(m, 1)} kali ini.'),
+  (RegExp(r'^Top of the rep range on every set — \+([\d.]+) (\w+), reps back to (\d+)\.$'),
+      (m) => 'Batas atas rentang rep di semua set — +${_g(m, 1)} ${_g(m, 2)}, rep kembali ke ${_g(m, 3)}.'),
+  (RegExp(r'^Stalled (\d+) sessions — deload to ([\d.]+) (\w+)\.$'),
+      (m) => 'Mandek ${_g(m, 1)} sesi — deload ke ${_g(m, 2)} ${_g(m, 3)}.'),
+  (RegExp(r'^Same weight — go for (\d+) reps this time\.$'),
+      (m) => 'Beban sama — kejar ${_g(m, 1)} rep kali ini.'),
+  (RegExp(r'^Last set (\d+) reps — double the target, so a double jump of \+([\d.]+) (\w+)\.$'),
+      (m) => 'Set terakhir ${_g(m, 1)} rep — dua kali target, jadi lompat ganda +${_g(m, 2)} ${_g(m, 3)}.'),
+  (RegExp(r'^\+([\d.]+) (\w+) — all reps hit last session\.$'),
+      (m) => '+${_g(m, 1)} ${_g(m, 2)} — semua rep tercapai di sesi lalu.'),
+  (RegExp(r'^Reps short (\d+) sessions running — reset to ([\d.]+) (\w+) and climb again\.$'),
+      (m) => 'Rep kurang ${_g(m, 1)} sesi beruntun — reset ke ${_g(m, 2)} ${_g(m, 3)} lalu naik lagi.'),
+  (RegExp(r'^Reps short — reset to ([\d.]+) (\w+) and climb again\.$'),
+      (m) => 'Rep kurang — reset ke ${_g(m, 1)} ${_g(m, 2)} lalu naik lagi.'),
+  (RegExp(r'^Reps short last session — same weight again \((\d+) of (\d+) to go\)\.$'),
+      (m) => 'Rep kurang di sesi lalu — beban sama lagi (sisa ${_g(m, 1)} dari ${_g(m, 2)}).'),
+  (RegExp(r'^(\d+) reps on bodyweight — past the top of the range\. Add load \(belt, vest\) or a harder variation\.$'),
+      (m) => '${_g(m, 1)} rep bodyweight — lewat batas atas rentang. Tambah beban (sabuk, rompi) atau variasi yang lebih berat.'),
+  (RegExp(r'^(\d+) reps on bodyweight — go for (\d+)\.$'),
+      (m) => '${_g(m, 1)} rep bodyweight — kejar ${_g(m, 2)}.'),
+  (RegExp(r'^(\d+) reps, under (\d+) — same target\. Consider an extra rest day\.$'),
+      (m) => '${_g(m, 1)} rep, di bawah ${_g(m, 2)} — target sama. Pertimbangkan tambah hari istirahat.'),
+  (RegExp(r'^(\d+) reps — past the top of the range, \+([\d.]+) (\w+) and reps back to (\d+)\.$'),
+      (m) => '${_g(m, 1)} rep — lewat batas atas rentang, +${_g(m, 2)} ${_g(m, 3)} dan rep kembali ke ${_g(m, 4)}.'),
+  (RegExp(r'^(\d+) reps — still inside the range, same weight, go for (\d+)\.$'),
+      (m) => '${_g(m, 1)} rep — masih dalam rentang, beban sama, kejar ${_g(m, 2)}.'),
+  (RegExp(r'^Two sessions running under (\d+) reps — deload to ([\d.]+) (\w+)\. Consider adding a rest day\.$'),
+      (m) => 'Dua sesi beruntun di bawah ${_g(m, 1)} rep — deload ke ${_g(m, 2)} ${_g(m, 3)}. Pertimbangkan tambah hari istirahat.'),
+  (RegExp(r'^(\d+) reps, under (\d+) — same weight again before deciding to deload\.$'),
+      (m) => '${_g(m, 1)} rep, di bawah ${_g(m, 2)} — beban sama lagi sebelum memutuskan deload.'),
+];
