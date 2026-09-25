@@ -7,6 +7,7 @@ library;
 
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../../core/keep_awake.dart';
@@ -19,7 +20,6 @@ import '../../data/workout_store.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
-import 'package:share_plus/share_plus.dart';
 import '../../domain/program.dart';
 import 'equipment_picker.dart';
 
@@ -154,12 +154,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final doc = {...store.toDocument(), 'exportedAt': DateTime.now().toIso8601String()};
     final bytes = utf8.encode(const JsonEncoder.withIndent(' ').convert(doc));
     final name = 'gymapps-backup-${isoDate(DateTime.now())}.json';
-    messenger.showSnackBar(SnackBar(content: Text(t.exportReady)));
-    await SharePlus.instance.share(ShareParams(
-      files: [XFile.fromData(bytes, mimeType: 'application/json', name: name)],
-      fileNameOverrides: [name],
-      subject: name,
-    ));
+    // Dialog "simpan ke" milik sistem, bukan lembar bagikan: bagikan butuh
+    // aplikasi lain yang mau menerima JSON, dan di HP tanpa aplikasi itu
+    // ekspornya buntu. Di web ini jadi unduhan biasa.
+    try {
+      final saved = await FilePicker.saveFile(fileName: name, bytes: bytes, mimeType: 'application/json');
+      if (saved != null || kIsWeb) messenger.showSnackBar(SnackBar(content: Text(t.exportSaved(name))));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(t.exportFailed)));
+    }
   }
 
   Future<void> _import() async {

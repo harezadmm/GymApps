@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ikon notifikasi dipanggil dengan nama dari Dart, jadi penyusut resource
+     tidak melihat pemakaiannya. Tanpa ini, build rilis membuang ikonnya dan
+     notifikasi istirahat gagal tampil. -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/ic_stat_rest" />
