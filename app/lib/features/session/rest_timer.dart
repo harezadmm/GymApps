@@ -180,7 +180,7 @@ class RestTimerCard extends StatelessWidget {
       builder: (context, _) {
         final card = GymCard(
           radius: GymRadius.large,
-          color: const Color(0xFF10263A),
+          color: c.selected,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [

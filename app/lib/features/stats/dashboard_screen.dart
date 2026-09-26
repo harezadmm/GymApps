@@ -7,6 +7,8 @@
 library;
 
 import 'package:flutter/material.dart';
+import '../../core/weights.dart';
+import '../../domain/units.dart';
 
 import '../../core/charts.dart';
 import '../../core/format.dart';
@@ -114,7 +116,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget build(BuildContext context) {
     final c = context.gym;
     final t = context.t;
-    final history = context.workouts.workouts;
+    final history = historyIn(context.workouts.workouts, context.unit);
     final now = DateTime.now();
     final lifts = strengthByMovement(history, now, count: 10);
     final stalled = stalledLifts(history, now);
@@ -180,7 +182,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                     child: Text(catalog?.nameOf(s.exerciseId) ?? '…',
                                         maxLines: 1, overflow: TextOverflow.ellipsis),
                                   ),
-                                  Text(t.stalledSince(formatDelta(s.best), s.weeks),
+                                  Text(t.stalledSince(formatDelta(s.best), s.weeks, context.unitLabel),
                                       style: TextStyle(fontSize: 12, color: c.text2)),
                                 ]),
                               ),

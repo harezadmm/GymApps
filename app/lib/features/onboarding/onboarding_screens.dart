@@ -193,7 +193,7 @@ class _ProgramCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.gym;
     return Material(
-      color: selected ? const Color(0xFF10263A) : c.surface,
+      color: selected ? c.selected : c.surface,
       borderRadius: BorderRadius.circular(GymRadius.card),
       child: InkWell(
         onTap: onTap,

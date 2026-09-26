@@ -36,9 +36,21 @@ Write-Host "Sinkron: $($cfg.SUPABASE_URL)"
 # kode keluarnya yang diperiksa.
 $ErrorActionPreference = 'Continue'
 
+# Kunci publik VAPID untuk notifikasi istirahat (Web Push). Hanya kunci
+# publik yang masuk ke build; kunci privatnya disimpan di env Vercel
+# (scripts/setup-web-push.ps1).
+$vapidFile = Join-Path $root '.secrets\vapid.json'
+$defines = @("--dart-define-from-file=$secrets")
+if (Test-Path $vapidFile) {
+  $vapid = Get-Content $vapidFile -Raw | ConvertFrom-Json
+  $defines += "--dart-define=VAPID_PUBLIC_KEY=$($vapid.VAPID_PUBLIC_KEY)"
+} else {
+  Write-Host 'Tanpa .secrets/vapid.json: notifikasi istirahat web dimatikan di build ini.'
+}
+
 Push-Location (Join-Path $root 'app')
 try {
-  flutter build web --release "--dart-define-from-file=$secrets"
+  flutter build web --release @defines
   if ($LASTEXITCODE -ne 0) { throw "flutter build web gagal ($LASTEXITCODE)" }
 } finally {
   Pop-Location
@@ -55,6 +67,10 @@ if (-not (Get-Command vercel -ErrorAction SilentlyContinue)) {
 $env:VERCEL_ORG_ID = 'team_UX8bS9Ox2sShcGlmYygJ69fY'
 $env:VERCEL_PROJECT_ID = 'prj_kxhHMOYx3TjRlsnVbX68hvLl0rtB'
 $out = Join-Path $root 'app\build\web'
+# Fungsi server (alarm istirahat) ikut diunggah di samping build Flutter.
+Copy-Item -Recurse -Force (Join-Path $root 'web-api\api') $out
+Copy-Item -Force (Join-Path $root 'web-api\package.json') $out
+Copy-Item -Force (Join-Path $root 'web-api\vercel.json') $out
 if ($Preview) {
   vercel deploy $out --yes
 } else {

@@ -5,3 +5,6 @@ library;
 import 'package:flutter/widgets.dart';
 
 EdgeInsets readCssSafeArea() => EdgeInsets.zero;
+
+/// Padanan web mewarnai bilah browser; di platform lain tidak ada.
+void setBrowserChrome({required Color background, required bool light}) {}

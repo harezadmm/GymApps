@@ -25,7 +25,37 @@ class GymColors extends ThemeExtension<GymColors> {
     required this.doneInk,
     required this.warn,
     required this.danger,
+    required this.selected,
+    required this.chartIdle,
+    required this.silhouette,
+    required this.heatRamp,
+    required this.activityRamp,
+    required this.brightness,
+    this.accentBase,
   });
+
+  /// Latar pilihan yang sedang aktif: kartu template terpilih, panel istirahat.
+  final Color selected;
+
+  /// Batang grafik yang bukan batang terakhir.
+  final Color chartIdle;
+
+  /// Siluet tubuh di belakang otot pada peta panas.
+  final Color silhouette;
+
+  /// Lima tingkat peta panas otot, rendah → tinggi.
+  final List<Color> heatRamp;
+
+  /// Lima tingkat kalender aktivitas, kosong → penuh.
+  final List<Color> activityRamp;
+
+  final Brightness brightness;
+
+  /// Aksen seperti yang dipilih di Profil, sebelum digelapkan untuk tema
+  /// terang. Dipakai untuk menandai pilihan yang aktif.
+  final Color? accentBase;
+
+  bool get isLight => brightness == Brightness.light;
 
   /// Latar layar. Navy sangat gelap, bukan hitam murni: kartu tetap terbaca
   /// sebagai kartu di gym yang terang, dan layar OLED tetap hemat.
@@ -75,6 +105,39 @@ class GymColors extends ThemeExtension<GymColors> {
     doneInk: Color(0xFF4ADE80),
     warn: Color(0xFFF5A623),
     danger: Color(0xFFF0554E),
+    selected: Color(0xFF10263A),
+    chartIdle: Color(0xFF25405A),
+    silhouette: Color(0xFF19212E),
+    heatRamp: [Color(0xFF1B2536), Color(0xFF1E4258), Color(0xFF2A7FA8), Color(0xFF3FA8DC), Color(0xFF5AC8FA)],
+    activityRamp: [Color(0xFF161C29), Color(0xFF173042), Color(0xFF1E5878), Color(0xFF2E93C6), Color(0xFF5AC8FA)],
+    brightness: Brightness.dark,
+  );
+
+  /// Tema terang: kartu putih di atas abu-abu sangat muda. Teks sekunder
+  /// #566074 ≈ 6,3:1 di atas putih (NFR-11 minta ≥ 4,5:1). Aksen digelapkan
+  /// (lihat [lightAccent]) karena biru langit di atas putih hanya ≈ 1,9:1.
+  static const light = GymColors(
+    bg: Color(0xFFF3F5F9),
+    bgNested: Color(0xFFF0F3F8),
+    surface: Color(0xFFFFFFFF),
+    surface2: Color(0xFFEDF1F6),
+    border: Color(0xFFDFE4EC),
+    text: Color(0xFF0F1522),
+    text2: Color(0xFF566074),
+    text3: Color(0xFF6A7284),
+    accent: Color(0xFF0877B0),
+    accentInk: Color(0xFFFFFFFF),
+    accentSoft: Color(0x1F0877B0),
+    doneBg: Color(0xFFE2F6E8),
+    doneInk: Color(0xFF166534),
+    warn: Color(0xFFB45309),
+    danger: Color(0xFFD02A24),
+    selected: Color(0xFFE3F1FA),
+    chartIdle: Color(0xFFC8D6E4),
+    silhouette: Color(0xFFE3E8EF),
+    heatRamp: [Color(0xFFE6EBF2), Color(0xFFC3E0F2), Color(0xFF86C5E8), Color(0xFF3E9FD3), Color(0xFF0877B0)],
+    activityRamp: [Color(0xFFE6EBF2), Color(0xFFC3E0F2), Color(0xFF86C5E8), Color(0xFF3E9FD3), Color(0xFF0877B0)],
+    brightness: Brightness.light,
   );
 
   @override
@@ -94,6 +157,8 @@ class GymColors extends ThemeExtension<GymColors> {
     Color? doneInk,
     Color? warn,
     Color? danger,
+    Color? selected,
+    Color? accentBase,
   }) {
     return GymColors(
       bg: bg ?? this.bg,
@@ -111,6 +176,13 @@ class GymColors extends ThemeExtension<GymColors> {
       doneInk: doneInk ?? this.doneInk,
       warn: warn ?? this.warn,
       danger: danger ?? this.danger,
+      selected: selected ?? this.selected,
+      chartIdle: chartIdle,
+      silhouette: silhouette,
+      heatRamp: heatRamp,
+      activityRamp: activityRamp,
+      brightness: brightness,
+      accentBase: accentBase ?? this.accentBase,
     );
   }
 
@@ -134,6 +206,13 @@ class GymColors extends ThemeExtension<GymColors> {
       doneInk: m(doneInk, other.doneInk),
       warn: m(warn, other.warn),
       danger: m(danger, other.danger),
+      selected: m(selected, other.selected),
+      chartIdle: m(chartIdle, other.chartIdle),
+      silhouette: m(silhouette, other.silhouette),
+      heatRamp: [for (var i = 0; i < heatRamp.length; i++) m(heatRamp[i], other.heatRamp[i])],
+      activityRamp: [for (var i = 0; i < activityRamp.length; i++) m(activityRamp[i], other.activityRamp[i])],
+      brightness: t < 0.5 ? brightness : other.brightness,
+      accentBase: t < 0.5 ? accentBase : other.accentBase,
     );
   }
 }
@@ -198,13 +277,45 @@ const accentChoices = <Color>[
   Color(0xFFA78BFA),
 ];
 
-ThemeData buildGymTheme({Color? accent}) {
+/// Aksen versi tema terang: pilihan Profil dirancang untuk latar gelap dan
+/// terlalu pucat di atas putih. Lima pilihan bawaan punya padanan yang sudah
+/// dicek kontrasnya dengan teks putih (≥ 4,5:1); warna lain digelapkan lewat
+/// HSL.
+Color lightAccent(Color accent) {
+  const pairs = {
+    0xFF5AC8FA: 0xFF0877B0,
+    0xFF4ADE80: 0xFF15803D,
+    0xFFFF9F43: 0xFFB9520B,
+    0xFFFF7AB6: 0xFFBE2468,
+    0xFFA78BFA: 0xFF6D28D9,
+  };
+  final known = pairs[accent.toARGB32()];
+  var hsl = HSLColor.fromColor(known == null ? accent : Color(known));
+  // Gelapkan sampai benar-benar lolos 4,5:1 terhadap putih. Kuning perlu
+  // jauh lebih gelap daripada biru untuk kontras yang sama, jadi batas
+  // lightness tetap tidak cukup.
+  double contrast(Color c) => 1.05 / (c.computeLuminance() + 0.05);
+  while (contrast(hsl.toColor()) < 4.6 && hsl.lightness > 0.05) {
+    hsl = hsl.withLightness(hsl.lightness - 0.02);
+  }
+  return hsl.toColor();
+}
+
+ThemeData buildGymTheme({Color? accent, Brightness brightness = Brightness.dark}) {
+  final base = brightness == Brightness.light ? GymColors.light : GymColors.dark;
+  final pick = accent ?? GymColors.dark.accent;
+  final shownAccent = brightness == Brightness.light ? lightAccent(pick) : pick;
   final c = accent == null
-      ? GymColors.dark
-      : GymColors.dark.copyWith(accent: accent, accentSoft: accent.withValues(alpha: 0.12));
+      ? base.copyWith(accentBase: pick)
+      : base.copyWith(
+          accent: shownAccent,
+          accentSoft: shownAccent.withValues(alpha: 0.12),
+          accentBase: pick,
+          selected: brightness == Brightness.light ? Color.alphaBlend(shownAccent.withValues(alpha: 0.10), base.surface) : null,
+        );
   final scheme = ColorScheme.fromSeed(
     seedColor: c.accent,
-    brightness: Brightness.dark,
+    brightness: brightness,
   ).copyWith(
     primary: c.accent,
     onPrimary: c.accentInk,
@@ -220,7 +331,7 @@ ThemeData buildGymTheme({Color? accent}) {
   return ThemeData(
     useMaterial3: true,
     fontFamily: 'Inter',
-    brightness: Brightness.dark,
+    brightness: brightness,
     colorScheme: scheme,
     scaffoldBackgroundColor: c.bg,
     canvasColor: c.bg,
@@ -232,15 +343,20 @@ ThemeData buildGymTheme({Color? accent}) {
       TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
       TargetPlatform.android: FadeForwardsPageTransitionsBuilder(),
     }),
-    textTheme: const TextTheme(
-      displaySmall: TextStyle(fontSize: 34, fontWeight: FontWeight.w700, color: Color(0xFFF2F5FA)),
-      headlineMedium: TextStyle(fontSize: 26, fontWeight: FontWeight.w700, color: Color(0xFFF2F5FA)),
-      titleLarge: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: Color(0xFFF2F5FA)),
-      titleMedium: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFFF2F5FA)),
-      bodyLarge: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Color(0xFFF2F5FA)),
-      bodyMedium: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFF8C95A8)),
-      labelSmall: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, letterSpacing: 1.1, color: Color(0xFF8C95A8)),
+    textTheme: TextTheme(
+      displaySmall: TextStyle(fontSize: 34, fontWeight: FontWeight.w700, color: c.text),
+      headlineMedium: TextStyle(fontSize: 26, fontWeight: FontWeight.w700, color: c.text),
+      titleLarge: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: c.text),
+      titleMedium: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: c.text),
+      bodyLarge: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: c.text),
+      bodyMedium: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: c.text2),
+      labelSmall: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, letterSpacing: 1.1, color: c.text2),
     ),
+    // Dialog, sheet, dan snackbar dari Material ikut palet, bukan warna
+    // turunan seed yang di tema terang jadi ungu muda.
+    dialogTheme: DialogThemeData(backgroundColor: c.surface),
+    bottomSheetTheme: BottomSheetThemeData(backgroundColor: c.surface, modalBackgroundColor: c.surface),
+    popupMenuTheme: PopupMenuThemeData(color: c.surface),
     navigationBarTheme: NavigationBarThemeData(
       backgroundColor: c.surface,
       // Pil redup di belakang ikon aktif: Material menganimasikannya sendiri

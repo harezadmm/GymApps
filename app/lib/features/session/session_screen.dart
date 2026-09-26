@@ -10,6 +10,8 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import '../../core/weights.dart';
+import '../../domain/units.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/format.dart';
@@ -204,6 +206,9 @@ class SessionScreen extends StatefulWidget {
 
 class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserver {
   final _rest = RestTimer();
+  /// Satuan angka di layar ini. Dipegang saat layar dibuka.
+  WeightUnit _unit = WeightUnit.kg;
+
   final _elapsed = Stopwatch()..start();
   late final List<SessionExercise> _exercises = List.of(widget.exercises);
 
@@ -263,6 +268,7 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
   void didChangeDependencies() {
     super.didChangeDependencies();
     _store ??= WorkoutScope.read(context);
+    _unit = _store?.settings.unit ?? WeightUnit.kg;
   }
 
   /// Browser melepas wake lock setiap kali halaman disembunyikan (pindah
@@ -295,6 +301,7 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
         'v': 1,
         'name': widget.routineName,
         if (widget.routineId != null) 'rid': widget.routineId,
+        'unit': _unit.name,
         'elapsed': _elapsedTotal.inSeconds,
         'saved': DateTime.now().millisecondsSinceEpoch,
         if (_notes.text.trim().isNotEmpty) 'notes': _notes.text,
@@ -489,7 +496,8 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
 
     final store = context.workouts;
     final notes = _notes.text.trim();
-    final workout = Workout(
+    // Sesi dicatat dalam satuan tampilan; yang disimpan selalu kg.
+    final workout = workoutToKg(Workout(
       date: isoDate(DateTime.now()),
       routine: widget.routineName,
       durationSeconds: _elapsedTotal.inSeconds,
@@ -503,7 +511,7 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
             note: (ex.note ?? '').trim().isEmpty ? null : ex.note!.trim(),
           ),
       ],
-    );
+    ), _unit);
     final drifted = _drifted;
     await store.addWorkout(workout, routineId: widget.routineId);
     await _dropDraft();
@@ -677,7 +685,7 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
             buildSessionExercise(catalog, cfg, widget.history, settings: _store?.settings, expanded: true));
       case _ExerciseAction.addWarmup:
         final firstWork = ex.sets.firstWhere((s) => !s.isWarmup, orElse: () => const SetRow());
-        final inc = weightIncrement(ex.config, 'kg');
+        final inc = weightIncrement(ex.config, _unit.label);
         setState(() {
           ex.addRow(
             SetRow(
@@ -691,7 +699,7 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
         });
       case _ExerciseAction.addDropSet || _ExerciseAction.addRestPause:
         final base = ex.sets.lastWhere((s) => !s.isWarmup, orElse: () => const SetRow());
-        final inc = weightIncrement(ex.config, 'kg');
+        final inc = weightIncrement(ex.config, _unit.label);
         final drop = action == _ExerciseAction.addDropSet;
         setState(() {
           ex.addRow(SetRow(
@@ -1100,8 +1108,9 @@ class _ExerciseCard extends StatelessWidget {
                       const SizedBox(height: 1),
                       Text(
                         ex.expanded
-                            ? t.targetLine(w, firstWork.reps, t.policy(policyName[policy]!).toLowerCase())
-                            : t.setsTarget(ex.workCount, w, firstWork.reps),
+                            ? t.targetLine(
+                                w, firstWork.reps, t.policy(policyName[policy]!).toLowerCase(), context.unitLabel)
+                            : t.setsTarget(ex.workCount, w, firstWork.reps, context.unitLabel),
                         style: TextStyle(fontSize: 12, color: c.text2),
                       ),
                       if (ex.config.superset) ...[
@@ -1324,7 +1333,7 @@ class _SetTable extends StatelessWidget {
     final c = context.gym;
     var workIndex = 0;
     final timed = exercise.config.mode == LogMode.time;
-    final inc = weightIncrement(exercise.config, 'kg');
+    final inc = weightIncrement(exercise.config, context.unitLabel);
     exercise._align();
 
     return Column(
@@ -1335,7 +1344,7 @@ class _SetTable extends StatelessWidget {
             children: [
               SizedBox(width: 34, child: SectionLabel(context.t.setCol)),
               SizedBox(width: 62, child: SectionLabel(context.t.prevCol)),
-              Expanded(child: Center(child: SectionLabel(context.t.kgCol))),
+              Expanded(child: Center(child: SectionLabel(context.t.weightCol(context.unitLabel)))),
               Expanded(child: Center(child: SectionLabel(timed ? context.t.secCol : context.t.repsCol))),
               const SizedBox(width: 38),
             ],
@@ -1441,7 +1450,7 @@ class _SetRowTile extends StatelessWidget {
             child: _Cell(
               text: set.weight == 0 ? '' : formatDelta(set.weight),
               doneText: formatWeight(set.weight),
-              hint: bodyweight ? 'BW' : 'kg',
+              hint: bodyweight ? 'BW' : context.unitLabel,
               done: done,
               decimal: true,
               onChanged: (v) => onWeight(double.tryParse(v.replaceAll(',', '.')) ?? 0),

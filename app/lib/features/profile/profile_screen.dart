@@ -9,8 +9,10 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import '../../domain/units.dart';
 
 import '../../core/keep_awake.dart';
+import '../../core/rest_alert.dart';
 import '../../core/motion.dart';
 import '../../core/strings.dart';
 import '../../core/theme.dart';
@@ -32,6 +34,8 @@ class ProfileScreen extends StatefulWidget {
     required this.email,
     this.onConnect,
     this.onAccentChanged,
+    this.themeMode = ThemeMode.dark,
+    this.onThemeModeChanged,
   });
 
   final AppLanguage language;
@@ -43,6 +47,8 @@ class ProfileScreen extends StatefulWidget {
   final Future<ConnectResult> Function(String password)? onConnect;
 
   final ValueChanged<Color>? onAccentChanged;
+  final ThemeMode themeMode;
+  final ValueChanged<ThemeMode>? onThemeModeChanged;
 
   /// Email akun yang sedang masuk. null hanya selagi pemeriksaannya berjalan;
   /// sebelumnya di sini ada alamat contoh yang di-hardcode, dan itu berarti
@@ -55,6 +61,7 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   bool _keepAwake = true;
+  WebRestPush _restPush = WebRestPush.unavailable;
 
   @override
   void initState() {
@@ -62,6 +69,38 @@ class _ProfileScreenState extends State<ProfileScreen> {
     KeepAwake.enabled.then((v) {
       if (mounted) setState(() => _keepAwake = v);
     });
+    if (kIsWeb) {
+      RestAlert.webState().then((v) {
+        if (mounted) setState(() => _restPush = v);
+      });
+    }
+  }
+
+  /// Dipanggil langsung dari ketukan: iPhone hanya mau menampilkan dialog izin
+  /// selama ketukan itu masih berlangsung, jadi tidak ada `await` sebelum
+  /// [RestAlert.enableWeb].
+  void _toggleRestPush() {
+    final messenger = ScaffoldMessenger.of(context);
+    final t = context.t;
+    switch (_restPush) {
+      case WebRestPush.needsHomeScreen:
+        messenger.showSnackBar(SnackBar(content: Text(t.restPushHowTo), duration: const Duration(seconds: 8)));
+      case WebRestPush.blocked:
+        messenger.showSnackBar(SnackBar(content: Text(t.restPushBlockedHow), duration: const Duration(seconds: 6)));
+      case WebRestPush.on:
+        RestAlert.disableWeb().then((v) {
+          if (mounted) setState(() => _restPush = v);
+        });
+      case WebRestPush.off:
+        RestAlert.enableWeb().then((v) {
+          if (!mounted) return;
+          setState(() => _restPush = v);
+          if (v == WebRestPush.on) messenger.showSnackBar(SnackBar(content: Text(t.restPushEnabled)));
+          if (v == WebRestPush.blocked) messenger.showSnackBar(SnackBar(content: Text(t.restPushBlockedHow)));
+        });
+      case WebRestPush.unavailable:
+        break;
+    }
   }
 
   /// Versi dibaca dari bundle, bukan ditulis tangan. Nomor yang di-hardcode
@@ -131,12 +170,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (v != null) await store.updateSettings(s.copyWith(weekStartsOn: v));
   }
 
+  Future<void> _pickUnit() async {
+    final store = WorkoutScope.read(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final t = context.t;
+    final s = store.settings;
+    final v = await _pick(t.unitsTitle, [(WeightUnit.kg, 'kg'), (WeightUnit.lb, 'lb')], s.unit);
+    if (v == null || v == s.unit) return;
+    await store.updateSettings(s.copyWith(unit: v));
+    messenger.showSnackBar(SnackBar(content: Text(t.unitsNote)));
+  }
+
+  Future<void> _pickTheme() async {
+    final onChanged = widget.onThemeModeChanged;
+    if (onChanged == null) return;
+    final t = context.t;
+    final v = await _pick(t.themeTitle, [
+      (ThemeMode.dark, t.themeDark),
+      (ThemeMode.light, t.themeLight),
+      (ThemeMode.system, t.themeSystem),
+    ], widget.themeMode);
+    if (v != null) onChanged(v);
+  }
+
   Future<void> _pickAccent() async {
     final onChanged = widget.onAccentChanged;
     if (onChanged == null) return;
     final t = context.t;
     final names = [t.accentBlue, t.accentGreen, t.accentOrange, t.accentPink, t.accentViolet];
-    final current = context.gym.accent;
+    // Di tema terang aksen yang tampil sudah digelapkan; yang dicocokkan
+    // pilihan aslinya.
+    final current = context.gym.accentBase ?? context.gym.accent;
     final v = await _pick(t.accentColour, [
       for (final (i, color) in accentChoices.indexed) (color, names[i]),
     ], accentChoices.firstWhere((a) => a.toARGB32() == current.toARGB32(), orElse: () => accentChoices.first));
@@ -420,13 +484,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         const SizedBox(height: 8),
         SettingsGroup(
           children: [
-            // Satuan hanya ditampilkan, bukan diketuk: lb belum didukung, dan
-            // baris yang tampak bisa diubah tapi tidak bisa itu menyesatkan.
-            SettingsTile(
-              icon: Icons.straighten,
-              label: t.units,
-              trailing: Text('kg', style: TextStyle(fontSize: 13.5, color: c.text2)),
-            ),
+            SettingsTile(icon: Icons.straighten, label: t.units, value: settings.unit.label, onTap: _pickUnit),
             SettingsTile(
                 icon: Icons.timer_outlined,
                 label: t.defaultRest,
@@ -456,6 +514,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 },
               ),
             ),
+            if (kIsWeb && _restPush != WebRestPush.unavailable)
+              SettingsTile(
+                icon: Icons.notifications_active_outlined,
+                label: t.restPushTitle,
+                value: switch (_restPush) {
+                  WebRestPush.on => t.restPushOn,
+                  WebRestPush.blocked => t.restPushBlocked,
+                  WebRestPush.needsHomeScreen => t.restPushNeedsHome,
+                  _ => t.restPushOff,
+                },
+                onTap: _toggleRestPush,
+              ),
             SettingsTile(
                 icon: Icons.calendar_view_week,
                 label: t.weekStartsOn,
@@ -488,6 +558,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
         const SizedBox(height: 8),
         SettingsGroup(
           children: [
+            if (widget.onThemeModeChanged != null)
+              SettingsTile(
+                icon: Icons.contrast,
+                label: t.themeTitle,
+                value: switch (widget.themeMode) {
+                  ThemeMode.light => t.themeLight,
+                  ThemeMode.system => t.themeSystem,
+                  ThemeMode.dark => t.themeDark,
+                },
+                onTap: _pickTheme,
+              ),
             SettingsTile(
               icon: Icons.palette_outlined,
               label: t.accentColour,

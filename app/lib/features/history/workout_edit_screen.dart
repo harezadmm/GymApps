@@ -7,9 +7,9 @@
 library;
 
 import 'package:flutter/material.dart';
+import '../../core/weights.dart';
 import 'package:flutter/services.dart';
 
-import '../../core/format.dart';
 import '../../core/strings.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
@@ -213,12 +213,13 @@ class _EditRow extends StatelessWidget {
           ),
           Expanded(
             child: TextFormField(
-              initialValue: set.weight == 0 ? '' : formatDelta(set.weight),
+              initialValue: set.weight == 0 ? '' : context.wDelta(set.weight),
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
               textAlign: TextAlign.center,
-              decoration: deco('kg'),
-              onChanged: (v) => onChanged(set.copyWith(weight: double.tryParse(v.replaceAll(',', '.')) ?? 0)),
+              decoration: deco(context.unitLabel),
+              onChanged: (v) =>
+                  onChanged(set.copyWith(weight: context.typedToKg(double.tryParse(v.replaceAll(',', '.')) ?? 0))),
             ),
           ),
           const SizedBox(width: 8),

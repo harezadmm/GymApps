@@ -10,6 +10,8 @@
 library;
 
 import 'package:flutter/material.dart';
+import '../../core/weights.dart';
+import '../../domain/units.dart';
 
 import '../../core/format.dart';
 import '../../core/strings.dart';
@@ -39,6 +41,7 @@ const _heavyBodyParts = {'upper legs', 'lower legs', 'back'};
 
 /// Pilihan increment beban. Di luar ini jarang ada alat yang bisa dimuat.
 const _increments = [0.5, 1.0, 1.25, 2.0, 2.5, 5.0, 10.0];
+const _incrementsLb = [1.0, 2.5, 5.0, 10.0, 20.0];
 
 enum _RowAction { moveUp, moveDown, replace, remove }
 
@@ -357,7 +360,7 @@ class _ExerciseEditor extends StatelessWidget {
     final policy = context.t.lang == AppLanguage.indonesian
         ? context.t.policy(name).toLowerCase()
         : name.split(' ').first.toLowerCase();
-    final w = config.weight > 0 ? ' · ${formatWeight(config.weight)} kg' : '';
+    final w = config.weight > 0 ? ' · ${context.wUnit(config.weight)}' : '';
     return '${config.sets} × $reps$w · $policy';
   }
 
@@ -390,7 +393,13 @@ class _ExerciseEditor extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.gym;
     final t = context.t;
-    final inc = weightIncrement(config, 'kg');
+    // Konfigurasi tersimpan dalam kg; yang disunting angka tampilannya, lalu
+    // hanya kolom yang diubah yang dikonversi balik (konversi bolak-balik
+    // seluruh konfigurasi akan menggeser increment 2,5 kg jadi 2,499 kg).
+    final unit = context.unit;
+    final shownConfig = configIn(config, unit);
+    final inc = weightIncrement(shownConfig, unit.label);
+    final steps = unit == WeightUnit.lb ? _incrementsLb : _increments;
     final rest = config.restSeconds ?? 90;
 
     PopupMenuItem<_RowAction> item(_RowAction a, IconData icon, String label, {bool enabled = true, Color? tone}) =>
@@ -543,23 +552,24 @@ class _ExerciseEditor extends StatelessWidget {
                     Expanded(
                       child: _StepperField(
                         label: t.startingWeight,
-                        value: config.weight == 0 ? (config.bodyweight ? 'BW' : '—') : '${formatWeight(config.weight)} kg',
-                        onMinus: () => onChanged(config.copyWith(weight: (config.weight - inc).clamp(0, 999).toDouble())),
-                        onPlus: () => onChanged(config.copyWith(weight: config.weight + inc)),
+                        value: config.weight == 0 ? (config.bodyweight ? 'BW' : '—') : context.wUnit(config.weight),
+                        onMinus: () => onChanged(config.copyWith(
+                            weight: toKg((shownConfig.weight - inc).clamp(0, 2000).toDouble(), unit))),
+                        onPlus: () => onChanged(config.copyWith(weight: toKg(shownConfig.weight + inc, unit))),
                       ),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: _StepperField(
                         label: t.increment,
-                        value: '${formatDelta(inc)} kg',
+                        value: '${formatDelta(inc)} ${unit.label}',
                         onMinus: () {
-                          final i = _increments.lastIndexWhere((x) => x < inc);
-                          if (i >= 0) onChanged(config.copyWith(increment: _increments[i]));
+                          final i = steps.lastIndexWhere((x) => x < inc - 1e-6);
+                          if (i >= 0) onChanged(config.copyWith(increment: toKg(steps[i], unit)));
                         },
                         onPlus: () {
-                          final i = _increments.indexWhere((x) => x > inc);
-                          if (i >= 0) onChanged(config.copyWith(increment: _increments[i]));
+                          final i = steps.indexWhere((x) => x > inc + 1e-6);
+                          if (i >= 0) onChanged(config.copyWith(increment: toKg(steps[i], unit)));
                         },
                       ),
                     ),

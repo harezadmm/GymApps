@@ -6,6 +6,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import '../../domain/units.dart';
 
 import '../../data/exercise_catalog.dart';
 import '../../data/workout_store.dart';
@@ -28,7 +29,9 @@ SessionExercise buildSessionExercise(
   // Faktor deload dari Profil berlaku untuk gerakan yang tidak menentukan
   // sendiri.
   final withDefaults = cfg.deloadFactor == null ? cfg.copyWith(deloadFactor: s.deloadFactor) : cfg;
-  final plan = planExercise(withDefaults, history, routineDefault: routineDefault);
+  // [cfg] dan [history] sudah dalam satuan tampilan (lihat units.dart), jadi
+  // lompatan pelatnya juga dalam satuan itu.
+  final plan = planExercise(withDefaults, history, routineDefault: routineDefault, unit: s.unit.label);
   final ex = catalog.byId(cfg.exerciseId);
   return SessionExercise(
     name: catalog.nameOf(cfg.exerciseId),
@@ -58,10 +61,11 @@ Future<void> openRoutineSession(BuildContext context, Routine routine) async {
   final store = WorkoutScope.read(context);
   final navigator = Navigator.of(context);
   final catalog = await ExerciseCatalog.load();
-  final history = store.chronological;
+  final unit = store.settings.unit;
+  final history = historyIn(store.chronological, unit);
   final exercises = [
     for (final (i, cfg) in routine.exercises.indexed)
-      buildSessionExercise(catalog, cfg, history,
+      buildSessionExercise(catalog, configIn(cfg, unit), history,
           routineDefault: routine.policy, settings: store.settings, expanded: i == 0),
   ];
   await navigator.push(MaterialPageRoute(
@@ -78,7 +82,8 @@ Future<void> openRoutineSession(BuildContext context, Routine routine) async {
 Future<void> openFreestyleSession(BuildContext context, String name) async {
   final store = WorkoutScope.read(context);
   await Navigator.of(context).push(MaterialPageRoute(
-    builder: (_) => SessionScreen(routineName: name, exercises: const [], history: store.chronological),
+    builder: (_) => SessionScreen(
+        routineName: name, exercises: const [], history: historyIn(store.chronological, store.settings.unit)),
   ));
 }
 
@@ -90,12 +95,23 @@ Future<void> resumeDraftSession(BuildContext context) async {
   if (draft == null) return;
   final navigator = Navigator.of(context);
   final catalog = await ExerciseCatalog.load();
+  // Draft sebelum v1.8 tidak menulis satuan; waktu itu hanya ada kg.
+  final draftUnit = WeightUnit.parse(draft['unit']);
+  final unit = store.settings.unit;
   final exercises = <SessionExercise>[
     for (final raw in (draft['ex'] as List? ?? const []))
       () {
         final j = Map<String, dynamic>.from(raw as Map);
         final id = ((j['cfg'] as Map?)?['id'] as String?) ?? '';
-        return SessionExercise.fromDraft(j, catalog.byId(id)?.icon ?? Icons.fitness_center);
+        final ex = SessionExercise.fromDraft(j, catalog.byId(id)?.icon ?? Icons.fitness_center);
+        if (draftUnit != unit) {
+          // Satuan diganti di Profil sebelum sesi dilanjutkan.
+          ex.config = configBetween(ex.config, draftUnit, unit);
+          for (var i = 0; i < ex.sets.length; i++) {
+            ex.sets[i] = setBetween(ex.sets[i], draftUnit, unit);
+          }
+        }
+        return ex;
       }(),
   ];
   final planned = <(String, int)>[
@@ -107,7 +123,7 @@ Future<void> resumeDraftSession(BuildContext context) async {
       routineName: draft['name'] as String? ?? '',
       routineId: draft['rid'] as String?,
       exercises: exercises,
-      history: store.chronological,
+      history: historyIn(store.chronological, unit),
       initialElapsed: Duration(seconds: (draft['elapsed'] as num?)?.toInt() ?? 0),
       initialNotes: draft['notes'] as String?,
       planned: planned.isEmpty ? null : planned,
