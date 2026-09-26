@@ -11,6 +11,7 @@ import 'package:gymapps/domain/models.dart';
 import 'package:gymapps/domain/session_plan.dart';
 import 'package:gymapps/domain/settings.dart';
 import 'package:gymapps/domain/units.dart';
+import 'package:gymapps/features/session/session_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 const _bench = ExerciseConfig(exerciseId: '0025', policy: ProgressionPolicy.linear, sets: 3, reps: 5);
@@ -94,6 +95,40 @@ void main() {
         ),
       ));
       expect(find.text('220.5 lb · 2.2k lb'), findsOneWidget);
+    });
+
+    testWidgets('satuan diganti selagi sesi terbuka: angka sesi ikut dikonversi', (tester) async {
+      // Tanpa konversi, 60 (kg) akan tetap tertulis 60 lalu disimpan sebagai
+      // 60 lb = 27 kg.
+      tester.view.physicalSize = const Size(1080, 2340);
+      tester.view.devicePixelRatio = 3;
+      addTearDown(tester.view.reset);
+      SharedPreferences.setMockInitialValues({});
+      final store = WorkoutStore();
+      await store.load();
+      final ex = SessionExercise(
+        name: 'Barbell Bench Press',
+        icon: Icons.fitness_center,
+        config: const ExerciseConfig(exerciseId: '0025', policy: ProgressionPolicy.linear, reps: 8, weight: 60),
+        sets: const [SetRow(weight: 60, reps: 8)],
+        previous: const ['60 × 8'],
+        expanded: true,
+      );
+      await tester.pumpWidget(WorkoutScope(
+        store: store,
+        child: AppStrings(
+          strings: const Strings(AppLanguage.english),
+          child: MaterialApp(theme: buildGymTheme(), home: SessionScreen(routineName: 'Push', exercises: [ex])),
+        ),
+      ));
+      await tester.pump();
+      expect(find.text('60'), findsWidgets);
+      await store.updateSettings(store.settings.copyWith(unit: WeightUnit.lb));
+      await tester.pump();
+      expect(ex.sets.first.weight, 132.3);
+      expect(ex.config.weight, 132.3);
+      expect(toKg(ex.sets.first.weight, WeightUnit.lb), closeTo(60, 0.05));
+      await tester.pumpWidget(const SizedBox());
     });
 
     test('alasan target dalam lb ikut diterjemahkan', () {

@@ -88,6 +88,10 @@ SetRow setBetween(SetRow s, WeightUnit from, WeightUnit to) =>
 ExerciseConfig configBetween(ExerciseConfig c, WeightUnit from, WeightUnit to) =>
     from == to ? c : _config(c, (v) => _inUnit(toKg(v, from), to));
 
+/// Riwayat dalam satuan [from] → satuan [to].
+List<Workout> historyBetween(List<Workout> h, WeightUnit from, WeightUnit to) =>
+    from == to ? h : historyIn([for (final w in h) workoutToKg(w, from)], to);
+
 /// Sesi yang dicatat dalam satuan tampilan → kg untuk disimpan.
 Workout workoutToKg(Workout w, WeightUnit u) => u == WeightUnit.kg ? w : _workout(w, (v) => toKg(v, u));
 
