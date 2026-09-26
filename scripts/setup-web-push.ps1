@@ -28,6 +28,9 @@ $vars = [ordered]@{
   VAPID_SUBJECT     = 'https://gymapps-hariz.vercel.app'
 }
 
+# Tanpa ini PowerShell bisa menyisipkan BOM di depan nilai yang dipipakan ke
+# vercel, dan header HTTP (apikey) menolak BOM.
+$OutputEncoding = New-Object System.Text.UTF8Encoding $false
 $ErrorActionPreference = 'Continue'
 foreach ($name in $vars.Keys) {
   vercel env rm $name production --yes *> $null

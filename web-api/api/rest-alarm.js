@@ -30,7 +30,9 @@ const PUSH_HOSTS = [
 ];
 
 const env = (name) => {
-  const v = process.env[name];
+  // Nilai yang diisi lewat pipa PowerShell bisa membawa BOM di depannya, dan
+  // header HTTP menolak karakter itu.
+  const v = (process.env[name] || '').replace(/^\uFEFF/, '').trim();
   if (!v) throw new Error(`env ${name} belum diisi`);
   return v;
 };
@@ -81,7 +83,10 @@ async function run(origin, alarm) {
   const cache = getCache();
   const hop = Math.min(alarm.remaining, HOP_SECONDS);
   await sleep(hop * 1000);
-  if ((await cache.get(keyFor(alarm.uid))) !== alarm.id) return; // diganti atau dibatalkan
+  if ((await cache.get(keyFor(alarm.uid))) !== alarm.id) {
+    console.log('alarm dilewati: diganti atau dibatalkan');
+    return;
+  }
   const rest = alarm.remaining - hop;
   if (rest > 0) {
     const cont = JSON.stringify({ ...alarm, remaining: rest });
@@ -94,11 +99,12 @@ async function run(origin, alarm) {
   }
   webpush.setVapidDetails(env('VAPID_SUBJECT'), env('VAPID_PUBLIC_KEY'), env('VAPID_PRIVATE_KEY'));
   try {
-    await webpush.sendNotification(
+    const res = await webpush.sendNotification(
       alarm.sub,
       JSON.stringify({ title: alarm.title, body: alarm.body, tag: 'rest' }),
       { TTL: 120, urgency: 'high' },
     );
+    console.log('push terkirim', res.statusCode, new URL(alarm.sub.endpoint).host);
   } catch (e) {
     console.warn('push gagal', e?.statusCode, e?.body);
   }
