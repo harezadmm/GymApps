@@ -6,6 +6,8 @@
 library;
 
 import 'package:flutter/material.dart';
+import '../../core/weights.dart';
+import '../../domain/units.dart';
 
 import '../../core/charts.dart';
 import '../../core/format.dart';
@@ -101,6 +103,7 @@ class _FinishScreenState extends State<FinishScreen> {
     final original = _original;
     if (original == null) return;
     final store = WorkoutScope.read(context);
+    final unit = store.settings.unit;
     final counts = {for (final e in widget.exercises) e.config.exerciseId: e.workCount};
     final Routine next;
     switch (option) {
@@ -112,7 +115,9 @@ class _FinishScreenState extends State<FinishScreen> {
         final byId = {for (final cfg in original.exercises) cfg.exerciseId: cfg};
         next = original.copyWith(exercises: [
           for (final e in widget.exercises)
-            (byId[e.config.exerciseId] ?? e.config).copyWith(sets: e.workCount),
+            // Gerakan baru dari sesi ini: konfigurasinya dalam satuan
+            // tampilan, rutinitas menyimpan kg.
+            (byId[e.config.exerciseId] ?? configToKg(e.config, unit)).copyWith(sets: e.workCount),
         ]);
       default:
         next = original;
@@ -187,7 +192,7 @@ class _FinishScreenState extends State<FinishScreen> {
                       Expanded(
                         child: _Metric(
                           icon: Icons.inventory_2_outlined,
-                          value: '${(_volume / 1000).toStringAsFixed(1)} t',
+                          value: volumeText(_volume, context.unit),
                           label: context.t.volume,
                         ),
                       ),
@@ -368,8 +373,8 @@ class _RecordsCard extends StatelessWidget {
                   // Rekor pertama tidak punya pembanding — jangan tulis
                   // "(was 0)" yang terbaca seperti pernah mengangkat nol.
                   entry.$2.previous == null
-                      ? 'e1RM ${formatDelta(entry.$2.now.est)} kg'
-                      : 'e1RM ${formatDelta(entry.$2.now.est)} kg (was ${formatDelta(entry.$2.previous!)})',
+                      ? 'e1RM ${formatDelta(entry.$2.now.est)} ${context.unitLabel}'
+                      : 'e1RM ${formatDelta(entry.$2.now.est)} ${context.unitLabel} (was ${formatDelta(entry.$2.previous!)})',
                   style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: c.text2),
                 ),
               ],
@@ -427,7 +432,7 @@ class _NextTargetsCard extends StatelessWidget {
             Builder(builder: (context) {
               // Fungsi yang sama dengan yang menyusun sesi berikutnya, supaya
               // angka di sini persis angka yang akan terbuka nanti.
-              final plan = planExercise(ex.config, history);
+              final plan = planExercise(ex.config, history, unit: context.unitLabel);
               final p = plan.prescription;
               final work = plan.sets.firstWhere((s) => !s.isWarmup, orElse: () => const SetRow());
               final weight = work.weight;
@@ -435,7 +440,7 @@ class _NextTargetsCard extends StatelessWidget {
               return Row(
                 children: [
                   Expanded(child: Text(ex.name, style: Theme.of(context).textTheme.bodyLarge)),
-                  Text('${weightLabel(weight, bodyweight: ex.config.bodyweight)} kg × $reps',
+                  Text('${weightLabel(weight, bodyweight: ex.config.bodyweight)} ${context.unitLabel} × $reps',
                       style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: c.text)),
                   const SizedBox(width: 8),
                   _DeltaTag(prescription: p, current: ex.config.weight),

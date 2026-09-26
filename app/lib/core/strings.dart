@@ -220,12 +220,12 @@ class Strings {
   String get addSet => _('ADD SET', 'TAMBAH SET');
   String get setCol => _('Set', 'Set');
   String get prevCol => _('Prev', 'Sblm');
-  String get kgCol => _('Kg', 'Kg');
+  String weightCol(String unit) => unit == 'lb' ? 'Lb' : 'Kg';
   String get repsCol => _('Reps', 'Rep');
-  String targetLine(String weight, int reps, String policy) =>
-      _('Target $weight kg × $reps · $policy', 'Target $weight kg × $reps · $policy');
-  String setsTarget(int n, String weight, int reps) =>
-      _('${n == 1 ? '1 set' : '$n sets'} · target $weight kg × $reps', '$n set · target $weight kg × $reps');
+  String targetLine(String weight, int reps, String policy, String unit) =>
+      _('Target $weight $unit × $reps · $policy', 'Target $weight $unit × $reps · $policy');
+  String setsTarget(int n, String weight, int reps, String unit) =>
+      _('${n == 1 ? '1 set' : '$n sets'} · target $weight $unit × $reps', '$n set · target $weight $unit × $reps');
   String get warmupLabel => _('warm-up', 'pemanasan');
   String setLabel(int n) => _('set $n', 'set $n');
   String nextUpLine(String what, String weight, int reps) =>
@@ -400,6 +400,24 @@ class Strings {
   String get theme => _('Theme', 'Tema');
   String get dark => _('Dark', 'Gelap');
   String get accentColour => _('Accent colour', 'Warna aksen');
+  String get themeTitle => _('Theme', 'Tema');
+  String get restPushTitle => _('Rest alerts on lock screen', 'Tanda istirahat di layar terkunci');
+  String get restPushOn => _('On', 'Nyala');
+  String get restPushOff => _('Off', 'Mati');
+  String get restPushBlocked => _('Blocked in settings', 'Diblokir di pengaturan');
+  String get restPushNeedsHome => _('Add to Home Screen first', 'Pasang ke Home Screen dulu');
+  String get restPushHowTo => _(
+        'On iPhone, notifications only work from the Home Screen app: in Safari tap Share → Add to Home Screen, then open GymApps from its icon.',
+        'Di iPhone, notifikasi hanya jalan dari aplikasi di Home Screen: di Safari ketuk Bagikan → Tambahkan ke Layar Utama, lalu buka GymApps dari ikonnya.');
+  String get restPushBlockedHow => _(
+        'Notifications are blocked. Allow them for GymApps in Settings → Notifications, then try again.',
+        'Notifikasi diblokir. Izinkan untuk GymApps di Pengaturan → Notifikasi, lalu coba lagi.');
+  String get restPushEnabled => _(
+        'Done — your phone will ring when rest is over, even locked.',
+        'Beres — HP akan berbunyi saat istirahat habis, walau terkunci.');
+  String get themeDark => _('Dark', 'Gelap');
+  String get themeLight => _('Light', 'Terang');
+  String get themeSystem => _('Match system', 'Ikuti sistem');
   String get language => _('Language', 'Bahasa');
   String get aboutApp => _('About GymApps', 'Tentang GymApps');
   String get logOut => _('LOG OUT', 'KELUAR');
@@ -695,7 +713,10 @@ class Strings {
   String get sessionUpdated => _('Session updated.', 'Sesi diperbarui.');
   String get notesLabel => _('Notes', 'Catatan');
   String get on => _('On', 'Nyala');
-  String get unitsKgOnly => _('kg (lb not supported yet)', 'kg (lb belum didukung)');
+  String get unitsTitle => _('Weight unit', 'Satuan beban');
+  String get unitsNote => _(
+        'Everything you logged stays the same — only how it is shown changes. Plate jumps follow the unit (2.5/5 kg or 5/10 lb).',
+        'Semua catatanmu tetap sama — yang berubah hanya cara tampilnya. Lompatan pelat ikut satuan (2,5/5 kg atau 5/10 lb).');
   String get logRir => _('Log reps in reserve (RIR)', 'Catat sisa rep (RIR)');
   String get myEquipment => _('Equipment at my gym', 'Alat di gym-ku');
   String get equipmentAll => _('All equipment', 'Semua alat');
@@ -755,8 +776,8 @@ class Strings {
   String get bodyweightTitle => _('Bodyweight', 'Berat badan');
   String get logBodyweight => _('Log bodyweight', 'Catat berat badan');
   String get bodyweightNone => _('No entries yet — log one to track the trend.', 'Belum ada catatan — catat untuk melihat tren.');
-  String bodyweightChange(String delta, int days) =>
-      _('$delta kg over $days days', '$delta kg dalam $days hari');
+  String bodyweightChange(String delta, int days, String unit) =>
+      _('$delta $unit over $days days', '$delta $unit dalam $days hari');
   String get dashboard => _('Dashboard', 'Dashboard');
   String get openDashboard => _('Open dashboard', 'Buka dashboard');
   String get e1rmByWeek => _('e1RM by week — last 12 weeks', 'e1RM per minggu — 12 minggu terakhir');
@@ -764,7 +785,8 @@ class Strings {
   String get noneStalled =>
       _('Nothing stalled — every lift moved in the last 3 weeks.', 'Tidak ada yang stagnan — semua gerakan naik dalam 3 minggu terakhir.');
   String get sessionsPerWeek => _('Sessions per week', 'Sesi per minggu');
-  String stalledSince(String kg, int weeks) => _('best $kg kg, flat for $weeks weeks', 'terbaik $kg kg, datar $weeks minggu');
+  String stalledSince(String w, int weeks, String unit) =>
+      _('best $w $unit, flat for $weeks weeks', 'terbaik $w $unit, datar $weeks minggu');
   String get forgotTitle => _('Reset password', 'Reset kata sandi');
   String get forgotBody => _(
         "We'll email you a link to set a new password. Open it, set the new password, then sign in here with it.",

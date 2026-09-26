@@ -10,6 +10,9 @@
 library;
 
 import 'models.dart';
+import 'units.dart';
+
+export 'units.dart' show WeightUnit;
 
 /// Kelompok alat di gym, dipetakan ke nilai `equipment` di katalog.
 ///
@@ -54,7 +57,11 @@ class TrainingSettings {
     this.equipment,
     this.favorites = const [],
     this.restByExercise = const {},
+    this.unit = WeightUnit.kg,
   });
+
+  /// Satuan tampilan beban. Data tetap disimpan dalam kg (lihat units.dart).
+  final WeightUnit unit;
 
   /// Istirahat untuk gerakan yang tidak punya istirahat sendiri di rutinitas.
   final int defaultRestSeconds;
@@ -88,6 +95,7 @@ class TrainingSettings {
     bool clearEquipment = false,
     List<String>? favorites,
     Map<String, int>? restByExercise,
+    WeightUnit? unit,
   }) =>
       TrainingSettings(
         defaultRestSeconds: defaultRestSeconds ?? this.defaultRestSeconds,
@@ -97,6 +105,7 @@ class TrainingSettings {
         equipment: clearEquipment ? null : (equipment ?? this.equipment),
         favorites: favorites ?? this.favorites,
         restByExercise: restByExercise ?? this.restByExercise,
+        unit: unit ?? this.unit,
       );
 
   /// Apakah satu nilai alat katalog tersedia menurut pilihan ini.
@@ -123,6 +132,7 @@ class TrainingSettings {
         if (equipment != null) 'eq': equipment,
         if (favorites.isNotEmpty) 'fav': favorites,
         if (restByExercise.isNotEmpty) 'restEx': restByExercise,
+        if (unit != WeightUnit.kg) 'unit': unit.name,
       };
 
   factory TrainingSettings.fromJson(Map<String, dynamic> j) => TrainingSettings(
@@ -135,5 +145,6 @@ class TrainingSettings {
         restByExercise: {
           for (final e in ((j['restEx'] as Map?) ?? const {}).entries) '${e.key}': (e.value as num).toInt(),
         },
+        unit: WeightUnit.parse(j['unit']),
       );
 }

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show SystemUiOverlayStyle;
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -61,6 +62,8 @@ Future<void> main() async {
         authFlowType: AuthFlowType.pkce,
       ),
     );
+    // Server alarm istirahat (web) hanya melayani akun yang sedang masuk.
+    RestAlert.webAccessToken = () => Supabase.instance.client.auth.currentSession?.accessToken;
   }
 
   // Setelan perangkat dibaca sebelum bingkai pertama, supaya aplikasi tidak
@@ -68,19 +71,39 @@ Future<void> main() async {
   final prefs = await SharedPreferences.getInstance();
   final lang = prefs.getString(_kLang) == 'id' ? AppLanguage.indonesian : AppLanguage.english;
   final accent = prefs.getInt(_kAccent);
+  final themeMode = parseThemeMode(prefs.getString(_kTheme));
   await RestAlert.init();
 
-  runApp(GymApp(initialLanguage: lang, initialAccent: accent == null ? null : Color(accent)));
+  runApp(GymApp(
+    initialLanguage: lang,
+    initialAccent: accent == null ? null : Color(accent),
+    initialThemeMode: themeMode,
+  ));
 }
 
 const _kLang = 'settings.lang';
 const _kAccent = 'settings.accent';
+const _kTheme = 'settings.theme';
+
+/// Gelap tetap bawaan: aplikasi ini dirancang gelap dulu, dan orang yang sudah
+/// memakainya tidak boleh tiba-tiba mendapat layar putih setelah update.
+ThemeMode parseThemeMode(String? v) => switch (v) {
+      'light' => ThemeMode.light,
+      'system' => ThemeMode.system,
+      _ => ThemeMode.dark,
+    };
 
 class GymApp extends StatefulWidget {
-  const GymApp({super.key, this.initialLanguage = AppLanguage.english, this.initialAccent});
+  const GymApp({
+    super.key,
+    this.initialLanguage = AppLanguage.english,
+    this.initialAccent,
+    this.initialThemeMode = ThemeMode.dark,
+  });
 
   final AppLanguage initialLanguage;
   final Color? initialAccent;
+  final ThemeMode initialThemeMode;
 
   @override
   State<GymApp> createState() => _GymAppState();
@@ -92,6 +115,7 @@ class _GymAppState extends State<GymApp> with WidgetsBindingObserver {
   /// kali aplikasi dibuka.
   late AppLanguage _lang = widget.initialLanguage;
   late Color? _accent = widget.initialAccent;
+  late ThemeMode _themeMode = widget.initialThemeMode;
 
   Future<void> _setLanguage(AppLanguage l) async {
     setState(() => _lang = l);
@@ -103,6 +127,12 @@ class _GymAppState extends State<GymApp> with WidgetsBindingObserver {
     setState(() => _accent = c);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_kAccent, c.toARGB32());
+  }
+
+  Future<void> _setThemeMode(ThemeMode m) async {
+    setState(() => _themeMode = m);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kTheme, m.name);
   }
 
   /// Satu store untuk seluruh aplikasi, dibuat di akar supaya riwayatnya tidak
@@ -146,8 +176,10 @@ class _GymAppState extends State<GymApp> with WidgetsBindingObserver {
         child: MaterialApp(
           title: 'GymApps',
           debugShowCheckedModeBanner: false,
-          theme: buildGymTheme(accent: _accent),
-          builder: _phoneWidthOnWeb,
+          theme: buildGymTheme(accent: _accent, brightness: Brightness.light),
+          darkTheme: buildGymTheme(accent: _accent),
+          themeMode: _themeMode,
+          builder: _appChrome,
           // Teks bawaan Flutter (tombol dialog, tooltip Kembali, pemilih
           // tanggal) ikut bahasa yang dipilih, bukan selalu bahasa Inggris.
           locale: _lang == AppLanguage.indonesian ? const Locale('id') : const Locale('en'),
@@ -158,11 +190,41 @@ class _GymAppState extends State<GymApp> with WidgetsBindingObserver {
             onLanguageChanged: _setLanguage,
             accent: _accent,
             onAccentChanged: _setAccent,
+            themeMode: _themeMode,
+            onThemeModeChanged: _setThemeMode,
           ),
         ),
       ),
     );
   }
+}
+
+/// Bilah status mengikuti tema: ikon gelap di tema terang. Tanpa ini jam dan
+/// baterai tergambar putih di atas latar putih.
+Widget _appChrome(BuildContext context, Widget? child) {
+  final c = context.gym;
+  setBrowserChrome(background: c.bg, light: c.isLight);
+  final style = (c.isLight ? SystemUiOverlayStyle.dark : SystemUiOverlayStyle.light).copyWith(
+    statusBarColor: const Color(0x00000000),
+    systemNavigationBarColor: c.surface,
+    systemNavigationBarIconBrightness: c.isLight ? Brightness.dark : Brightness.light,
+  );
+  var body = _phoneWidthOnWeb(context, child);
+  if (kIsWeb && c.isLight) {
+    // Aplikasi web di Home Screen iPhone memakai bilah status
+    // black-translucent: teksnya selalu putih, dan pengaturannya hanya dibaca
+    // saat dipasang. Di tema terang, pita di balik bilah status digelapkan
+    // supaya jam tetap terbaca.
+    final top = MediaQuery.paddingOf(context).top;
+    final inset = top > 0 ? top : readCssSafeArea().top;
+    if (inset > 0) {
+      body = Stack(children: [
+        body,
+        Positioned(top: 0, left: 0, right: 0, height: inset, child: ColoredBox(color: c.text)),
+      ]);
+    }
+  }
+  return AnnotatedRegion<SystemUiOverlayStyle>(value: style, child: body);
 }
 
 /// Penyesuaian tampilan khusus web, dipasang lewat `MaterialApp.builder`.
@@ -223,12 +285,16 @@ class AppFlow extends StatefulWidget {
     required this.onLanguageChanged,
     this.accent,
     this.onAccentChanged,
+    this.themeMode = ThemeMode.dark,
+    this.onThemeModeChanged,
   });
 
   final AppLanguage language;
   final ValueChanged<AppLanguage> onLanguageChanged;
   final Color? accent;
   final ValueChanged<Color>? onAccentChanged;
+  final ThemeMode themeMode;
+  final ValueChanged<ThemeMode>? onThemeModeChanged;
 
   @override
   State<AppFlow> createState() => _AppFlowState();
@@ -477,6 +543,8 @@ class _AppFlowState extends State<AppFlow> {
           language: widget.language,
           onLanguageChanged: widget.onLanguageChanged,
           onAccentChanged: widget.onAccentChanged,
+          themeMode: widget.themeMode,
+          onThemeModeChanged: widget.onThemeModeChanged,
           email: _account?.email,
           onSignOut: _signOut,
           onConnect: switch (_accounts) {
@@ -499,6 +567,8 @@ class HomeShell extends StatefulWidget {
     required this.email,
     this.onConnect,
     this.onAccentChanged,
+    this.themeMode = ThemeMode.dark,
+    this.onThemeModeChanged,
   });
 
   final AppLanguage language;
@@ -507,6 +577,8 @@ class HomeShell extends StatefulWidget {
   final String? email;
   final Future<ConnectResult> Function(String password)? onConnect;
   final ValueChanged<Color>? onAccentChanged;
+  final ThemeMode themeMode;
+  final ValueChanged<ThemeMode>? onThemeModeChanged;
 
   @override
   State<HomeShell> createState() => _HomeShellState();
@@ -551,6 +623,8 @@ class _HomeShellState extends State<HomeShell> {
               email: widget.email,
               onConnect: widget.onConnect,
               onAccentChanged: widget.onAccentChanged,
+              themeMode: widget.themeMode,
+              onThemeModeChanged: widget.onThemeModeChanged,
             ),
           ],
         ),

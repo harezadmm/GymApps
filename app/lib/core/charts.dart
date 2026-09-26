@@ -47,8 +47,6 @@ class BarSeries extends StatelessWidget {
   /// tampak sama tinggi dan kemajuannya hilang.
   final double baselineFraction;
 
-  /// Warna batang yang bukan batang terakhir — `#25405A`, diambil dari Pen.
-  static const idle = Color(0xFF25405A);
 
   @override
   Widget build(BuildContext context) {
@@ -80,7 +78,7 @@ class BarSeries extends StatelessWidget {
                       // Tanpa penjaga ini tingginya NaN dan layarnya gagal digambar.
                       height: hi <= floor ? 6 : math.max(6, ((v - floor) / (hi - floor)) * box.maxHeight),
                       decoration: BoxDecoration(
-                        color: i == values.length - 1 ? (highlightColor ?? c.accent) : idle,
+                        color: i == values.length - 1 ? (highlightColor ?? c.accent) : c.chartIdle,
                         borderRadius: BorderRadius.circular(GymRadius.bar),
                       ),
                     ),
@@ -226,14 +224,6 @@ class ActivityHeatmap extends StatelessWidget {
   /// kolom per kolom (satu kolom = satu minggu).
   final List<int> levels;
 
-  /// Lima warna sel dari artboard Pen `11 History`.
-  static const ramp = <Color>[
-    Color(0xFF161C29),
-    Color(0xFF173042),
-    Color(0xFF1E5878),
-    Color(0xFF2E93C6),
-    Color(0xFF5AC8FA),
-  ];
   final List<String> monthLabels;
   final int rows;
 
@@ -287,7 +277,7 @@ class ActivityHeatmap extends StatelessWidget {
     );
   }
 
-  Color _tint(GymColors c, int level) => ramp[level.clamp(0, ramp.length - 1)];
+  Color _tint(GymColors c, int level) => c.activityRamp[level.clamp(0, c.activityRamp.length - 1)];
 }
 
 /// Peta otot depan-belakang — bentuknya diambil apa adanya dari artboard Pen
@@ -316,24 +306,14 @@ class MuscleMap extends StatelessWidget {
     ];
   }
 
-  /// Ramp volume dari legenda Pen: rendah → tinggi.
-  static const heatRamp = <Color>[
-    Color(0xFF1B2536),
-    Color(0xFF1E4258),
-    Color(0xFF2A7FA8),
-    Color(0xFF3FA8DC),
-    Color(0xFF5AC8FA),
-  ];
-
-  /// Warna siluet tubuh di belakang otot.
-  static const silhouette = Color(0xFF19212E);
 
   @override
   Widget build(BuildContext context) {
+    final c = context.gym;
     return SizedBox(
       height: height,
       child: CustomPaint(
-        painter: _BodyPainter(levels: _levels),
+        painter: _BodyPainter(levels: _levels, silhouette: c.silhouette, ramp: c.heatRamp),
         child: const SizedBox.expand(),
       ),
     );
@@ -341,9 +321,11 @@ class MuscleMap extends StatelessWidget {
 }
 
 class _BodyPainter extends CustomPainter {
-  _BodyPainter({required this.levels});
+  _BodyPainter({required this.levels, required this.silhouette, required this.ramp});
 
   final List<int> levels;
+  final Color silhouette;
+  final List<Color> ramp;
 
   /// Rasio kotak gambar aslinya di Pen (320 × 260). Dipertahankan supaya
   /// figurnya tidak melar saat kartunya lebih lebar.
@@ -364,9 +346,7 @@ class _BodyPainter extends CustomPainter {
     for (var i = 0; i < bodyHeatmapPaths.length; i++) {
       final enc = bodyHeatmapPaths[i];
       final level = i < levels.length ? levels[i] : -1;
-      final colour = level < 0
-          ? MuscleMap.silhouette
-          : MuscleMap.heatRamp[level.clamp(0, MuscleMap.heatRamp.length - 1)];
+      final colour = level < 0 ? silhouette : ramp[level.clamp(0, ramp.length - 1)];
 
       final path = Path();
       var k = 0;
@@ -396,6 +376,8 @@ class _BodyPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_BodyPainter old) =>
+      old.silhouette != silhouette ||
+      old.ramp.first != ramp.first ||
       old.levels.length != levels.length ||
       Iterable.generate(levels.length).any((i) => old.levels[i] != levels[i]);
 }

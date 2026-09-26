@@ -23,3 +23,22 @@ EdgeInsets readCssSafeArea() {
 
   return EdgeInsets.fromLTRB(side('--sal'), side('--sat'), side('--sar'), side('--sab'));
 }
+
+String? _lastChrome;
+
+/// Warnai bilah browser (Chrome Android, tab Safari) sesuai tema, dan beri tahu
+/// browser skema warnanya supaya kontrol bawaannya tidak berbenturan.
+void setBrowserChrome({required Color background, required bool light}) {
+  final hex = '#${(background.toARGB32() & 0xFFFFFF).toRadixString(16).padLeft(6, '0')}';
+  final key = '$hex$light';
+  if (key == _lastChrome) return;
+  _lastChrome = key;
+  void meta(String name, String content) {
+    final el = web.document.querySelector('meta[name="$name"]');
+    el?.setAttribute('content', content);
+  }
+
+  meta('theme-color', hex);
+  meta('color-scheme', light ? 'light' : 'dark');
+  web.document.body?.style.backgroundColor = hex;
+}

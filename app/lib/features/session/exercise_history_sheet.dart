@@ -6,6 +6,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import '../../domain/units.dart';
 
 import '../../core/format.dart';
 import '../../core/strings.dart';
@@ -92,8 +93,11 @@ String setsSummary(WorkoutEntry e) {
 
 Future<void> showExerciseHistory(BuildContext context, {required String exerciseId, required String name}) {
   final store = WorkoutScope.read(context);
-  final recent = recentFor(store.workouts, exerciseId);
-  final records = recordsFor(store.workouts, exerciseId);
+  // Rekor dan riwayat dalam satuan tampilan.
+  final unit = store.settings.unit;
+  final shownHistory = historyIn(store.workouts, unit);
+  final recent = recentFor(shownHistory, exerciseId);
+  final records = recordsFor(shownHistory, exerciseId);
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
@@ -136,14 +140,14 @@ Future<void> showExerciseHistory(BuildContext context, {required String exercise
                 Text(t.noExerciseHistory, style: TextStyle(fontSize: 13.5, color: c.text2))
               else ...[
                 Row(children: [
-                  record(t.prHeaviest, records.heaviest == null ? '—' : '${formatWeight(records.heaviest!)} kg',
+                  record(t.prHeaviest, records.heaviest == null ? '—' : '${formatWeight(records.heaviest!)} ${unit.label}',
                       records.heaviestDate),
                   const SizedBox(width: 8),
-                  record(t.prBestE1rm, records.best == null ? '—' : '${formatDelta(records.best!.est)} kg',
+                  record(t.prBestE1rm, records.best == null ? '—' : '${formatDelta(records.best!.est)} ${unit.label}',
                       records.best?.date),
                   const SizedBox(width: 8),
                   record(t.prBestVolume,
-                      records.bestVolume == null ? '—' : '${formatDelta(records.bestVolume!)} kg', records.bestVolumeDate),
+                      records.bestVolume == null ? '—' : '${formatDelta(records.bestVolume!)} ${unit.label}', records.bestVolumeDate),
                 ]),
                 const SizedBox(height: 16),
                 SectionLabel(t.history),

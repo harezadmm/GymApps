@@ -7,9 +7,9 @@
 library;
 
 import 'package:flutter/material.dart';
+import '../../core/weights.dart';
 
 import '../../core/charts.dart';
-import '../../core/format.dart';
 import '../../core/strings.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
@@ -267,7 +267,7 @@ class _SessionRow extends StatelessWidget {
                     Text(
                       [
                         if (workout.durationSeconds != null) _clock(workout.durationSeconds!),
-                        '${(volume / 1000).toStringAsFixed(1)} t',
+                        context.volume(volume),
                         context.t.setsSuffix(_workingSets.length),
                       ].join(' · '),
                       style: TextStyle(fontSize: 12.5, color: c.text2),
@@ -358,7 +358,7 @@ Future<void> _showDetail(BuildContext context, Workout workout) async {
                         child: Text(
                             (e.target?.mode ?? LogMode.reps) == LogMode.time
                                 ? '${s.seconds}s'
-                                : '${weightLabel(s.weight, bodyweight: e.target?.bodyweight ?? false)} kg × ${s.reps}'
+                                : '${context.wLabel(s.weight, bodyweight: e.target?.bodyweight ?? false)} ${context.unitLabel} × ${s.reps}'
                                     '${s.rir == null ? '' : '  @${s.rir}'}',
                             style: TextStyle(fontSize: 14, color: s.done ? c.text : c.text3)),
                       ),

@@ -6,6 +6,8 @@
 library;
 
 import 'package:flutter/material.dart';
+import '../../core/weights.dart';
+import '../../domain/units.dart';
 
 import '../../core/charts.dart';
 import '../../core/format.dart';
@@ -173,7 +175,7 @@ class _StatsScreenState extends State<StatsScreen> {
                 // Lima warna yang sama persis dengan yang dipakai peta di
                 // atasnya — legenda yang tidak cocok dengan gambarnya lebih
                 // buruk daripada tidak ada legenda.
-                for (final tone in MuscleMap.heatRamp) ...[
+                for (final tone in c.heatRamp) ...[
                   Expanded(
                     child: Container(
                       height: 8,
@@ -318,7 +320,7 @@ class _StatsScreenState extends State<StatsScreen> {
   List<Widget> _strength(BuildContext context) {
     final c = context.gym;
     final t = context.t;
-    final history = context.workouts.workouts;
+    final history = historyIn(context.workouts.workouts, context.unit);
     final now = DateTime.now();
     final logged = loggedExercises(history);
     final catalog = _cat;
@@ -385,7 +387,7 @@ class _StatsScreenState extends State<StatsScreen> {
                 const SizedBox(width: 6),
                 Padding(
                   padding: const EdgeInsets.only(bottom: 4),
-                  child: Text('kg', style: TextStyle(fontSize: 13, color: c.text2)),
+                  child: Text(context.unitLabel, style: TextStyle(fontSize: 13, color: c.text2)),
                 ),
                 const SizedBox(width: 10),
                 Padding(
@@ -434,7 +436,7 @@ class _StatsScreenState extends State<StatsScreen> {
                             maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodyLarge),
                       ),
                       const SizedBox(width: 8),
-                      Text('${m.best.toStringAsFixed(1)} kg',
+                      Text('${m.best.toStringAsFixed(1)} ${context.unitLabel}',
                           style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: c.text)),
                       const SizedBox(width: 8),
                       _Change(delta: double.parse(m.delta.toStringAsFixed(1))),

@@ -10,14 +10,38 @@
 /// * **Getar dan bunyi langsung** kalau aplikasi sedang terbuka saat waktunya
 ///   habis. Notifikasinya dibatalkan supaya tidak berbunyi dua kali.
 ///
-/// Di web tidak ada penjadwalan yang bisa diandalkan (Safari menghentikan
-/// JavaScript saat layar terkunci), jadi yang ada hanya tanda langsung.
+/// Di web, Safari menghentikan JavaScript saat layar terkunci, jadi timer di
+/// halaman tidak bisa berbunyi. Gantinya **Web Push**: saat istirahat mulai,
+/// server (`web-api/api/rest-alarm.js`) diminta mengirim push di tenggatnya.
+/// Push itu dibunyikan sistem, walau layar terkunci. Hanya bekerja kalau
+/// orangnya menyalakan "Notifikasi istirahat" di Profil — dan di iPhone hanya
+/// dari aplikasi yang dipasang ke Home Screen (iOS 16.4+).
 library;
+
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:http/http.dart' as http;
 import 'package:timezone/timezone.dart' as tz;
+
+import 'web_push_stub.dart' if (dart.library.js_interop) 'web_push_web.dart' as wp;
+
+/// Keadaan notifikasi istirahat di versi web, untuk baris di Profil.
+enum WebRestPush {
+  /// Build ini tidak punya kunci push, atau browsernya tidak mendukung.
+  unavailable,
+
+  /// iPhone yang membuka lewat tab Safari: push hanya ada untuk aplikasi yang
+  /// dipasang ke Home Screen.
+  needsHomeScreen,
+
+  /// Izin ditolak; hanya bisa dibuka lagi dari pengaturan browser/iOS.
+  blocked,
+  off,
+  on,
+}
 
 class RestAlert {
   RestAlert._();
@@ -28,6 +52,87 @@ class RestAlert {
   static const _id = 4201;
 
   static bool get _supported => !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+
+  // ── Web Push ────────────────────────────────────────────────────────────
+
+  static const _vapidKey = String.fromEnvironment('VAPID_PUBLIC_KEY');
+
+  /// Token sesi Supabase untuk memanggil server alarm. Diisi `main.dart`.
+  static String? Function()? webAccessToken;
+
+  static bool _webScheduled = false;
+
+  static Future<WebRestPush> webState() async {
+    if (!kIsWeb || _vapidKey.isEmpty || !wp.webPushSupported()) {
+      // Safari di tab biasa tidak punya PushManager sama sekali.
+      if (kIsWeb && _vapidKey.isNotEmpty && wp.runningOnIos() && !wp.runningStandalone()) {
+        return WebRestPush.needsHomeScreen;
+      }
+      return WebRestPush.unavailable;
+    }
+    if (wp.runningOnIos() && !wp.runningStandalone()) return WebRestPush.needsHomeScreen;
+    final permission = wp.notificationPermission();
+    if (permission == 'denied') return WebRestPush.blocked;
+    if (permission != 'granted') return WebRestPush.off;
+    return await wp.currentWebPushSubscription() == null ? WebRestPush.off : WebRestPush.on;
+  }
+
+  /// Nyalakan dari ketukan. Mengembalikan keadaan sesudahnya.
+  static Future<WebRestPush> enableWeb() async {
+    wp.unlockWebAudio();
+    try {
+      await wp.subscribeWebPush(_vapidKey);
+    } catch (e) {
+      debugPrint('langganan push gagal: $e');
+    }
+    return webState();
+  }
+
+  static Future<WebRestPush> disableWeb() async {
+    try {
+      await wp.unsubscribeWebPush();
+    } catch (e) {
+      debugPrint('berhenti langganan: $e');
+    }
+    return webState();
+  }
+
+  static Future<bool> _postAlarm(Map<String, dynamic> body) async {
+    final token = webAccessToken?.call();
+    if (token == null) return false;
+    try {
+      final r = await http.post(
+        Uri.base.resolve('api/rest-alarm'),
+        headers: {'content-type': 'application/json', 'authorization': 'Bearer $token'},
+        body: jsonEncode(body),
+      );
+      return r.statusCode >= 200 && r.statusCode < 300;
+    } catch (e) {
+      debugPrint('alarm istirahat: $e');
+      return false;
+    }
+  }
+
+  static Future<void> _scheduleWeb(Duration after, String title, String body) async {
+    // Istirahat biasanya mulai dari ketukan centang set: saat yang tepat untuk
+    // menyiapkan bunyi di halaman.
+    wp.unlockWebAudio();
+    final sub = await wp.currentWebPushSubscription();
+    if (sub == null) return;
+    _webScheduled = await _postAlarm({
+      'action': 'schedule',
+      'delaySeconds': after.inSeconds.clamp(1, 1860),
+      'subscription': sub,
+      'title': title,
+      'body': body,
+    });
+  }
+
+  static Future<void> _cancelWeb() async {
+    if (!_webScheduled) return;
+    _webScheduled = false;
+    await _postAlarm({'action': 'cancel'});
+  }
 
   static Future<void> init() async {
     if (!_supported || _ready) return;
@@ -57,6 +162,7 @@ class RestAlert {
   /// Jadwalkan tanda istirahat selesai [after] dari sekarang. Jadwal yang
   /// lama diganti.
   static Future<void> schedule(Duration after, {required String title, required String body}) async {
+    if (kIsWeb) return _scheduleWeb(after, title, body);
     if (!_supported) return;
     await init();
     if (!_ready) return;
@@ -103,6 +209,7 @@ class RestAlert {
   }
 
   static Future<void> cancel() async {
+    if (kIsWeb) return _cancelWeb();
     if (!_supported || !_ready) return;
     try {
       await _plugin.cancel(id: _id);
@@ -114,6 +221,7 @@ class RestAlert {
   /// Istirahat habis selagi aplikasi terbuka: getar tiga kali dan satu bunyi,
   /// lalu batalkan notifikasi yang sedianya menyusul.
   static Future<void> ringNow() async {
+    if (kIsWeb) wp.webBeep();
     await cancel();
     for (var i = 0; i < 3; i++) {
       await HapticFeedback.heavyImpact();

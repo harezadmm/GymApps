@@ -2,6 +2,8 @@
 library;
 
 import 'package:flutter/material.dart';
+import '../../core/weights.dart';
+import '../../domain/units.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/charts.dart';
@@ -17,12 +19,14 @@ class BodyweightCard extends StatelessWidget {
 
   Future<void> _log(BuildContext context) async {
     final store = WorkoutScope.read(context);
-    final kg = await showDialog<double>(
+    final unit = store.settings.unit;
+    final latest = store.latestBodyweight;
+    final typed = await showDialog<double>(
       context: context,
-      builder: (_) => _BodyweightDialog(initial: store.latestBodyweight),
+      builder: (_) => _BodyweightDialog(initial: latest == null ? null : shown(latest, unit), unit: unit.label),
     );
-    if (kg == null || kg <= 0) return;
-    await store.logBodyweight(isoDate(DateTime.now()), kg);
+    if (typed == null || typed <= 0) return;
+    await store.logBodyweight(isoDate(DateTime.now()), toKg(typed, unit));
   }
 
   @override
@@ -36,11 +40,12 @@ class BodyweightCard extends StatelessWidget {
     String? change;
     if (log.length >= 2) {
       final first = log.first;
-      final d = last!.kg - first.kg;
+      final d = kgTo(last!.kg - first.kg, context.unit);
       final days = (DateTime.tryParse(last.date) ?? DateTime.now())
           .difference(DateTime.tryParse(first.date) ?? DateTime.now())
           .inDays;
-      change = t.bodyweightChange('${d >= 0 ? '+' : ''}${formatDelta(double.parse(d.toStringAsFixed(1)))}', days);
+      change = t.bodyweightChange(
+          '${d >= 0 ? '+' : ''}${formatDelta(double.parse(d.toStringAsFixed(1)))}', days, context.unitLabel);
     }
     return GymCard(
       radius: GymRadius.large,
@@ -51,7 +56,7 @@ class BodyweightCard extends StatelessWidget {
             children: [
               Expanded(child: SectionLabel(t.bodyweightTitle)),
               if (last != null)
-                Text('${formatWeight(last.kg)} kg',
+                Text(context.wUnit(last.kg),
                     style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: c.text)),
             ],
           ),
@@ -84,9 +89,10 @@ class BodyweightCard extends StatelessWidget {
 }
 
 class _BodyweightDialog extends StatefulWidget {
-  const _BodyweightDialog({this.initial});
+  const _BodyweightDialog({this.initial, this.unit = 'kg'});
 
   final double? initial;
+  final String unit;
 
   @override
   State<_BodyweightDialog> createState() => _BodyweightDialogState();
@@ -116,7 +122,7 @@ class _BodyweightDialogState extends State<_BodyweightDialog> {
         autofocus: true,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
         inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
-        decoration: const InputDecoration(suffixText: 'kg'),
+        decoration: InputDecoration(suffixText: widget.unit),
         onSubmitted: (_) => _submit(),
       ),
       actions: [

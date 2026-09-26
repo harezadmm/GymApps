@@ -6,6 +6,8 @@
 library;
 
 import 'package:flutter/material.dart';
+import '../../core/weights.dart';
+import '../../domain/units.dart';
 
 import '../../core/format.dart';
 import '../../core/strings.dart';
@@ -100,9 +102,9 @@ class HomeScreen extends StatelessWidget {
           children: [
             Expanded(
               child: _StatTile(
-                value: recent.volume >= 1000
-                    ? '${(recent.volume / 1000).toStringAsFixed(1)} t'
-                    : '${formatDelta(recent.volume.roundToDouble())} kg',
+                value: kgTo(recent.volume, context.unit) >= 1000
+                    ? context.volume(recent.volume)
+                    : '${formatDelta(kgTo(recent.volume, context.unit).roundToDouble())} ${context.unitLabel}',
                 label: t.volume7d,
               ),
             ),
@@ -352,10 +354,12 @@ class _NextSessionCard extends StatelessWidget {
                         Builder(builder: (context) {
                           // Target yang sama persis dengan yang akan terbuka
                           // di layar sesi — dihitung dengan fungsi yang sama.
-                          final plan = planExercise(cfg, history, routineDefault: routine.policy);
+                          final unit = context.unit;
+                          final plan = planExercise(configIn(cfg, unit), historyIn(history, unit),
+                              routineDefault: routine.policy, unit: unit.label);
                           final work = plan.sets.firstWhere((s) => !s.isWarmup, orElse: () => const SetRow());
                           final target = work.weight > 0
-                              ? '${formatWeight(work.weight)} kg × ${work.reps}'
+                              ? '${formatWeight(work.weight)} ${context.unitLabel} × ${work.reps}'
                               : '${plan.sets.where((s) => !s.isWarmup).length} × ${work.reps}';
                           return Padding(
                             padding: const EdgeInsets.symmetric(vertical: 8),
