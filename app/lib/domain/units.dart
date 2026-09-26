@@ -60,18 +60,21 @@ WorkoutEntry _entry(WorkoutEntry e, _Scale f) => WorkoutEntry(
 
 Workout _workout(Workout w, _Scale f) => w.copyWith(entries: [for (final e in w.entries) _entry(e, f)]);
 
+/// Pembulatan angka dalam satuan tampilan: 0,01 kg, 0,1 lb. Cukup supaya
+/// 135 lb yang tersimpan sebagai 61,23 kg kembali tepat 135 dan tetap duduk
+/// di grid pelat 5 lb, tanpa menulis "121.25 lb" untuk 55 kg.
+double _inUnit(double kg, WeightUnit u) => _round(kgTo(kg, u), u == WeightUnit.kg ? 100 : 10);
+
 /// Riwayat dalam satuan tampilan, untuk engine progresi dan layar sesi.
-/// Dibulatkan ke 0,01 supaya 135 lb yang tersimpan sebagai kg kembali 135,
-/// bukan 134,99999, dan tetap duduk di grid pelat 5 lb.
 List<Workout> historyIn(List<Workout> kgHistory, WeightUnit u) {
   if (u == WeightUnit.kg) return kgHistory;
-  double f(double kg) => _round(kgTo(kg, u), 100);
+  double f(double kg) => _inUnit(kg, u);
   return [for (final w in kgHistory) _workout(w, f)];
 }
 
 /// Konfigurasi rutinitas (kg) → satuan tampilan.
 ExerciseConfig configIn(ExerciseConfig kgConfig, WeightUnit u) =>
-    u == WeightUnit.kg ? kgConfig : _config(kgConfig, (kg) => _round(kgTo(kg, u), 100));
+    u == WeightUnit.kg ? kgConfig : _config(kgConfig, (kg) => _inUnit(kg, u));
 
 /// Konfigurasi dalam satuan tampilan → kg untuk disimpan.
 ExerciseConfig configToKg(ExerciseConfig c, WeightUnit u) =>
@@ -80,10 +83,10 @@ ExerciseConfig configToKg(ExerciseConfig c, WeightUnit u) =>
 /// Set dalam satuan [from] → satuan [to]. Untuk draft sesi yang dipulihkan
 /// setelah satuannya diganti.
 SetRow setBetween(SetRow s, WeightUnit from, WeightUnit to) =>
-    from == to ? s : _set(s, (v) => _round(kgTo(toKg(v, from), to), 100));
+    from == to ? s : _set(s, (v) => _inUnit(toKg(v, from), to));
 
 ExerciseConfig configBetween(ExerciseConfig c, WeightUnit from, WeightUnit to) =>
-    from == to ? c : _config(c, (v) => _round(kgTo(toKg(v, from), to), 100));
+    from == to ? c : _config(c, (v) => _inUnit(toKg(v, from), to));
 
 /// Sesi yang dicatat dalam satuan tampilan → kg untuk disimpan.
 Workout workoutToKg(Workout w, WeightUnit u) => u == WeightUnit.kg ? w : _workout(w, (v) => toKg(v, u));

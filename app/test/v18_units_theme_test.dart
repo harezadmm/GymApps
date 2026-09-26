@@ -73,7 +73,7 @@ void main() {
 
     test('draft sesi dalam kg dibuka setelah pindah ke lb', () {
       const s = SetRow(weight: 100, reps: 5);
-      expect(setBetween(s, WeightUnit.kg, WeightUnit.lb).weight, 220.46);
+      expect(setBetween(s, WeightUnit.kg, WeightUnit.lb).weight, 220.5);
       expect(setBetween(const SetRow(weight: 0, reps: 8), WeightUnit.kg, WeightUnit.lb).weight, 0);
     });
 
