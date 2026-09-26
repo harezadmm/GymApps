@@ -206,8 +206,12 @@ class SessionScreen extends StatefulWidget {
 
 class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserver {
   final _rest = RestTimer();
-  /// Satuan angka di layar ini. Dipegang saat layar dibuka.
+  /// Satuan angka di layar ini. Kalau satuan diganti di Profil selagi sesi
+  /// terbuka, semua angka sesi dikonversi (lihat [didChangeDependencies]) —
+  /// tanpa itu angka kg akan disimpan dengan faktor lb.
   WeightUnit _unit = WeightUnit.kg;
+  bool _unitKnown = false;
+  late List<Workout> _history = widget.history;
 
   final _elapsed = Stopwatch()..start();
   late final List<SessionExercise> _exercises = List.of(widget.exercises);
@@ -268,7 +272,21 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
   void didChangeDependencies() {
     super.didChangeDependencies();
     _store ??= WorkoutScope.read(context);
-    _unit = _store?.settings.unit ?? WeightUnit.kg;
+    final unit = context.unit;
+    if (!_unitKnown) {
+      _unit = unit;
+      _unitKnown = true;
+    } else if (unit != _unit) {
+      final from = _unit;
+      for (final ex in _exercises) {
+        ex.config = configBetween(ex.config, from, unit);
+        for (var i = 0; i < ex.sets.length; i++) {
+          ex.sets[i] = setBetween(ex.sets[i], from, unit);
+        }
+      }
+      _history = historyBetween(_history, from, unit);
+      _unit = unit;
+    }
   }
 
   /// Browser melepas wake lock setiap kali halaman disembunyikan (pindah
@@ -522,7 +540,7 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
         routineName: widget.routineName,
         routineId: drifted ? widget.routineId : null,
         exercises: _exercises,
-        history: widget.history,
+        history: _history,
         elapsed: _elapsedTotal,
         dateLabel: _dateLabel(context),
         addedSetTo: drifted ? _addedSetTo : null,
@@ -653,12 +671,12 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
     if (picked == null || !mounted) return;
     final catalog = await ExerciseCatalog.load();
     if (!mounted) return;
-    final cfg = configForAdded(picked.id, widget.history);
+    final cfg = configForAdded(picked.id, _history);
     setState(() {
       for (final e in _exercises) {
         e.expanded = false;
       }
-      _exercises.add(buildSessionExercise(catalog, cfg, widget.history, settings: _store?.settings, expanded: true));
+      _exercises.add(buildSessionExercise(catalog, cfg, _history, settings: _store?.settings, expanded: true));
     });
   }
 
@@ -680,9 +698,9 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
         if (picked == null || !mounted) return;
         final catalog = await ExerciseCatalog.load();
         if (!mounted) return;
-        final cfg = configForAdded(picked.id, widget.history);
+        final cfg = configForAdded(picked.id, _history);
         setState(() => _exercises[_exercises.indexOf(ex)] =
-            buildSessionExercise(catalog, cfg, widget.history, settings: _store?.settings, expanded: true));
+            buildSessionExercise(catalog, cfg, _history, settings: _store?.settings, expanded: true));
       case _ExerciseAction.addWarmup:
         final firstWork = ex.sets.firstWhere((s) => !s.isWarmup, orElse: () => const SetRow());
         final inc = weightIncrement(ex.config, _unit.label);
