@@ -9,6 +9,8 @@ library;
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import '../core/gym_icons.dart';
+import '../domain/settings.dart';
 import 'package:flutter/services.dart' show rootBundle;
 
 String _title(String s) =>
@@ -73,19 +75,17 @@ class Exercise {
         if (equipment.isNotEmpty) _title(equipment),
       ].join(' · ');
 
-  /// Ikon per bagian tubuh. Katalognya tidak membawa gambar yang di-bundle —
-  /// hanya nama berkas gif di server openGym — jadi baris pakai ikon, bukan
-  /// kotak kosong yang menunggu gambar yang tidak akan datang.
-  IconData get icon => switch (bodyPart) {
-        'back' => Icons.rowing,
-        'chest' => Icons.fitness_center,
-        'upper legs' || 'lower legs' => Icons.directions_run,
-        'shoulders' => Icons.sports_martial_arts,
-        'upper arms' || 'lower arms' => Icons.sports_gymnastics,
-        'waist' => Icons.self_improvement,
-        'cardio' => Icons.monitor_heart_outlined,
-        _ => Icons.fitness_center,
-      };
+  /// Ikon dari alat yang dipakai (IconScout, lihat [GymIcons]). Bagian
+  /// tubuh sudah tertulis di baris yang sama ("Chest · Barbell"); ikon alat
+  /// membedakan Barbell Bench Press dari Dumbbell Bench Press sekilas, yang
+  /// dulu sama-sama tampil sebagai ikon dada.
+  IconData get icon {
+    if (bodyPart == 'cardio') return GymIcons.cardio;
+    for (final e in equipmentGroups.entries) {
+      if (e.value.contains(equipment)) return GymIcons.forGroup(e.key);
+    }
+    return GymIcons.bodyweight;
+  }
 }
 
 /// Kata yang orang ketik berbeda dari yang tertulis di katalog. Setiap kata di

@@ -422,6 +422,7 @@ class SelectRow extends StatelessWidget {
     this.detail,
     this.square = false,
     this.dimWhenOff = false,
+    this.icon,
   });
 
   final String title;
@@ -429,6 +430,9 @@ class SelectRow extends StatelessWidget {
   final String? detail;
   final bool selected;
   final VoidCallback onTap;
+
+  /// Ikon di kiri judul, misalnya gambar alat di pemilih alat gym.
+  final IconData? icon;
 
   /// Kotak untuk pilihan ganda, lingkaran untuk pilihan tunggal — bedanya
   /// memberi tahu "boleh pilih banyak" tanpa satu kata pun.
@@ -451,6 +455,18 @@ class SelectRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
         child: Row(
           children: [
+            if (icon != null) ...[
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: off ? c.bgNested : c.accentSoft,
+                  borderRadius: BorderRadius.circular(GymRadius.small),
+                ),
+                child: Icon(icon, size: 22, color: off ? c.text3 : c.accent),
+              ),
+              const SizedBox(width: 12),
+            ],
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,

@@ -401,6 +401,7 @@ class Strings {
   String get dark => _('Dark', 'Gelap');
   String get accentColour => _('Accent colour', 'Warna aksen');
   String get themeTitle => _('Theme', 'Tema');
+  String get noStrengthYet => _('No lifts logged yet', 'Belum ada angkatan tercatat');
   String get restPushTitle => _('Rest alerts on lock screen', 'Tanda istirahat di layar terkunci');
   String get restPushOn => _('On', 'Nyala');
   String get restPushOff => _('Off', 'Mati');

@@ -6,6 +6,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import '../../core/illustration.dart';
 import '../../core/weights.dart';
 import '../../domain/units.dart';
 
@@ -327,11 +328,13 @@ class _StatsScreenState extends State<StatsScreen> {
 
     if (logged.isEmpty || catalog == null) {
       return [
-        NoteBanner(
-          text: catalog == null ? t.readingSessions : t.noSetsInRange,
-          icon: Icons.info_outline,
-          tone: c.text2,
-        ),
+        if (catalog == null)
+          NoteBanner(text: t.readingSessions, icon: Icons.info_outline, tone: c.text2)
+        else
+          GymCard(
+            radius: GymRadius.large,
+            child: EmptyState(art: GymArt.emptyStats, title: t.noStrengthYet, body: t.noSetsInRange),
+          ),
         const SizedBox(height: 14),
         const BodyweightCard(),
       ];

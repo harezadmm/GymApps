@@ -2,6 +2,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import '../../core/gym_icons.dart';
 import '../../core/weights.dart';
 import '../../domain/units.dart';
 import 'package:flutter/services.dart';
@@ -77,7 +78,7 @@ class BodyweightCard extends StatelessWidget {
           const SizedBox(height: 12),
           GymButton(
             label: t.logBodyweight,
-            icon: Icons.monitor_weight_outlined,
+            icon: GymIcons.scale,
             tone: GymButtonTone.neutral,
             height: 42,
             onPressed: () => _log(context),
