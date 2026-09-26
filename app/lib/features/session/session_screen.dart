@@ -1112,7 +1112,7 @@ class _ExerciseCard extends StatelessWidget {
                   color: c.surface2,
                   borderRadius: BorderRadius.circular(GymRadius.small),
                 ),
-                child: Icon(ex.icon, size: 20, color: c.text2),
+                child: Icon(ex.icon, size: 24, color: c.text2),
               ),
               const SizedBox(width: 12),
               Expanded(

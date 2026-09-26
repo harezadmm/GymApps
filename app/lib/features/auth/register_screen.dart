@@ -12,6 +12,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import '../../core/illustration.dart';
 
 import '../../data/account_store.dart';
 import '../../core/strings.dart';
@@ -123,17 +124,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Berkas yang sama dengan ikon di layar Home ponsel, bukan
-                // gambar kedua yang perlahan menyimpang dari yang pertama.
-                Image.asset(
-                  'assets/brand/app_icon.png',
-                  width: 56,
-                  height: 56,
-                  // 256 px turun ke 56 pt; tanpa ini tepinya bergerigi.
-                  filterQuality: FilterQuality.medium,
-                ),
+                const Center(child: GymIllustration(GymArt.liftBarbell, height: 170)),
                 const SizedBox(height: 18),
-                Text(t.createAccount, style: Theme.of(context).textTheme.displaySmall),
+                Row(children: [
+                  // Berkas yang sama dengan ikon di layar Home ponsel, bukan
+                  // gambar kedua yang perlahan menyimpang dari yang pertama.
+                  Image.asset(
+                    'assets/brand/app_icon.png',
+                    width: 40,
+                    height: 40,
+                    // 256 px turun ke 40 pt; tanpa ini tepinya bergerigi.
+                    filterQuality: FilterQuality.medium,
+                  ),
+                  const SizedBox(width: 12),
+                  Flexible(child: Text(t.createAccount, style: Theme.of(context).textTheme.displaySmall)),
+                ]),
                 const SizedBox(height: 8),
                 Text(t.createAccountSub,
                     style: TextStyle(fontSize: 14, height: 1.45, color: c.text2)),

@@ -7,6 +7,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import '../../core/illustration.dart';
 import '../../core/weights.dart';
 
 import '../../core/charts.dart';
@@ -187,25 +188,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
 class _EmptyHistory extends StatelessWidget {
   @override
-  Widget build(BuildContext context) {
-    final c = context.gym;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 34),
-      child: Column(
-        children: [
-          Icon(Icons.history, size: 30, color: c.text3),
-          const SizedBox(height: 12),
-          Text(context.t.noSessionsYet, style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 5),
-          Text(
-            context.t.noSessionsYetHint,
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 13, height: 1.4, color: c.text2),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => EmptyState(
+        art: GymArt.emptyHistory,
+        title: context.t.noSessionsYet,
+        body: context.t.noSessionsYetHint,
+      );
 }
 
 class _SessionRow extends StatelessWidget {

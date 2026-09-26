@@ -7,6 +7,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import '../../core/gym_icons.dart';
 
 import '../../core/strings.dart';
 import '../../core/theme.dart';
@@ -29,6 +30,7 @@ class EquipmentGroupsList extends StatelessWidget {
         for (final key in equipmentGroups.keys)
           SelectRow(
             title: t.equipmentGroup(key),
+            icon: GymIcons.forGroup(key),
             selected: selected.contains(key),
             square: true,
             dimWhenOff: true,

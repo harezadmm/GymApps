@@ -400,7 +400,7 @@ class _ExerciseRow extends StatelessWidget {
                 borderRadius: BorderRadius.circular(GymRadius.small),
                 border: Border.all(color: c.border),
               ),
-              child: Icon(exercise.icon, size: 20, color: c.text2),
+              child: Icon(exercise.icon, size: 24, color: c.text2),
             ),
             const SizedBox(width: 12),
             Expanded(
