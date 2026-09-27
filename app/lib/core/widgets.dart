@@ -223,7 +223,7 @@ class StatBlock extends StatelessWidget {
             alignment: Alignment.centerLeft,
             child: Text(value,
                 style: TextStyle(
-                    fontFamily: 'BarlowCondensed', fontSize: 38, fontWeight: FontWeight.w800, height: 1.0, color: c.text)),
+                    fontFamily: 'Manrope', fontSize: 28, fontWeight: FontWeight.w800, height: 1.05, letterSpacing: -0.6, color: c.text)),
           ),
           if (hint != null) ...[
             const SizedBox(height: 3),

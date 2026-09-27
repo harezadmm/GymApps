@@ -22,7 +22,7 @@ token ada di `app/lib/core/theme.dart`, komponennya di `app/lib/core/widgets.dar
 | Kolom cari | kotak gelap membulat, ikon saring di kanan | `_SearchField` Library; ikon saring = "Alat saya" |
 | Grafik | batang berwarna aksen | ramp peta panas & kalender diturunkan dari aksen (`_ramp`) |
 | Ikon antarmuka | garis membulat satu keluarga | paket "Basic UI" IconScout di font `GymIcons` (nav, header, setelan, aksi) — tidak ada lagi ikon Material di layar utama |
-| Judul & angka besar | condensed tebal | Barlow Condensed (`displaySmall`, `headlineMedium`, `titleLarge`, angka `StatBlock`) |
+| Judul & angka besar | sans membulat geometris | Manrope (`displaySmall`, `headlineMedium`, `titleLarge`, angka `StatBlock`) |
 | Kartu hero | figur di kanan, dipotong tepi kartu, statistik mini berikon | `_HeroFigure` + `_MiniStat` di Home |
 | Kategori bagian tubuh | cakram berikon | `MuscleGlyph`: siluet peta otot Stats dengan kelompok yang disorot |
 
@@ -35,7 +35,7 @@ token ada di `app/lib/core/theme.dart`, komponennya di `app/lib/core/widgets.dar
   (`_fillFor`), ramp grafik dan `hues.violet` ikut aksen.
 - Tema terang memakai palet sendiri (`GymColors.light`); aksen digelapkan
   lewat `lightAccent` seperti sebelumnya.
-- Teks isi tetap Inter; judul Barlow Condensed. Keduanya di-bundle (offline-first).
+- Teks isi tetap Inter; judul Manrope. Keduanya di-bundle (offline-first).
 
 ## Yang tidak diambil dari referensi
 

@@ -57,9 +57,9 @@ NODE_PATH=D:/sdk/tmp/iconfont/node_modules node "D:/Desktop/CODE PROJECT/GymApps
 python "D:/Desktop/CODE PROJECT/GymApps/scripts/gen-gym-icons-dart.py"
 ```
 
-## Font judul — Barlow Condensed (OFL, `app/assets/fonts/BarlowCondensed-*.ttf`)
+## Font judul — Manrope (OFL, `app/assets/fonts/Manrope-*.ttf`)
 
-Bukan dari IconScout; dari Google Fonts (lisensi di `OFL-BarlowCondensed.txt`).
+Bukan dari IconScout; dari Google Fonts (lisensi di `OFL-Manrope.txt`).
 Dipakai untuk judul layar, nama rutinitas, dan angka besar di blok statistik.
 
 ## Ilustrasi (`app/assets/illustrations/`)
