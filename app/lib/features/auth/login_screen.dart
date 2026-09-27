@@ -110,7 +110,7 @@ class _LoginScreenState extends State<LoginScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Center(child: GymIllustration(GymArt.liftOverhead, height: 170)),
+                const Center(child: GymIllustration(GymArt.liftOverhead, height: 170, blob: true)),
                 const SizedBox(height: 18),
                 Row(children: [
                   // Berkas yang sama dengan ikon di layar Home ponsel, bukan
