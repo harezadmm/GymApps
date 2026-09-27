@@ -6,6 +6,7 @@ const svg2ttf = require('svg2ttf');
 const fs = require('fs');
 const path = require('path');
 const src = process.argv[2], out = process.argv[3];
+const jsonOut = process.argv[4] || out.replace('.ttf', '.json');
 const names = fs.readdirSync(src).filter((f) => f.endsWith('.svg')).sort();
 const stream = new SVGIcons2SVGFontStream({ fontName: 'GymIcons', normalize: true, fontHeight: 1000, descent: 0, log: () => {} });
 let svgFont = '';
@@ -15,7 +16,7 @@ stream.on('end', () => {
   fs.writeFileSync(out, Buffer.from(ttf.buffer));
   const map = {};
   names.forEach((n, i) => (map[n.replace('.svg', '')] = 0xe900 + i));
-  fs.writeFileSync(out.replace('.ttf', '.json'), JSON.stringify(map, null, 2));
+  fs.writeFileSync(jsonOut, JSON.stringify(map, null, 2));
   console.log('ok', out, Object.keys(map).length, 'glyphs');
 });
 names.forEach((n, i) => {

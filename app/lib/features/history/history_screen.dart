@@ -7,6 +7,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import '../../core/gym_icons.dart';
 import '../../core/illustration.dart';
 import '../../core/weights.dart';
 
@@ -62,7 +63,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
             // Kalender bulanan belum ada — kotak aktivitas di bawah sudah
             // menjawab "kapan saja aku latihan". Tombol + mencatat sesi baru.
             SquareIconButton(
-              icon: Icons.add,
+              icon: GymIcons.plus,
               tone: c.accent,
               onPressed: () => openFreestyleSession(context, context.t.freestyle),
             ),

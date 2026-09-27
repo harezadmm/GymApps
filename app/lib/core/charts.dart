@@ -381,3 +381,128 @@ class _BodyPainter extends CustomPainter {
       old.levels.length != levels.length ||
       Iterable.generate(levels.length).any((i) => old.levels[i] != levels[i]);
 }
+
+/// Glyph bagian tubuh untuk kategori Library: siluet tubuh dari peta otot
+/// yang sama dengan layar Stats, dengan kelompok otot yang dimaksud diwarnai.
+///
+/// Ini pengganti ikon anatomi dari IconScout yang terlalu rinci untuk 24 px.
+/// Bentuknya sudah ada di aplikasi ([bodyHeatmapPaths]), jadi tidak ada aset
+/// tambahan, dan gambarnya sama dengan yang orang lihat di Statistik.
+class MuscleGlyph extends StatelessWidget {
+  const MuscleGlyph({super.key, required this.groups, this.size = 26, this.color, this.base});
+
+  /// Indeks [MuscleGroup] yang disorot; kosong = seluruh tubuh (kardio).
+  final List<int> groups;
+  final double size;
+  final Color? color;
+  final Color? base;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gym;
+    return SizedBox(
+      width: size,
+      height: size,
+      child: CustomPaint(
+        painter: _MuscleGlyphPainter(
+          groups: groups,
+          color: color ?? c.accent,
+          base: base ?? (color ?? c.accent).withValues(alpha: 0.30),
+        ),
+      ),
+    );
+  }
+}
+
+class _MuscleGlyphPainter extends CustomPainter {
+  _MuscleGlyphPainter({required this.groups, required this.color, required this.base});
+
+  final List<int> groups;
+  final Color color;
+  final Color base;
+
+  /// Figur depan menempati separuh kiri artboard 320×260, figur belakang
+  /// separuh kanan. Pilih figur yang memuat lebih banyak bentuk yang disorot.
+  static (int, int) _rangeOf(bool front) => front ? (0, 48) : (48, bodyHeatmapPaths.length);
+
+  Rect _bounds(int from, int to) {
+    var l = 1.0, t = 1.0, r = 0.0, b = 0.0;
+    for (var i = from; i < to; i++) {
+      if (bodyHeatmapGroups[i] != -1) continue;
+      final enc = bodyHeatmapPaths[i];
+      var k = 0;
+      while (k < enc.length) {
+        final op = enc[k].toInt();
+        final n = op == 0 || op == 1 ? 1 : (op == 2 ? 3 : 0);
+        for (var j = 0; j < n; j++) {
+          final x = enc[k + 1 + j * 2], y = enc[k + 2 + j * 2];
+          if (x < l) l = x;
+          if (x > r) r = x;
+          if (y < t) t = y;
+          if (y > b) b = y;
+        }
+        k += 1 + n * 2;
+      }
+    }
+    return Rect.fromLTRB(l, t, r, b);
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    var frontHits = 0, backHits = 0;
+    for (var i = 0; i < bodyHeatmapGroups.length; i++) {
+      if (groups.contains(bodyHeatmapGroups[i])) {
+        if (i < 48) {
+          frontHits++;
+        } else {
+          backHits++;
+        }
+      }
+    }
+    final front = groups.isEmpty || frontHits >= backHits;
+    final (from, to) = _rangeOf(front);
+    final box = _bounds(from, to);
+    // Artboard 320×260: sumbu x dan y punya skala berbeda.
+    final wPx = box.width * 320, hPx = box.height * 260;
+    final scale = math.min(size.width / wPx, size.height / hPx);
+    final dx = (size.width - wPx * scale) / 2 - box.left * 320 * scale;
+    final dy = (size.height - hPx * scale) / 2 - box.top * 260 * scale;
+    Offset p(double x, double y) => Offset(dx + x * 320 * scale, dy + y * 260 * scale);
+
+    for (final pass in [false, true]) {
+      for (var i = from; i < to; i++) {
+        final g = bodyHeatmapGroups[i];
+        final hit = groups.isEmpty ? g != -1 : groups.contains(g);
+        if (pass != hit) continue;
+        if (!pass && g != -1) continue; // bentuk otot lain: tidak digambar, cukup siluet
+        final enc = bodyHeatmapPaths[i];
+        final path = Path();
+        var k = 0;
+        while (k < enc.length) {
+          switch (enc[k].toInt()) {
+            case 0:
+              final o = p(enc[k + 1], enc[k + 2]);
+              path.moveTo(o.dx, o.dy);
+              k += 3;
+            case 1:
+              final o = p(enc[k + 1], enc[k + 2]);
+              path.lineTo(o.dx, o.dy);
+              k += 3;
+            case 2:
+              final a = p(enc[k + 1], enc[k + 2]), b = p(enc[k + 3], enc[k + 4]), o = p(enc[k + 5], enc[k + 6]);
+              path.cubicTo(a.dx, a.dy, b.dx, b.dy, o.dx, o.dy);
+              k += 7;
+            default:
+              path.close();
+              k += 1;
+          }
+        }
+        canvas.drawPath(path, Paint()..color = hit ? color : base..isAntiAlias = true);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_MuscleGlyphPainter old) =>
+      old.color != color || old.base != base || old.groups.join(',') != groups.join(',');
+}

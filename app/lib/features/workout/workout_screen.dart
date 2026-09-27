@@ -2,6 +2,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import '../../core/gym_icons.dart';
 
 import '../../core/format.dart';
 import '../../core/motion.dart';
@@ -99,7 +100,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         ScreenHeader(
           title: context.t.workout,
           actions: [
-            SquareIconButton(icon: Icons.add, tone: c.accent, onPressed: _newRoutine),
+            SquareIconButton(icon: GymIcons.plus, tone: c.accent, onPressed: _newRoutine),
           ],
         ),
         SegmentedTabs(
@@ -159,7 +160,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                   MaterialPageRoute(builder: (_) => const ExerciseLibraryScreen()),
                 ),
                 borderRadius: BorderRadius.circular(GymRadius.small),
-                child: SizedBox(width: 42, height: 42, child: Icon(Icons.menu_book_outlined, size: 20, color: c.accent)),
+                child: SizedBox(width: 42, height: 42, child: Icon(GymIcons.dumbbell, size: 20, color: c.accent)),
               ),
             ),
           ],
@@ -172,7 +173,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         children: [
           Expanded(
             child: _StartCard(
-              icon: Icons.edit_note_outlined,
+              icon: GymIcons.edit,
               title: context.t.startEmpty,
               detail: context.t.freestyleLog,
               onTap: () => openFreestyleSession(context, context.t.freestyle),
@@ -181,7 +182,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
           const SizedBox(width: 10),
           Expanded(
             child: _StartCard(
-              icon: Icons.playlist_play,
+              icon: GymIcons.play,
               title: context.t.fromProgram,
               detail: next == null ? context.t.noProgramYet : context.t.isNext(next.routine.name),
               onTap: next == null ? () => setState(() => _tab = 1) : () => _start(next.routine),
@@ -311,7 +312,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
             const SizedBox(height: 14),
             GymButton(
               label: t.changeProgram.toUpperCase(),
-              icon: Icons.swap_horiz,
+              icon: GymIcons.dataTransfer,
               tone: GymButtonTone.neutral,
               height: 44,
               onPressed: _changeProgram,
@@ -396,7 +397,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                 onPressed: program.minRestDays >= 7
                     ? null
                     : () => store.updateProgram(program.copyWith(minRestDays: program.minRestDays + 1)),
-                icon: Icon(Icons.add, color: c.accent),
+                icon: Icon(GymIcons.plus, color: c.accent),
                 tooltip: t.more,
               ),
             ],
@@ -475,7 +476,7 @@ class _AddRoutineRow extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.add, size: 17, color: c.accent),
+              Icon(GymIcons.plus, size: 17, color: c.accent),
               const SizedBox(width: 8),
               Text(context.t.newRoutine,
                   style: TextStyle(
@@ -691,7 +692,7 @@ class _RoutineRow extends StatelessWidget {
                 ),
               ),
               PopupMenuButton<_RoutineAction>(
-                icon: Icon(Icons.more_vert, size: 18, color: c.text2),
+                icon: Icon(GymIcons.moreVertical, size: 18, color: c.text2),
                 tooltip: context.t.routineActions,
                 color: c.surface2,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(GymRadius.control)),

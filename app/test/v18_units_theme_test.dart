@@ -3,6 +3,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gymapps/core/format.dart';
 import 'package:gymapps/core/strings.dart';
 import 'package:gymapps/core/theme.dart';
 import 'package:gymapps/core/weights.dart';
@@ -76,6 +77,14 @@ void main() {
       const s = SetRow(weight: 100, reps: 5);
       expect(setBetween(s, WeightUnit.kg, WeightUnit.lb).weight, 220.5);
       expect(setBetween(const SetRow(weight: 0, reps: 8), WeightUnit.kg, WeightUnit.lb).weight, 0);
+    });
+
+    test('kg hasil konversi dari lb tampil dibulatkan, bukan pecahan panjang', () {
+      expect(formatWeight(toKg(140, WeightUnit.lb)), '63.5');
+      expect(formatWeight(63.502931800000006), '63.5');
+      expect(formatWeight(72.5), '72.5');
+      expect(formatWeight(65), '65');
+      expect(formatWeight(61.235), '61.24');
     });
 
     test('volume: ton untuk kg, ribuan lb untuk lb', () {

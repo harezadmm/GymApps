@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'core/gym_icons.dart';
 import 'package:flutter/services.dart' show SystemUiOverlayStyle;
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -596,11 +597,13 @@ class _HomeShellState extends State<HomeShell> {
     // e1RM, bukan detak. Labelnya tidak digambar (referensi memakai nav pil
     // berisi ikon saja) tapi tetap ada untuk pembaca layar dan tooltip.
     final tabs = <(IconData, IconData, String)>[
-      (Icons.fitness_center_outlined, Icons.fitness_center, t.workout),
-      (Icons.home_outlined, Icons.home, t.home),
-      (Icons.insights_outlined, Icons.insights, t.stats),
-      (Icons.history_outlined, Icons.history, t.history),
-      (Icons.person_outline, Icons.person, t.profile),
+      (GymIcons.dumbbell, GymIcons.dumbbell, t.workout),
+      (GymIcons.home, GymIcons.home, t.home),
+      (GymIcons.chart, GymIcons.chart, t.stats),
+      (GymIcons.clock, GymIcons.clock, t.history),
+      // Referensi memakai roda gigi untuk tab terakhir; tab Profil di sini
+      // memang berisi setelan.
+      (GymIcons.settings, GymIcons.settings, t.profile),
     ];
     return Scaffold(
       backgroundColor: c.bg,
@@ -681,16 +684,31 @@ class _FloatingNav extends StatelessWidget {
                         child: InkWell(
                           onTap: () => onChanged(i),
                           borderRadius: BorderRadius.circular(GymRadius.nav),
-                          child: Center(
-                            child: AnimatedSwitcher(
-                              duration: GymMotion.of(context, GymMotion.quick),
-                              child: Icon(
-                                i == index ? activeIcon : icon,
-                                key: ValueKey(i == index),
-                                size: 26,
-                                color: i == index ? c.accent : c.text2,
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              AnimatedSwitcher(
+                                duration: GymMotion.of(context, GymMotion.quick),
+                                child: Icon(
+                                  i == index ? activeIcon : icon,
+                                  key: ValueKey(i == index),
+                                  size: 26,
+                                  color: i == index ? c.accent : c.text2,
+                                ),
                               ),
-                            ),
+                              const SizedBox(height: 5),
+                              // Paket ikonnya garis saja, tanpa versi terisi;
+                              // tab aktif ditandai warna dan titik kecil.
+                              AnimatedContainer(
+                                duration: GymMotion.of(context, GymMotion.quick),
+                                width: 5,
+                                height: 5,
+                                decoration: BoxDecoration(
+                                  color: i == index ? c.accent : Colors.transparent,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ),

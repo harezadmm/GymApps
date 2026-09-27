@@ -6,6 +6,8 @@
 library;
 
 import 'package:flutter/material.dart';
+import '../../core/gym_icons.dart';
+import '../../core/charts.dart';
 import '../../core/motion.dart';
 
 import '../../core/format.dart';
@@ -44,17 +46,18 @@ class _ExerciseLibraryScreenState extends State<ExerciseLibraryScreen> {
     'chest', 'back', 'shoulders', 'upper arms', 'lower arms', 'upper legs', 'lower legs', 'waist', 'cardio',
   ];
 
-  static IconData _bodyPartIcon(String bp) => switch (bp) {
-        'chest' => Icons.shield_outlined,
-        'back' => Icons.rowing,
-        'shoulders' => Icons.sports_martial_arts,
-        'upper arms' => Icons.sports_gymnastics,
-        'lower arms' => Icons.front_hand_outlined,
-        'upper legs' => Icons.directions_run,
-        'lower legs' => Icons.directions_walk,
-        'waist' => Icons.self_improvement,
-        'cardio' => Icons.monitor_heart_outlined,
-        _ => Icons.fitness_center,
+  /// Kelompok otot ([MuscleGroup] index) yang disorot di glyph tiap kategori.
+  /// Kardio kosong = seluruh tubuh.
+  static List<int> _bodyPartGroups(String bp) => switch (bp) {
+        'chest' => const [0],
+        'back' => const [4, 5, 6],
+        'shoulders' => const [3],
+        'upper arms' => const [7, 8],
+        'lower arms' => const [9],
+        'upper legs' => const [10, 11, 12],
+        'lower legs' => const [13],
+        'waist' => const [1, 2],
+        _ => const [],
       };
 
   @override
@@ -198,7 +201,7 @@ class _ExerciseLibraryScreenState extends State<ExerciseLibraryScreen> {
                   ),
                   IconButton(
                     onPressed: () => _createCustom(''),
-                    icon: Icon(Icons.add, color: c.accent),
+                    icon: Icon(GymIcons.plus, color: c.accent),
                     tooltip: context.t.customExercise,
                   ),
                 ],
@@ -223,14 +226,14 @@ class _ExerciseLibraryScreenState extends State<ExerciseLibraryScreen> {
                 children: [
                   _CategoryDisc(
                     label: context.t.allBodyParts,
-                    icon: Icons.grid_view_rounded,
+                    icon: GymIcons.menu,
                     selected: _bodyPart == null,
                     onTap: () => setState(() => _bodyPart = null),
                   ),
                   for (final bp in _bodyParts)
                     _CategoryDisc(
                       label: context.t.bodyPart(bp),
-                      icon: _bodyPartIcon(bp),
+                      groups: _bodyPartGroups(bp),
                       selected: _bodyPart == bp,
                       onTap: () => setState(() => _bodyPart = _bodyPart == bp ? null : bp),
                     ),
@@ -379,13 +382,13 @@ class _SearchField extends StatelessWidget {
         decoration: InputDecoration(
           hintText: context.t.searchExercise,
           hintStyle: TextStyle(fontSize: 14.5, color: c.text3),
-          prefixIcon: Icon(Icons.search, size: 20, color: c.text2),
+          prefixIcon: Icon(GymIcons.search, size: 20, color: c.text2),
           suffixIcon: onFilter == null
               ? null
               : IconButton(
                   onPressed: onFilter,
                   tooltip: filterTooltip,
-                  icon: Icon(Icons.tune_rounded, size: 20, color: filterOn ? c.accent : c.text3),
+                  icon: Icon(GymIcons.filter, size: 20, color: filterOn ? c.accent : c.text3),
                 ),
           filled: true,
           fillColor: c.surface,
@@ -402,16 +405,33 @@ class _SearchField extends StatelessWidget {
 
 /// Satu kategori: cakram ikon bulat dengan label di bawahnya.
 class _CategoryDisc extends StatelessWidget {
-  const _CategoryDisc({required this.label, required this.icon, required this.selected, required this.onTap});
+  const _CategoryDisc({required this.label, required this.selected, required this.onTap, this.icon, this.groups});
 
   final String label;
-  final IconData icon;
+  final IconData? icon;
+
+  /// Kelompok otot untuk glyph tubuh; dipakai kalau [icon] null.
+  final List<int>? groups;
   final bool selected;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final c = context.gym;
+    final disc = icon != null
+        ? IconDisc(icon!, size: 50, iconSize: 23, filled: selected)
+        : Container(
+            width: 50,
+            height: 50,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(color: selected ? c.accentFill : c.tint(c.accent), shape: BoxShape.circle),
+            child: MuscleGlyph(
+              groups: groups ?? const [],
+              size: 36,
+              color: selected ? c.accentInk : c.accent,
+              base: selected ? c.accentInk.withValues(alpha: 0.30) : c.accent.withValues(alpha: 0.18),
+            ),
+          );
     return Semantics(
       button: true,
       selected: selected,
@@ -429,7 +449,7 @@ class _CategoryDisc extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                IconDisc(icon, size: 50, iconSize: 23, filled: selected),
+                disc,
                 const SizedBox(height: 6),
                 Text(label,
                     maxLines: 1,

@@ -6,6 +6,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import '../../core/illustration.dart';
 import '../../core/gym_icons.dart';
 import '../library/library_screen.dart';
 import '../stats/dashboard_screen.dart';
@@ -107,7 +108,7 @@ class HomeScreen extends StatelessWidget {
           Expanded(
             child: _QuickTile(
               label: t.otherSession,
-              icon: Icons.swap_horiz_rounded,
+              icon: GymIcons.dataTransfer,
               hue: c.hues.cyan,
               onTap: !hasProgram || store.nextSessionOn(now) == null
                   ? null
@@ -122,7 +123,7 @@ class HomeScreen extends StatelessWidget {
           Expanded(
             child: _QuickTile(
               label: t.freestyle,
-              icon: Icons.edit_note_rounded,
+              icon: GymIcons.edit,
               hue: c.hues.pink,
               onTap: () => openFreestyleSession(context, t.freestyle),
             ),
@@ -142,7 +143,7 @@ class HomeScreen extends StatelessWidget {
           Expanded(
             child: _QuickTile(
               label: t.dashboard,
-              icon: Icons.insights_rounded,
+              icon: GymIcons.chart,
               hue: c.hues.orange,
               onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DashboardScreen())),
             ),
@@ -164,9 +165,9 @@ class HomeScreen extends StatelessWidget {
           children: [
             Expanded(
               child: StatBlock(
-                height: 128,
+                height: 138,
                 label: t.volume7d,
-                icon: Icons.inventory_2_outlined,
+                icon: GymIcons.scale,
                 color: c.hues.orange,
                 value: kgTo(recent.volume, context.unit) >= 1000
                     ? context.volume(recent.volume)
@@ -176,9 +177,9 @@ class HomeScreen extends StatelessWidget {
             const SizedBox(width: 10),
             Expanded(
               child: StatBlock(
-                height: 128,
+                height: 138,
                 label: t.e1rmUp,
-                icon: Icons.trending_up_rounded,
+                icon: GymIcons.chart,
                 color: c.hues.violet,
                 value: recent.e1rmUp > 0 ? '+${recent.e1rmUp}' : '0',
               ),
@@ -186,9 +187,9 @@ class HomeScreen extends StatelessWidget {
             const SizedBox(width: 10),
             Expanded(
               child: StatBlock(
-                height: 128,
+                height: 138,
                 label: t.sinceLast,
-                icon: Icons.schedule_rounded,
+                icon: GymIcons.clock,
                 color: c.hues.cyan,
                 value: recent.daysSince == null ? '—' : t.daysShort(recent.daysSince!),
               ),
@@ -238,7 +239,7 @@ class _ResumeCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
-            Icon(Icons.play_circle_outline, size: 18, color: c.warn),
+            Icon(GymIcons.play, size: 18, color: c.warn),
             const SizedBox(width: 8),
             Expanded(child: SectionLabel(t.resumeTitle)),
           ]),
@@ -306,7 +307,7 @@ class _NoProgramCard extends StatelessWidget {
           const SizedBox(height: 10),
           GymButton(
             label: t.freestyle,
-            icon: Icons.edit_note_outlined,
+            icon: GymIcons.edit,
             tone: GymButtonTone.neutral,
             height: 44,
             onPressed: () => openFreestyleSession(context, t.freestyle),
@@ -376,28 +377,51 @@ class _NextSessionCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Tata letak kartu "Body yoga" di referensi: teks dan angka-angka
+          // kecil di kiri, figur yang dipotong tepi kartu di kanan.
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(child: SectionLabel(t.nextSession)),
-              Pill(
-                color: next.early ? c.surface2 : c.accentSoft,
-                textColor: next.early ? c.text2 : c.accent,
-                child: Text(dueLabel, style: const TextStyle(fontSize: 10, letterSpacing: 0.8)),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
+                      Pill(
+                        color: next.early ? c.surface2 : c.accentSoft,
+                        textColor: next.early ? c.text2 : c.accent,
+                        child: Text(dueLabel, style: const TextStyle(fontSize: 10, letterSpacing: 0.8)),
+                      ),
+                    ]),
+                    const SizedBox(height: 10),
+                    Text(routine.name, maxLines: 2, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.displaySmall),
+                    const SizedBox(height: 4),
+                    Text(
+                      program.mode == ProgramMode.weekday ? t.weekdayOf(program.name) : t.rotationOf(program.name),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 13, color: c.text2),
+                    ),
+                    const SizedBox(height: 12),
+                    Builder(builder: (context) {
+                      final parts = t.routineOverview(routine.exercises.length, routine.setCount).split(' · ');
+                      return Wrap(
+                        spacing: 14,
+                        runSpacing: 6,
+                        children: [
+                          _MiniStat(icon: GymIcons.dumbbell, text: parts.first, hue: c.hues.orange),
+                          if (parts.length > 1) _MiniStat(icon: GymIcons.menu, text: parts[1], hue: c.hues.pink),
+                          _MiniStat(icon: GymIcons.clock, text: sinceText, hue: c.hues.cyan),
+                        ],
+                      );
+                    }),
+                  ],
+                ),
               ),
+              const SizedBox(width: 6),
+              const _HeroFigure(),
             ],
           ),
-          const SizedBox(height: 12),
-          Text(routine.name, style: Theme.of(context).textTheme.displaySmall),
-          const SizedBox(height: 4),
-          Text(
-            program.mode == ProgramMode.weekday ? t.weekdayOf(program.name) : t.rotationOf(program.name),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: 13, color: c.text2),
-          ),
-          const SizedBox(height: 8),
-          Text('${t.routineOverview(routine.exercises.length, routine.setCount)} · $sinceText',
-              style: TextStyle(fontSize: 13, color: c.text2)),
           if (next.early) ...[
             const SizedBox(height: 10),
             NoteBanner(
@@ -470,7 +494,7 @@ class _NextSessionCard extends StatelessWidget {
             children: [
               Expanded(
                 flex: 3,
-                child: GymButton(label: t.startSession, icon: Icons.play_arrow_rounded, onPressed: () => _start(context)),
+                child: GymButton(label: t.startSession, icon: GymIcons.play, onPressed: () => _start(context)),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -581,6 +605,71 @@ Future<Routine?> pickOtherRoutine(BuildContext context, {required Program progra
       );
     },
   );
+}
+
+/// Satu angka kecil berikon di kartu hero — "280 Burn" di referensi.
+class _MiniStat extends StatelessWidget {
+  const _MiniStat({required this.icon, required this.text, required this.hue});
+
+  final IconData icon;
+  final String text;
+  final Color hue;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gym;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 15, color: hue),
+        const SizedBox(width: 6),
+        // "belum pernah dilatih" di kolom sempit sebelah figur: potong, jangan
+        // meluber.
+        Flexible(
+          child: Text(text,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: c.text)),
+        ),
+      ],
+    );
+  }
+}
+
+/// Figur di sisi kanan kartu hero: ilustrasi di atas lingkaran aksen,
+/// dipotong tepi kartu seperti figur "Body yoga" di referensi.
+class _HeroFigure extends StatelessWidget {
+  const _HeroFigure();
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gym;
+    return SizedBox(
+      width: 112,
+      height: 156,
+      child: ClipRect(
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned(
+              right: -34,
+              top: 8,
+              child: Container(
+                width: 150,
+                height: 150,
+                decoration: BoxDecoration(color: c.tint(c.accent), shape: BoxShape.circle),
+              ),
+            ),
+            const Positioned(
+              right: -8,
+              bottom: 0,
+              child: GymIllustration(GymArt.liftOverhead, height: 150),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _WeekStrip extends StatelessWidget {

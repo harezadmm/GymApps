@@ -9,6 +9,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import '../../core/gym_icons.dart';
 import '../../domain/units.dart';
 
 import '../../core/keep_awake.dart';
@@ -475,19 +476,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
         const SizedBox(height: 8),
         SettingsGroup(
           children: [
-            SettingsTile(icon: Icons.straighten, hue: c.hues.violet, label: t.units, value: settings.unit.label, onTap: _pickUnit),
+            SettingsTile(icon: GymIcons.scale, hue: c.hues.violet, label: t.units, value: settings.unit.label, onTap: _pickUnit),
             SettingsTile(
-                icon: Icons.timer_outlined, hue: c.hues.cyan,
+                icon: GymIcons.alarm, hue: c.hues.cyan,
                 label: t.defaultRest,
                 value: _restText(settings.defaultRestSeconds),
                 onTap: _pickDefaultRest),
             SettingsTile(
-                icon: Icons.trending_down, hue: c.hues.orange,
+                icon: GymIcons.chart, hue: c.hues.orange,
                 label: t.deloadFactor,
                 value: '${(settings.deloadFactor * 100).round()}%',
                 onTap: _pickDeload),
             SettingsTile(
-              icon: Icons.speed, hue: c.hues.pink,
+              icon: GymIcons.menu, hue: c.hues.pink,
               label: t.logRir,
               trailing: Switch(
                 value: settings.logRir,
@@ -495,7 +496,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
             SettingsTile(
-              icon: Icons.lightbulb_outline, hue: c.hues.lime,
+              icon: GymIcons.eye, hue: c.hues.lime,
               label: t.keepScreenAwake,
               trailing: Switch(
                 value: _keepAwake,
@@ -507,7 +508,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             if (kIsWeb && _restPush != WebRestPush.unavailable)
               SettingsTile(
-                icon: Icons.notifications_active_outlined, hue: c.hues.green,
+                icon: GymIcons.bell, hue: c.hues.green,
                 label: t.restPushTitle,
                 value: switch (_restPush) {
                   WebRestPush.on => t.restPushOn,
@@ -518,12 +519,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 onTap: _toggleRestPush,
               ),
             SettingsTile(
-                icon: Icons.calendar_view_week, hue: c.hues.violet,
+                icon: GymIcons.calendar, hue: c.hues.violet,
                 label: t.weekStartsOn,
                 value: t.weekdayLong(settings.weekStartsOn),
                 onTap: _pickWeekStart),
             SettingsTile(
-              icon: Icons.fitness_center, hue: c.hues.cyan,
+              icon: GymIcons.dumbbell, hue: c.hues.cyan,
               label: t.myEquipment,
               value: settings.equipment == null ? t.equipmentAll : t.equipmentCount(settings.equipment!.length),
               onTap: () => editEquipment(context),
@@ -535,10 +536,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
         const SizedBox(height: 8),
         SettingsGroup(
           children: [
-            SettingsTile(icon: Icons.download_outlined, hue: c.hues.orange, label: t.exportBackup, onTap: _export),
-            SettingsTile(icon: Icons.upload_outlined, hue: c.hues.pink, label: t.importBackup, onTap: _import),
+            SettingsTile(icon: GymIcons.download, hue: c.hues.orange, label: t.exportBackup, onTap: _export),
+            SettingsTile(icon: GymIcons.dataTransfer, hue: c.hues.pink, label: t.importBackup, onTap: _import),
             SettingsTile(
-              icon: Icons.sync, hue: c.hues.green,
+              icon: GymIcons.sync, hue: c.hues.green,
               label: t.forceSync,
               onTap: _forceSync,
             ),
@@ -551,7 +552,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           children: [
             if (widget.onThemeModeChanged != null)
               SettingsTile(
-                icon: Icons.contrast, hue: c.hues.violet,
+                icon: GymIcons.moon, hue: c.hues.violet,
                 label: t.themeTitle,
                 value: switch (widget.themeMode) {
                   ThemeMode.light => t.themeLight,
@@ -561,7 +562,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 onTap: _pickTheme,
               ),
             SettingsTile(
-              icon: Icons.palette_outlined, hue: c.hues.pink,
+              icon: GymIcons.settings, hue: c.hues.pink,
               label: t.accentColour,
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -574,13 +575,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
               onTap: widget.onAccentChanged == null ? null : _pickAccent,
             ),
             SettingsTile(
-              icon: Icons.translate, hue: c.hues.cyan,
+              icon: GymIcons.globe, hue: c.hues.cyan,
               label: t.language,
               value: appLanguageLabel[widget.language]!,
               onTap: _pickLanguage,
             ),
             SettingsTile(
-                icon: Icons.info_outline, hue: c.hues.orange,
+                icon: GymIcons.info, hue: c.hues.orange,
                 label: t.aboutApp,
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -616,7 +617,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.logout, size: 17, color: c.danger),
+                  Icon(GymIcons.logout, size: 17, color: c.danger),
                   const SizedBox(width: 9),
                   Text(t.logOut,
                       style: TextStyle(

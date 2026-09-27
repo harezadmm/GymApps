@@ -84,6 +84,15 @@ flutter:
     - family: GymIcons
       fonts:
         - asset: assets/fonts/GymIcons.ttf
+    # Judul dan angka besar: condensed, seperti aplikasi olahraga. OFL, di-bundle.
+    - family: BarlowCondensed
+      fonts:
+        - asset: assets/fonts/BarlowCondensed-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/BarlowCondensed-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/BarlowCondensed-ExtraBold.ttf
+          weight: 800
     - family: Inter
       fonts:
         - asset: assets/fonts/Inter-Regular.ttf

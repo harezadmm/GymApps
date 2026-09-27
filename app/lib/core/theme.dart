@@ -464,10 +464,13 @@ ThemeData buildGymTheme({Color? accent, Brightness brightness = Brightness.dark}
       TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
       TargetPlatform.android: FadeForwardsPageTransitionsBuilder(),
     }),
+    // Judul dan angka besar memakai Barlow Condensed — condensed tebal khas
+    // aplikasi olahraga, dan pembeda dari Inter yang dipakai semua orang.
+    // Teks isi tetap Inter supaya angka beban dan nama gerakan mudah dibaca.
     textTheme: TextTheme(
-      displaySmall: TextStyle(fontSize: 32, fontWeight: FontWeight.w800, letterSpacing: -0.5, color: c.text),
-      headlineMedium: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, letterSpacing: -0.2, color: c.text),
-      titleLarge: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: c.text),
+      displaySmall: TextStyle(fontFamily: 'BarlowCondensed', fontSize: 44, fontWeight: FontWeight.w800, height: 1.0, color: c.text),
+      headlineMedium: TextStyle(fontFamily: 'BarlowCondensed', fontSize: 32, fontWeight: FontWeight.w700, height: 1.05, color: c.text),
+      titleLarge: TextStyle(fontFamily: 'BarlowCondensed', fontSize: 24, fontWeight: FontWeight.w700, height: 1.1, color: c.text),
       titleMedium: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: c.text),
       bodyLarge: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: c.text),
       bodyMedium: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: c.text2),

@@ -10,12 +10,21 @@ library;
 /// ada, dan di daftar panjang membuat kolom jadi ramai tanpa menambah informasi.
 String formatWeight(double w) {
   if (w == 0) return 'BW';
-  return w == w.roundToDouble() ? w.toStringAsFixed(0) : w.toString();
+  return formatDelta(w);
 }
 
 /// Seperti [formatWeight] tapi nol tetap ditulis `0` — untuk selisih dan
 /// kelipatan, di mana "BW" tidak berarti apa-apa.
-String formatDelta(double w) => w == w.roundToDouble() ? w.toStringAsFixed(0) : w.toString();
+///
+/// Dibulatkan ke 0,01: beban yang dicatat dalam lb tersimpan sebagai kg
+/// dengan pecahan panjang (140 lb = 63,5029318 kg), dan itu tidak boleh
+/// muncul di layar sebagai "63.502931800000006".
+String formatDelta(double w) {
+  final r = (w * 100).roundToDouble() / 100;
+  if (r == r.roundToDouble()) return r.toStringAsFixed(0);
+  final s = r.toStringAsFixed(2);
+  return s.endsWith('0') ? s.substring(0, s.length - 1) : s;
+}
 
 /// 1324 → "1,324". Daftar sepanjang katalog gerakan sulit dibaca tanpa ini.
 String formatCount(int n) =>

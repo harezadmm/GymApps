@@ -21,17 +21,24 @@ void main() {
     // menentukan kode glyph. Kalau berkas ditambah tanpa memperbarui
     // gym_icons.dart, ikon yang tampil akan tertukar diam-diam.
     final map = jsonDecode(File('../design/iconscout/GymIcons.json').readAsStringSync()) as Map<String, dynamic>;
-    final dart = {
-      'ball': GymIcons.ball, 'band': GymIcons.band, 'barbell': GymIcons.barbell,
-      'bodyweight': GymIcons.bodyweight, 'cable': GymIcons.cable, 'cardio': GymIcons.cardio,
-      'dumbbell': GymIcons.dumbbell, 'kettlebell': GymIcons.kettlebell, 'machine': GymIcons.machine,
-      'scale': GymIcons.scale,
+    // gym_icons.dart dibangkitkan dari JSON yang sama; test ini memastikan
+    // keduanya belum saling tertinggal.
+    final dart = File('lib/core/gym_icons.dart').readAsStringSync();
+    final declared = {
+      for (final m in RegExp(r'static const (\w+) = IconData\(0x([0-9a-f]+)').allMatches(dart))
+        m.group(1)!: int.parse(m.group(2)!, radix: 16),
     };
-    expect(map.keys.toSet(), dart.keys.toSet());
-    for (final e in dart.entries) {
-      expect(e.value.codePoint, map[e.key], reason: e.key);
-      expect(e.value.fontFamily, 'GymIcons');
+    String camel(String n) {
+      final base = n.startsWith('ui_') ? n.substring(3) : n;
+      final parts = base.split(RegExp('[-_]'));
+      return parts.first + parts.skip(1).map((p) => p[0].toUpperCase() + p.substring(1)).join();
     }
+    expect(declared.keys.toSet(), map.keys.map(camel).toSet());
+    for (final e in map.entries) {
+      expect(declared[camel(e.key)], e.value, reason: e.key);
+    }
+    expect(GymIcons.barbell.fontFamily, 'GymIcons');
+    expect(GymIcons.home.fontFamily, 'GymIcons');
     expect(File('assets/fonts/GymIcons.ttf').existsSync(), isTrue);
     expect(File('pubspec.yaml').readAsStringSync(), contains('assets/fonts/GymIcons.ttf'));
   });
