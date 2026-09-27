@@ -539,7 +539,7 @@ class _DriftOption extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.gym;
     return Material(
-      color: selected ? c.accent : Colors.transparent,
+      color: selected ? c.accentFill : Colors.transparent,
       borderRadius: BorderRadius.circular(GymRadius.small),
       child: InkWell(
         onTap: onTap,

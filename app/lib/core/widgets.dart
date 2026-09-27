@@ -1,6 +1,6 @@
-/// Potongan UI yang dipakai berulang di banyak layar, disamakan dengan artboard
-/// Pen di `REFRENSI/`. Ditaruh di satu tempat supaya padding, radius, dan warna
-/// tidak diketik ulang per layar lalu perlahan menyimpang.
+/// Potongan UI yang dipakai berulang di banyak layar, mengikuti referensi
+/// `REFRENSI/NEW REFRENSI/`. Ditaruh di satu tempat supaya padding, radius,
+/// dan warna tidak diketik ulang per layar lalu perlahan menyimpang.
 library;
 
 import 'package:flutter/material.dart';
@@ -10,7 +10,7 @@ export 'format.dart' show formatWeight;
 import 'motion.dart';
 import 'theme.dart';
 
-/// Kartu standar: surface, border tipis, radius besar.
+/// Kartu standar: abu gelap di atas latar hampir hitam, tanpa garis tepi.
 class GymCard extends StatelessWidget {
   const GymCard({super.key, required this.child, this.padding, this.color, this.radius});
 
@@ -28,7 +28,6 @@ class GymCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: color ?? c.surface,
         borderRadius: BorderRadius.circular(radius ?? GymRadius.card),
-        border: Border.all(color: c.border),
       ),
       child: child,
     );
@@ -47,6 +46,38 @@ class SectionLabel extends StatelessWidget {
     return Text(
       text.toUpperCase(),
       style: Theme.of(context).textTheme.labelSmall?.copyWith(color: color),
+    );
+  }
+}
+
+/// Judul bagian bergaya referensi — "Popular exercises · See all": judul di
+/// kiri, aksi kecil di kanan.
+class SectionTitle extends StatelessWidget {
+  const SectionTitle(this.title, {super.key, this.action, this.onAction});
+
+  final String title;
+  final String? action;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gym;
+    return Row(
+      children: [
+        Expanded(child: Text(title, style: Theme.of(context).textTheme.titleLarge)),
+        if (action != null)
+          Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+              onTap: onAction,
+              borderRadius: BorderRadius.circular(GymRadius.pill),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                child: Text(action!, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.text2)),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
@@ -88,8 +119,128 @@ class Pill extends StatelessWidget {
   }
 }
 
-/// Tombol utama biru langit. Tinggi 52 supaya nyaman ditekan dengan tangan
-/// berkeringat sambil berdiri (NFR-12: target sentuh ≥ 48 dp).
+/// Ikon di dalam cakram bulat berwarna — "My Fitness Profile", kategori,
+/// baris setelan. [color] mewarnai ikon; latarnya [color] yang ditipiskan.
+class IconDisc extends StatelessWidget {
+  const IconDisc(this.icon, {super.key, this.color, this.size = 44, this.iconSize, this.filled = false});
+
+  final IconData icon;
+  final Color? color;
+  final double size;
+  final double? iconSize;
+
+  /// Cakram penuh warna dengan ikon putih — untuk keadaan terpilih.
+  final bool filled;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gym;
+    final hue = color ?? c.accent;
+    return Container(
+      width: size,
+      height: size,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(color: filled ? c.accentFill : c.tint(hue), shape: BoxShape.circle),
+      child: Icon(icon, size: iconSize ?? size * 0.5, color: filled ? c.accentInk : hue),
+    );
+  }
+}
+
+/// Avatar bulat berisi inisial — di pojok kanan header, seperti referensi.
+class AvatarCircle extends StatelessWidget {
+  const AvatarCircle({super.key, required this.text, this.onTap, this.size = 40, this.tooltip});
+
+  final String text;
+  final VoidCallback? onTap;
+  final double size;
+  final String? tooltip;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gym;
+    final body = Container(
+      width: size,
+      height: size,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(color: c.tint(c.accent), shape: BoxShape.circle),
+      child: Text(text, style: TextStyle(fontSize: size * 0.34, fontWeight: FontWeight.w800, color: c.accent)),
+    );
+    if (onTap == null) return body;
+    return Tooltip(
+      message: tooltip ?? '',
+      child: Material(
+        type: MaterialType.transparency,
+        shape: const CircleBorder(),
+        child: InkWell(customBorder: const CircleBorder(), onTap: onTap, child: body),
+      ),
+    );
+  }
+}
+
+/// Blok statistik berwarna penuh — kartu "Weight / Calories / BPM" di
+/// referensi: judul kecil di atas, angka besar di bawah, keterangan di bawahnya.
+class StatBlock extends StatelessWidget {
+  const StatBlock({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.color,
+    this.hint,
+    this.icon,
+    this.onTap,
+    this.height,
+  });
+
+  final String label;
+  final String value;
+  final String? hint;
+  final IconData? icon;
+  final Color color;
+  final VoidCallback? onTap;
+  final double? height;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gym;
+    final body = Container(
+      height: height,
+      padding: const EdgeInsets.fromLTRB(14, 13, 14, 14),
+      decoration: BoxDecoration(color: c.block(color), borderRadius: BorderRadius.circular(GymRadius.card)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          if (icon != null) ...[Icon(icon, size: 18, color: color), const SizedBox(height: 8)],
+          // Dua baris: "Volume 7 hari" di ubin sepertiga lebar HP 360 dp tidak
+          // muat satu baris, dan "Volum…" bukan label.
+          Text(label,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, height: 1.2, color: c.text)),
+          const SizedBox(height: 8),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(value,
+                style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, height: 1.05, letterSpacing: -0.5, color: c.text)),
+          ),
+          if (hint != null) ...[
+            const SizedBox(height: 3),
+            Text(hint!, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11, color: c.text2)),
+          ],
+        ],
+      ),
+    );
+    if (onTap == null) return body;
+    return Material(
+      type: MaterialType.transparency,
+      child: InkWell(onTap: onTap, borderRadius: BorderRadius.circular(GymRadius.card), child: body),
+    );
+  }
+}
+
+/// Tombol utama violet berbentuk pil. Tinggi 52 supaya nyaman ditekan dengan
+/// tangan berkeringat sambil berdiri (NFR-12: target sentuh ≥ 48 dp).
 class GymButton extends StatelessWidget {
   const GymButton({
     super.key,
@@ -109,21 +260,20 @@ class GymButton extends StatelessWidget {
   final double height;
   final bool expand;
 
-  /// Pen tidak membuat semua tombol jadi pil: CTA utama dan sekunder bersudut
-  /// membulat (r14 / r12), pil hanya dipakai tombol kecil di header seperti
-  /// SAVE dan FINISH.
+  /// Referensi memakai pil untuk tombol utama ("Next", "Play") dan sudut
+  /// membulat untuk tombol sekunder di dalam kartu.
   final GymButtonShape shape;
 
   double get _radius => switch (shape) {
         GymButtonShape.pill => GymRadius.pill,
-        GymButtonShape.rounded => tone == GymButtonTone.primary ? GymRadius.card : GymRadius.control,
+        GymButtonShape.rounded => tone == GymButtonTone.primary ? GymRadius.pill : GymRadius.control,
       };
 
   @override
   Widget build(BuildContext context) {
     final c = context.gym;
     final (bg, fg) = switch (tone) {
-      GymButtonTone.primary => (c.accent, c.accentInk),
+      GymButtonTone.primary => (c.accentFill, c.accentInk),
       GymButtonTone.neutral => (c.surface2, c.text),
       GymButtonTone.danger => (c.danger.withValues(alpha: 0.16), c.danger),
     };
@@ -134,7 +284,7 @@ class GymButton extends StatelessWidget {
       style: TextStyle(
         fontSize: 14,
         fontWeight: FontWeight.w800,
-        letterSpacing: 0.6,
+        letterSpacing: 0.4,
         color: fg,
       ),
     );
@@ -155,34 +305,35 @@ class GymButton extends StatelessWidget {
           child: Material(
             type: MaterialType.transparency,
             child: InkWell(
-          onTap: onPressed == null
-              ? null
-              : () {
-                  if (tone == GymButtonTone.primary) GymHaptics.confirm();
-                  onPressed!();
-                },
-          borderRadius: BorderRadius.circular(_radius),
-          child: Padding(
-            // Tanpa padding ini tombol yang tidak melebar menyusut persis
-            // selebar teksnya dan hurufnya menyentuh tepi pil.
-            padding: EdgeInsets.symmetric(horizontal: expand ? 0 : 18),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (icon != null) ...[Icon(icon, size: 18, color: fg), const SizedBox(width: 8)],
-                // Label yang lebih panjang dari tombolnya mengecil, tidak
-                // meluber keluar: tombol setengah lebar di HP 360 dp dan
-                // terjemahan yang lebih panjang dari bahasa Inggrisnya.
-                // Hanya untuk tombol yang melebar — tombol selebar isinya bisa
-                // duduk di Row tanpa batas lebar, dan Flexible di sana error.
-                if (expand)
-                  Flexible(child: FittedBox(fit: BoxFit.scaleDown, child: text))
-                else
-                  text,
-              ],
-            ),
-          ),
+              onTap: onPressed == null
+                  ? null
+                  : () {
+                      if (tone == GymButtonTone.primary) GymHaptics.confirm();
+                      onPressed!();
+                    },
+              borderRadius: BorderRadius.circular(_radius),
+              child: Padding(
+                // Tanpa padding ini tombol yang tidak melebar menyusut persis
+                // selebar teksnya dan hurufnya menyentuh tepi pil.
+                padding: EdgeInsets.symmetric(horizontal: expand ? 0 : 20),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (icon != null) ...[Icon(icon, size: 18, color: fg), const SizedBox(width: 8)],
+                    // Label yang lebih panjang dari tombolnya mengecil, tidak
+                    // meluber keluar: tombol setengah lebar di HP 360 dp dan
+                    // terjemahan yang lebih panjang dari bahasa Inggrisnya.
+                    // Hanya untuk tombol yang melebar — tombol selebar isinya
+                    // bisa duduk di Row tanpa batas lebar, dan Flexible di sana
+                    // error.
+                    if (expand)
+                      Flexible(child: FittedBox(fit: BoxFit.scaleDown, child: text))
+                    else
+                      text,
+                  ],
+                ),
+              ),
             ),
           ),
         ),
@@ -212,12 +363,11 @@ class SegmentedTabs extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.gym;
     return Container(
-      height: 44,
+      height: 46,
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
         color: c.surface,
-        borderRadius: BorderRadius.circular(GymRadius.control),
-        border: Border.all(color: c.border),
+        borderRadius: BorderRadius.circular(GymRadius.pill),
       ),
       // Satu pil yang bergeser ke segmen terpilih. Mata mengikuti benda yang
       // pindah lebih mudah daripada dua kotak yang bertukar warna.
@@ -234,8 +384,8 @@ class SegmentedTabs extends StatelessWidget {
               width: w,
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                  color: c.accent,
-                  borderRadius: BorderRadius.circular(GymRadius.segment),
+                  color: c.accentFill,
+                  borderRadius: BorderRadius.circular(GymRadius.pill),
                 ),
               ),
             ),
@@ -251,7 +401,7 @@ class SegmentedTabs extends StatelessWidget {
                           GymHaptics.tap();
                           onChanged(i);
                         },
-                        borderRadius: BorderRadius.circular(GymRadius.segment),
+                        borderRadius: BorderRadius.circular(GymRadius.pill),
                         child: Center(
                           child: AnimatedDefaultTextStyle(
                             duration: GymMotion.of(context, GymMotion.normal),
@@ -299,9 +449,8 @@ class FilterChips extends StatelessWidget {
             duration: GymMotion.of(context, GymMotion.quick),
             curve: GymMotion.curve,
             decoration: BoxDecoration(
-              color: on ? c.accent : c.surface,
+              color: on ? c.accentFill : c.surface2,
               borderRadius: BorderRadius.circular(GymRadius.pill),
-              border: Border.all(color: on ? c.accent : c.border),
             ),
             child: Material(
               type: MaterialType.transparency,
@@ -334,7 +483,7 @@ class FilterChips extends StatelessWidget {
   }
 }
 
-/// Satu baris pengaturan: ikon · label · nilai · chevron.
+/// Satu baris pengaturan: cakram ikon · label · nilai · chevron.
 class SettingsTile extends StatelessWidget {
   const SettingsTile({
     super.key,
@@ -344,6 +493,7 @@ class SettingsTile extends StatelessWidget {
     this.trailing,
     this.onTap,
     this.tone,
+    this.hue,
   });
 
   final IconData icon;
@@ -353,7 +503,13 @@ class SettingsTile extends StatelessWidget {
   /// Menggantikan nilai + chevron — untuk switch atau titik warna.
   final Widget? trailing;
   final VoidCallback? onTap;
+
+  /// Warna label, untuk baris berbahaya (keluar akun).
   final Color? tone;
+
+  /// Warna cakram ikon. Referensi memberi tiap baris warnanya sendiri supaya
+  /// daftar panjang mudah dipindai; null = aksen.
+  final Color? hue;
 
   @override
   Widget build(BuildContext context) {
@@ -362,17 +518,24 @@ class SettingsTile extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
         child: Row(
           children: [
-            Icon(icon, size: 19, color: tone ?? c.text2),
-            const SizedBox(width: 14),
+            IconDisc(icon, color: tone ?? hue, size: 38, iconSize: 19),
+            const SizedBox(width: 13),
             Expanded(child: Text(label, style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, color: ink))),
             if (trailing != null)
               trailing!
             else ...[
-              if (value != null) Text(value!, style: TextStyle(fontSize: 13.5, color: c.text2)),
-              const SizedBox(width: 8),
+              if (value != null)
+                Flexible(
+                  child: Text(value!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.end,
+                      style: TextStyle(fontSize: 13.5, color: c.text2)),
+                ),
+              const SizedBox(width: 6),
               Icon(Icons.chevron_right, size: 18, color: c.text3),
             ],
           ],
@@ -395,13 +558,12 @@ class SettingsGroup extends StatelessWidget {
       decoration: BoxDecoration(
         color: c.surface,
         borderRadius: BorderRadius.circular(GymRadius.card),
-        border: Border.all(color: c.border),
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
           for (final (i, child) in children.indexed) ...[
-            if (i > 0) Divider(height: 1, thickness: 1, color: c.border, indent: 48),
+            if (i > 0) Divider(height: 1, thickness: 1, color: c.border, indent: 65),
             child,
           ],
         ],
@@ -452,19 +614,19 @@ class SelectRow extends StatelessWidget {
         onTap();
       },
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         child: Row(
           children: [
             if (icon != null) ...[
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: off ? c.bgNested : c.accentSoft,
-                  borderRadius: BorderRadius.circular(GymRadius.small),
-                ),
-                child: Icon(icon, size: 22, color: off ? c.text3 : c.accent),
-              ),
+              off
+                  ? Container(
+                      width: 42,
+                      height: 42,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(color: c.bgNested, shape: BoxShape.circle),
+                      child: Icon(icon, size: 22, color: c.text3),
+                    )
+                  : IconDisc(icon!, size: 42, iconSize: 22),
               const SizedBox(width: 12),
             ],
             Expanded(
@@ -515,10 +677,10 @@ class _Tick extends StatelessWidget {
       width: 26,
       height: 26,
       decoration: BoxDecoration(
-        color: selected ? c.accent : Colors.transparent,
+        color: selected ? c.accentFill : Colors.transparent,
         shape: square ? BoxShape.rectangle : BoxShape.circle,
-        borderRadius: square ? BorderRadius.circular(7) : null,
-        border: Border.all(color: selected ? c.accent : c.text3, width: 1.5),
+        borderRadius: square ? BorderRadius.circular(GymRadius.check) : null,
+        border: Border.all(color: selected ? c.accentFill : c.text3, width: 1.5),
       ),
       child: AnimatedScale(
         scale: selected ? 1 : 0,
@@ -530,68 +692,76 @@ class _Tick extends StatelessWidget {
   }
 }
 
-/// Header layar tingkat atas: judul besar plus aksi di kanan.
+/// Header layar tingkat atas: judul plus aksi bulat di kanan, seperti
+/// "Diet Adviser · 🔔 · avatar" di referensi.
 class ScreenHeader extends StatelessWidget {
-  const ScreenHeader({super.key, required this.title, this.actions = const []});
+  const ScreenHeader({super.key, required this.title, this.subtitle, this.actions = const []});
 
   final String title;
+
+  /// Baris kecil di atas judul — tanggal di Home.
+  final String? subtitle;
   final List<Widget> actions;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(0, 4, 0, 16),
+      padding: const EdgeInsets.fromLTRB(0, 6, 0, 16),
       child: Row(
         children: [
-          Expanded(child: Text(title, style: Theme.of(context).textTheme.headlineMedium)),
-          for (final a in actions) Padding(padding: const EdgeInsets.only(left: 8), child: a),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (subtitle != null) ...[SectionLabel(subtitle!), const SizedBox(height: 3)],
+                Text(title, style: Theme.of(context).textTheme.headlineMedium),
+              ],
+            ),
+          ),
+          for (final a in actions) Padding(padding: const EdgeInsets.only(left: 10), child: a),
         ],
       ),
     );
   }
 }
 
-/// Tombol ikon kotak di header.
+/// Tombol ikon bulat di header — dulu kotak, referensi memakai lingkaran.
 class SquareIconButton extends StatelessWidget {
-  const SquareIconButton({super.key, required this.icon, this.onPressed, this.tone});
+  const SquareIconButton({super.key, required this.icon, this.onPressed, this.tone, this.tooltip});
 
   final IconData icon;
   final VoidCallback? onPressed;
   final Color? tone;
+  final String? tooltip;
 
   @override
   Widget build(BuildContext context) {
     final c = context.gym;
-    return PressScale(
+    final button = PressScale(
       enabled: onPressed != null,
       scale: 0.92,
       child: Material(
-      color: c.surface,
-      borderRadius: BorderRadius.circular(GymRadius.small),
-      child: InkWell(
-        onTap: onPressed,
-        borderRadius: BorderRadius.circular(GymRadius.small),
-        child: Container(
-          // Kotak yang terlihat tetap 42 seperti artboard Pen, tapi area
-          // sentuhnya 44 lewat padding di pembungkusnya (lihat di bawah) —
-          // 42 di bawah ambang minimum, dan tangan berkeringat di gym adalah
-          // kasus pakai yang sebenarnya, bukan teori.
-          width: 42,
-          height: 42,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(GymRadius.small),
-            border: Border.all(color: c.border),
+        color: c.surface,
+        shape: const CircleBorder(),
+        child: InkWell(
+          onTap: onPressed,
+          customBorder: const CircleBorder(),
+          child: SizedBox(
+            // Lingkaran yang terlihat 42; area sentuhnya 44 lewat padding di
+            // pembungkusnya — tangan berkeringat di gym adalah kasus pakai yang
+            // sebenarnya, bukan teori.
+            width: 42,
+            height: 42,
+            child: Icon(icon, size: 20, color: tone ?? c.text),
           ),
-          child: Icon(icon, size: 20, color: tone ?? c.text2),
         ),
       ),
-      ),
     );
+    return tooltip == null ? button : Tooltip(message: tooltip!, child: button);
   }
 }
 
-/// Baris info bernada — kuning untuk peringatan lembut, biru untuk keterangan.
+/// Baris info bernada — oranye untuk peringatan lembut, aksen untuk keterangan.
 class NoteBanner extends StatelessWidget {
   const NoteBanner({super.key, required this.text, required this.icon, required this.tone});
 
@@ -601,13 +771,13 @@ class NoteBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.gym;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: tone.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(GymRadius.card),
-        border: Border.all(color: tone.withValues(alpha: 0.35)),
+        color: c.tint(tone),
+        borderRadius: BorderRadius.circular(GymRadius.control),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,

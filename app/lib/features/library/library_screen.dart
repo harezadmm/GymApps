@@ -6,6 +6,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import '../../core/motion.dart';
 
 import '../../core/format.dart';
 import '../../core/strings.dart';
@@ -42,6 +43,19 @@ class _ExerciseLibraryScreenState extends State<ExerciseLibraryScreen> {
   static const _bodyParts = [
     'chest', 'back', 'shoulders', 'upper arms', 'lower arms', 'upper legs', 'lower legs', 'waist', 'cardio',
   ];
+
+  static IconData _bodyPartIcon(String bp) => switch (bp) {
+        'chest' => Icons.shield_outlined,
+        'back' => Icons.rowing,
+        'shoulders' => Icons.sports_martial_arts,
+        'upper arms' => Icons.sports_gymnastics,
+        'lower arms' => Icons.front_hand_outlined,
+        'upper legs' => Icons.directions_run,
+        'lower legs' => Icons.directions_walk,
+        'waist' => Icons.self_improvement,
+        'cardio' => Icons.monitor_heart_outlined,
+        _ => Icons.fitness_center,
+      };
 
   @override
   void initState() {
@@ -169,7 +183,19 @@ class _ExerciseLibraryScreenState extends State<ExerciseLibraryScreen> {
                     icon: Icon(Icons.arrow_back, color: c.text2),
                     tooltip: context.t.back,
                   ),
-                  Expanded(child: _SearchField(controller: _query, onChanged: (_) => setState(() {}))),
+                  Expanded(
+                    child: _SearchField(
+                      controller: _query,
+                      onChanged: (_) => setState(() {}),
+                      // Saringan "Alat saya" duduk di ujung kolom cari,
+                      // seperti ikon penyaring di layar Search referensi.
+                      filterOn: context.workouts.settings.equipment != null && (_onlyMine ?? true),
+                      onFilter: context.workouts.settings.equipment == null
+                          ? null
+                          : () => setState(() => _onlyMine = !(_onlyMine ?? true)),
+                      filterTooltip: context.t.myEquipmentOnly,
+                    ),
+                  ),
                   IconButton(
                     onPressed: () => _createCustom(''),
                     icon: Icon(Icons.add, color: c.accent),
@@ -186,43 +212,32 @@ class _ExerciseLibraryScreenState extends State<ExerciseLibraryScreen> {
                 onChanged: (i) => setState(() => _sort = i),
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
+            // Bagian tubuh sebagai deretan cakram bulat berlabel — "Featured
+            // categories" di referensi.
             SizedBox(
-              height: 36,
+              height: 82,
               child: ListView(
                 scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 10),
                 children: [
-                  if (context.workouts.settings.equipment != null)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 6),
-                      child: FilterChip(
-                        label: Text(context.t.myEquipmentOnly),
-                        selected: _onlyMine ?? true,
-                        onSelected: (v) => setState(() => _onlyMine = v),
-                      ),
-                    ),
-                  Padding(
-                    padding: const EdgeInsets.only(right: 6),
-                    child: ChoiceChip(
-                      label: Text(context.t.allMuscles),
-                      selected: _bodyPart == null,
-                      onSelected: (_) => setState(() => _bodyPart = null),
-                    ),
+                  _CategoryDisc(
+                    label: context.t.allBodyParts,
+                    icon: Icons.grid_view_rounded,
+                    selected: _bodyPart == null,
+                    onTap: () => setState(() => _bodyPart = null),
                   ),
                   for (final bp in _bodyParts)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 6),
-                      child: ChoiceChip(
-                        label: Text(context.t.bodyPart(bp)),
-                        selected: _bodyPart == bp,
-                        onSelected: (_) => setState(() => _bodyPart = _bodyPart == bp ? null : bp),
-                      ),
+                    _CategoryDisc(
+                      label: context.t.bodyPart(bp),
+                      icon: _bodyPartIcon(bp),
+                      selected: _bodyPart == bp,
+                      onTap: () => setState(() => _bodyPart = _bodyPart == bp ? null : bp),
                     ),
                 ],
               ),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 6),
             Expanded(
               child: FutureBuilder<ExerciseCatalog>(
                 future: _catalog,
@@ -332,21 +347,30 @@ class _ExerciseLibraryScreenState extends State<ExerciseLibraryScreen> {
 }
 
 class _SearchField extends StatelessWidget {
-  const _SearchField({required this.controller, required this.onChanged});
+  const _SearchField({
+    required this.controller,
+    required this.onChanged,
+    this.filterOn = false,
+    this.onFilter,
+    this.filterTooltip,
+  });
 
   final TextEditingController controller;
   final ValueChanged<String> onChanged;
+  final bool filterOn;
+  final VoidCallback? onFilter;
+  final String? filterTooltip;
 
   @override
   Widget build(BuildContext context) {
     final c = context.gym;
     OutlineInputBorder border(Color colour) => OutlineInputBorder(
-          borderRadius: BorderRadius.circular(GymRadius.pill),
+          borderRadius: BorderRadius.circular(GymRadius.control),
           borderSide: BorderSide(color: colour),
         );
 
     return SizedBox(
-      height: 44,
+      height: 46,
       child: TextField(
         controller: controller,
         onChanged: onChanged,
@@ -354,15 +378,67 @@ class _SearchField extends StatelessWidget {
         textInputAction: TextInputAction.search,
         decoration: InputDecoration(
           hintText: context.t.searchExercise,
-          hintStyle: TextStyle(fontSize: 14.5, color: c.text2),
-          prefixIcon: Icon(Icons.search, size: 19, color: c.text2),
+          hintStyle: TextStyle(fontSize: 14.5, color: c.text3),
+          prefixIcon: Icon(Icons.search, size: 20, color: c.text2),
+          suffixIcon: onFilter == null
+              ? null
+              : IconButton(
+                  onPressed: onFilter,
+                  tooltip: filterTooltip,
+                  icon: Icon(Icons.tune_rounded, size: 20, color: filterOn ? c.accent : c.text3),
+                ),
           filled: true,
           fillColor: c.surface,
           isDense: true,
           contentPadding: EdgeInsets.zero,
-          border: border(c.border),
-          enabledBorder: border(c.border),
+          border: border(Colors.transparent),
+          enabledBorder: border(Colors.transparent),
           focusedBorder: border(c.accent),
+        ),
+      ),
+    );
+  }
+}
+
+/// Satu kategori: cakram ikon bulat dengan label di bawahnya.
+class _CategoryDisc extends StatelessWidget {
+  const _CategoryDisc({required this.label, required this.icon, required this.selected, required this.onTap});
+
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gym;
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: label,
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          onTap: () {
+            GymHaptics.tap();
+            onTap();
+          },
+          borderRadius: BorderRadius.circular(GymRadius.control),
+          child: SizedBox(
+            width: 74,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                IconDisc(icon, size: 50, iconSize: 23, filled: selected),
+                const SizedBox(height: 6),
+                Text(label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        fontSize: 11, fontWeight: FontWeight.w600, color: selected ? c.text : c.text2)),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -392,16 +468,7 @@ class _ExerciseRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 7),
         child: Row(
           children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: c.surface,
-                borderRadius: BorderRadius.circular(GymRadius.small),
-                border: Border.all(color: c.border),
-              ),
-              child: Icon(exercise.icon, size: 24, color: c.text2),
-            ),
+            IconDisc(exercise.icon, size: 44, iconSize: 23),
             const SizedBox(width: 12),
             Expanded(
               child: Column(

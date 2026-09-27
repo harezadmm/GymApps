@@ -591,17 +591,16 @@ class _HomeShellState extends State<HomeShell> {
   Widget build(BuildContext context) {
     final c = context.gym;
     final t = context.t;
-    final destinations = <NavigationDestination>[
-      // Setiap tab punya pasangan garis/isi: yang aktif "terisi", sisanya
-      // garis. Stats pakai grafik, bukan monitor jantung — ini beban dan
-      // e1RM, bukan detak.
-      NavigationDestination(icon: const Icon(Icons.fitness_center_outlined), selectedIcon: const Icon(Icons.fitness_center), label: t.workout),
-      NavigationDestination(
-          icon: const Icon(Icons.home_outlined), selectedIcon: const Icon(Icons.home), label: t.home),
-      NavigationDestination(icon: const Icon(Icons.insights_outlined), selectedIcon: const Icon(Icons.insights), label: t.stats),
-      NavigationDestination(icon: const Icon(Icons.history_outlined), selectedIcon: const Icon(Icons.history), label: t.history),
-      NavigationDestination(
-          icon: const Icon(Icons.person_outline), selectedIcon: const Icon(Icons.person), label: t.profile),
+    // Setiap tab punya pasangan garis/isi: yang aktif "terisi", sisanya
+    // garis. Stats pakai grafik, bukan monitor jantung — ini beban dan
+    // e1RM, bukan detak. Labelnya tidak digambar (referensi memakai nav pil
+    // berisi ikon saja) tapi tetap ada untuk pembaca layar dan tooltip.
+    final tabs = <(IconData, IconData, String)>[
+      (Icons.fitness_center_outlined, Icons.fitness_center, t.workout),
+      (Icons.home_outlined, Icons.home, t.home),
+      (Icons.insights_outlined, Icons.insights, t.stats),
+      (Icons.history_outlined, Icons.history, t.history),
+      (Icons.person_outline, Icons.person, t.profile),
     ];
     return Scaffold(
       backgroundColor: c.bg,
@@ -613,7 +612,7 @@ class _HomeShellState extends State<HomeShell> {
           index: _tab,
           children: [
             const WorkoutScreen(),
-            const HomeScreen(),
+            HomeScreen(email: widget.email, onOpenProfile: () => setState(() => _tab = 4)),
             const StatsScreen(),
             const HistoryScreen(),
             ProfileScreen(
@@ -629,16 +628,77 @@ class _HomeShellState extends State<HomeShell> {
           ],
         ),
       ),
-      bottomNavigationBar: DecoratedBox(
-        decoration: BoxDecoration(border: Border(top: BorderSide(color: c.border))),
-        child: NavigationBar(
-          selectedIndex: _tab,
-          onDestinationSelected: (i) {
-            if (i == _tab) return;
-            GymHaptics.tap();
-            setState(() => _tab = i);
-          },
-          destinations: destinations,
+      bottomNavigationBar: _FloatingNav(
+        tabs: tabs,
+        index: _tab,
+        onChanged: (i) {
+          if (i == _tab) return;
+          GymHaptics.tap();
+          setState(() => _tab = i);
+        },
+      ),
+    );
+  }
+}
+
+/// Nav bawah bergaya referensi: pil abu gelap yang melayang di atas latar,
+/// berisi ikon saja; yang aktif berwarna aksen.
+class _FloatingNav extends StatelessWidget {
+  const _FloatingNav({required this.tabs, required this.index, required this.onChanged});
+
+  final List<(IconData, IconData, String)> tabs;
+  final int index;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gym;
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 6, 16, 12),
+        child: Container(
+          height: 66,
+          decoration: BoxDecoration(
+            color: c.surface,
+            borderRadius: BorderRadius.circular(GymRadius.nav),
+            boxShadow: [
+              BoxShadow(color: Colors.black.withValues(alpha: c.isLight ? 0.10 : 0.45), blurRadius: 24, offset: const Offset(0, 8)),
+            ],
+          ),
+          child: Row(
+            children: [
+              for (final (i, (icon, activeIcon, label)) in tabs.indexed)
+                Expanded(
+                  child: Semantics(
+                    button: true,
+                    selected: i == index,
+                    label: label,
+                    child: Tooltip(
+                      message: label,
+                      child: Material(
+                        type: MaterialType.transparency,
+                        child: InkWell(
+                          onTap: () => onChanged(i),
+                          borderRadius: BorderRadius.circular(GymRadius.nav),
+                          child: Center(
+                            child: AnimatedSwitcher(
+                              duration: GymMotion.of(context, GymMotion.quick),
+                              child: Icon(
+                                i == index ? activeIcon : icon,
+                                key: ValueKey(i == index),
+                                size: 26,
+                                color: i == index ? c.accent : c.text2,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );

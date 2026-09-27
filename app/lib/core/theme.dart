@@ -1,12 +1,14 @@
 import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 import 'package:flutter/material.dart';
 
-/// Token desain GymApps, diambil dari artboard Pen di `REFRENSI/export/`.
+/// Token desain GymApps v2, mengikuti referensi `REFRENSI/NEW REFRENSI/`
+/// (UI kit "Diet Adviser"): latar hampir hitam, kartu abu gelap tanpa garis
+/// tepi, aksen ungu-violet, ikon di dalam cakram bulat berwarna, dan blok
+/// statistik berwarna penuh.
 ///
-/// Dipisah dari [ThemeData] karena beberapa warna tidak punya slot di Material:
-/// hijau baris set selesai, latar bersarang di dalam kartu, dan tiga tingkat
-/// teks. Widget membaca lewat `context.gym` (lihat [GymColorsX]) supaya tidak
-/// ada nilai hex yang tersebar di layar.
+/// Dipisah dari [ThemeData] karena banyak warna tidak punya slot di Material.
+/// Widget membaca lewat `context.gym` (lihat [GymColorsX]) supaya tidak ada
+/// nilai hex yang tersebar di layar.
 @immutable
 class GymColors extends ThemeExtension<GymColors> {
   const GymColors({
@@ -19,6 +21,7 @@ class GymColors extends ThemeExtension<GymColors> {
     required this.text2,
     required this.text3,
     required this.accent,
+    required this.accentFill,
     required this.accentInk,
     required this.accentSoft,
     required this.doneBg,
@@ -30,54 +33,44 @@ class GymColors extends ThemeExtension<GymColors> {
     required this.silhouette,
     required this.heatRamp,
     required this.activityRamp,
+    required this.hues,
     required this.brightness,
     this.accentBase,
   });
 
-  /// Latar pilihan yang sedang aktif: kartu template terpilih, panel istirahat.
-  final Color selected;
-
-  /// Batang grafik yang bukan batang terakhir.
-  final Color chartIdle;
-
-  /// Siluet tubuh di belakang otot pada peta panas.
-  final Color silhouette;
-
-  /// Lima tingkat peta panas otot, rendah → tinggi.
-  final List<Color> heatRamp;
-
-  /// Lima tingkat kalender aktivitas, kosong → penuh.
-  final List<Color> activityRamp;
-
-  final Brightness brightness;
-
-  /// Aksen seperti yang dipilih di Profil, sebelum digelapkan untuk tema
-  /// terang. Dipakai untuk menandai pilihan yang aktif.
-  final Color? accentBase;
-
-  bool get isLight => brightness == Brightness.light;
-
-  /// Latar layar. Navy sangat gelap, bukan hitam murni: kartu tetap terbaca
-  /// sebagai kartu di gym yang terang, dan layar OLED tetap hemat.
+  /// Latar layar. Hampir hitam, bukan hitam murni, supaya kartu abu gelap di
+  /// atasnya masih terbaca sebagai kartu.
   final Color bg;
 
   /// Latar di dalam kartu — tabel set, preview gerakan.
   final Color bgNested;
 
+  /// Kartu. Referensi tidak memberi kartu garis tepi; yang memisahkannya dari
+  /// latar hanya selisih terang.
   final Color surface;
+
+  /// Chip, tombol netral, dan kotak input di atas kartu.
   final Color surface2;
+
+  /// Garis pemisah tipis. Hampir tak terlihat, dan memang begitu maksudnya:
+  /// dipakai untuk pembatas baris, bukan bingkai kartu.
   final Color border;
 
-  /// NFR-11 minta kontras teks ≥ 4,5:1. [text2] (#8C95A8 di atas surface)
-  /// ≈ 6,4:1. [text3] di bawah ambang itu — hanya untuk elemen dekoratif yang
-  /// tidak membawa informasi.
+  /// NFR-11 minta kontras teks ≥ 4,5:1. [text2] di atas [surface] ≈ 6,6:1.
+  /// [text3] di bawah ambang itu — hanya untuk elemen dekoratif yang tidak
+  /// membawa informasi.
   final Color text;
   final Color text2;
   final Color text3;
 
-  /// Biru langit Liftoff (PRD §14). Terlalu terang untuk label putih, jadi teks
-  /// di atasnya memakai [accentInk].
+  /// Aksen untuk ikon, teks, dan tanda di atas latar gelap. Di tema gelap ini
+  /// lavender terang, terlalu pucat untuk latar tombol berteks putih — untuk
+  /// itu ada [accentFill].
   final Color accent;
+
+  /// Latar tombol utama, tab terpilih, chip terpilih: versi aksen yang cukup
+  /// gelap supaya [accentInk] (putih) di atasnya ≥ 4,5:1.
+  final Color accentFill;
   final Color accentInk;
   final Color accentSoft;
 
@@ -89,54 +82,92 @@ class GymColors extends ThemeExtension<GymColors> {
   final Color warn;
   final Color danger;
 
+  /// Latar pilihan yang sedang aktif: kartu template terpilih, panel istirahat.
+  final Color selected;
+
+  /// Batang grafik yang bukan batang terakhir.
+  final Color chartIdle;
+
+  /// Siluet tubuh di belakang otot pada peta panas.
+  final Color silhouette;
+
+  /// Lima tingkat peta panas otot, rendah → tinggi. Diturunkan dari aksen.
+  final List<Color> heatRamp;
+
+  /// Lima tingkat kalender aktivitas, kosong → penuh. Diturunkan dari aksen.
+  final List<Color> activityRamp;
+
+  /// Warna-warna pembeda dari referensi: cakram ikon, blok statistik, legenda.
+  final GymHues hues;
+
+  final Brightness brightness;
+
+  /// Aksen seperti yang dipilih di Profil, sebelum disesuaikan untuk tema.
+  /// Dipakai untuk menandai pilihan yang aktif.
+  final Color? accentBase;
+
+  bool get isLight => brightness == Brightness.light;
+
+  /// Latar cakram ikon atau blok berwarna: [hue] tipis di atas kartu, cukup
+  /// pekat untuk terlihat berwarna tapi tidak menelan ikonnya.
+  Color tint(Color hue) => Color.alphaBlend(hue.withValues(alpha: isLight ? 0.14 : 0.20), surface);
+
+  /// Latar blok statistik: lebih pekat dari [tint], seperti kartu "Weight" dan
+  /// "Calories" di referensi.
+  Color block(Color hue) => Color.alphaBlend(hue.withValues(alpha: isLight ? 0.18 : 0.30), surface);
+
   static const dark = GymColors(
-    bg: Color(0xFF080B12),
-    bgNested: Color(0xFF0E1220),
-    surface: Color(0xFF141925),
-    surface2: Color(0xFF1C2231),
-    border: Color(0xFF252C3D),
-    text: Color(0xFFF2F5FA),
-    text2: Color(0xFF8C95A8),
-    text3: Color(0xFF7A8192),
-    accent: Color(0xFF5AC8FA),
-    accentInk: Color(0xFF04121C),
-    accentSoft: Color(0x1F5AC8FA),
-    doneBg: Color(0xFF16321C),
+    bg: Color(0xFF0C0C0F),
+    bgNested: Color(0xFF141417),
+    surface: Color(0xFF1B1B1F),
+    surface2: Color(0xFF26262C),
+    border: Color(0xFF232328),
+    text: Color(0xFFF4F4F6),
+    text2: Color(0xFFA0A0AA),
+    text3: Color(0xFF6F6F7A),
+    accent: Color(0xFF8F7FFF),
+    accentFill: Color(0xFF6A5AE6),
+    accentInk: Color(0xFFFFFFFF),
+    accentSoft: Color(0x2E8F7FFF),
+    doneBg: Color(0xFF163126),
     doneInk: Color(0xFF4ADE80),
-    warn: Color(0xFFF5A623),
-    danger: Color(0xFFF0554E),
-    selected: Color(0xFF10263A),
-    chartIdle: Color(0xFF25405A),
-    silhouette: Color(0xFF19212E),
-    heatRamp: [Color(0xFF1B2536), Color(0xFF1E4258), Color(0xFF2A7FA8), Color(0xFF3FA8DC), Color(0xFF5AC8FA)],
-    activityRamp: [Color(0xFF161C29), Color(0xFF173042), Color(0xFF1E5878), Color(0xFF2E93C6), Color(0xFF5AC8FA)],
+    warn: Color(0xFFFFA94D),
+    danger: Color(0xFFFF5C5C),
+    selected: Color(0xFF1F1B36),
+    chartIdle: Color(0xFF34333F),
+    silhouette: Color(0xFF232328),
+    heatRamp: [Color(0xFF26262C), Color(0xFF3C3660), Color(0xFF574C9E), Color(0xFF7466D2), Color(0xFF8F7FFF)],
+    activityRamp: [Color(0xFF212126), Color(0xFF3C3660), Color(0xFF574C9E), Color(0xFF7466D2), Color(0xFF8F7FFF)],
+    hues: GymHues.dark,
     brightness: Brightness.dark,
   );
 
   /// Tema terang: kartu putih di atas abu-abu sangat muda. Teks sekunder
-  /// #566074 ≈ 6,3:1 di atas putih (NFR-11 minta ≥ 4,5:1). Aksen digelapkan
-  /// (lihat [lightAccent]) karena biru langit di atas putih hanya ≈ 1,9:1.
+  /// #5B5B68 ≈ 6,9:1 di atas putih (NFR-11 minta ≥ 4,5:1). Aksen digelapkan
+  /// (lihat [lightAccent]) karena lavender di atas putih hanya ≈ 2,6:1.
   static const light = GymColors(
-    bg: Color(0xFFF3F5F9),
-    bgNested: Color(0xFFF0F3F8),
+    bg: Color(0xFFF4F4F7),
+    bgNested: Color(0xFFEEEEF3),
     surface: Color(0xFFFFFFFF),
-    surface2: Color(0xFFEDF1F6),
-    border: Color(0xFFDFE4EC),
-    text: Color(0xFF0F1522),
-    text2: Color(0xFF566074),
-    text3: Color(0xFF6A7284),
-    accent: Color(0xFF0877B0),
+    surface2: Color(0xFFECECF2),
+    border: Color(0xFFE3E3EA),
+    text: Color(0xFF111118),
+    text2: Color(0xFF5B5B68),
+    text3: Color(0xFF7A7A88),
+    accent: Color(0xFF5B4BD6),
+    accentFill: Color(0xFF5B4BD6),
     accentInk: Color(0xFFFFFFFF),
-    accentSoft: Color(0x1F0877B0),
+    accentSoft: Color(0x1F5B4BD6),
     doneBg: Color(0xFFE2F6E8),
     doneInk: Color(0xFF166534),
     warn: Color(0xFFB45309),
     danger: Color(0xFFD02A24),
-    selected: Color(0xFFE3F1FA),
-    chartIdle: Color(0xFFC8D6E4),
-    silhouette: Color(0xFFE3E8EF),
-    heatRamp: [Color(0xFFE6EBF2), Color(0xFFC3E0F2), Color(0xFF86C5E8), Color(0xFF3E9FD3), Color(0xFF0877B0)],
-    activityRamp: [Color(0xFFE6EBF2), Color(0xFFC3E0F2), Color(0xFF86C5E8), Color(0xFF3E9FD3), Color(0xFF0877B0)],
+    selected: Color(0xFFEDEAFF),
+    chartIdle: Color(0xFFD6D6E4),
+    silhouette: Color(0xFFE3E3EA),
+    heatRamp: [Color(0xFFE6E6EF), Color(0xFFC9C3F3), Color(0xFFA79DEA), Color(0xFF8072E0), Color(0xFF5B4BD6)],
+    activityRamp: [Color(0xFFE6E6EF), Color(0xFFC9C3F3), Color(0xFFA79DEA), Color(0xFF8072E0), Color(0xFF5B4BD6)],
+    hues: GymHues.light,
     brightness: Brightness.light,
   );
 
@@ -151,6 +182,7 @@ class GymColors extends ThemeExtension<GymColors> {
     Color? text2,
     Color? text3,
     Color? accent,
+    Color? accentFill,
     Color? accentInk,
     Color? accentSoft,
     Color? doneBg,
@@ -158,6 +190,10 @@ class GymColors extends ThemeExtension<GymColors> {
     Color? warn,
     Color? danger,
     Color? selected,
+    Color? chartIdle,
+    List<Color>? heatRamp,
+    List<Color>? activityRamp,
+    GymHues? hues,
     Color? accentBase,
   }) {
     return GymColors(
@@ -170,6 +206,7 @@ class GymColors extends ThemeExtension<GymColors> {
       text2: text2 ?? this.text2,
       text3: text3 ?? this.text3,
       accent: accent ?? this.accent,
+      accentFill: accentFill ?? this.accentFill,
       accentInk: accentInk ?? this.accentInk,
       accentSoft: accentSoft ?? this.accentSoft,
       doneBg: doneBg ?? this.doneBg,
@@ -177,10 +214,11 @@ class GymColors extends ThemeExtension<GymColors> {
       warn: warn ?? this.warn,
       danger: danger ?? this.danger,
       selected: selected ?? this.selected,
-      chartIdle: chartIdle,
+      chartIdle: chartIdle ?? this.chartIdle,
       silhouette: silhouette,
-      heatRamp: heatRamp,
-      activityRamp: activityRamp,
+      heatRamp: heatRamp ?? this.heatRamp,
+      activityRamp: activityRamp ?? this.activityRamp,
+      hues: hues ?? this.hues,
       brightness: brightness,
       accentBase: accentBase ?? this.accentBase,
     );
@@ -200,6 +238,7 @@ class GymColors extends ThemeExtension<GymColors> {
       text2: m(text2, other.text2),
       text3: m(text3, other.text3),
       accent: m(accent, other.accent),
+      accentFill: m(accentFill, other.accentFill),
       accentInk: m(accentInk, other.accentInk),
       accentSoft: m(accentSoft, other.accentSoft),
       doneBg: m(doneBg, other.doneBg),
@@ -211,123 +250,205 @@ class GymColors extends ThemeExtension<GymColors> {
       silhouette: m(silhouette, other.silhouette),
       heatRamp: [for (var i = 0; i < heatRamp.length; i++) m(heatRamp[i], other.heatRamp[i])],
       activityRamp: [for (var i = 0; i < activityRamp.length; i++) m(activityRamp[i], other.activityRamp[i])],
+      hues: t < 0.5 ? hues : other.hues,
       brightness: t < 0.5 ? brightness : other.brightness,
       accentBase: t < 0.5 ? accentBase : other.accentBase,
     );
   }
 }
 
+/// Warna pembeda dari referensi. Bukan untuk makna tetap (merah = bahaya
+/// tetap [GymColors.danger]); ini untuk membedakan satu blok dari blok di
+/// sebelahnya, seperti kartu "Water / Weight / Calories / BPM".
+@immutable
+class GymHues {
+  const GymHues({
+    required this.violet,
+    required this.pink,
+    required this.cyan,
+    required this.orange,
+    required this.lime,
+    required this.green,
+  });
+
+  final Color violet;
+  final Color pink;
+  final Color cyan;
+  final Color orange;
+  final Color lime;
+  final Color green;
+
+  /// Urutan bergilir untuk daftar (ikon setelan, kategori).
+  List<Color> get cycle => [violet, pink, cyan, orange, green, lime];
+
+  /// Warna ke-[i] dari giliran, berputar.
+  Color at(int i) => cycle[i % cycle.length];
+
+  static const dark = GymHues(
+    violet: Color(0xFF8F7FFF),
+    pink: Color(0xFFFF5FB0),
+    cyan: Color(0xFF22D3EE),
+    orange: Color(0xFFFFA94D),
+    lime: Color(0xFFD9FF5C),
+    green: Color(0xFF34D399),
+  );
+
+  /// Versi terang: cukup gelap untuk dipakai sebagai warna ikon dan angka di
+  /// atas kartu putih.
+  static const light = GymHues(
+    violet: Color(0xFF5B4BD6),
+    pink: Color(0xFFC81E78),
+    cyan: Color(0xFF0E7C8C),
+    orange: Color(0xFFB9520B),
+    lime: Color(0xFF4D7C0F),
+    green: Color(0xFF15803D),
+  );
+}
+
 extension GymColorsX on BuildContext {
   GymColors get gym => Theme.of(this).extension<GymColors>()!;
 }
 
-/// Radius sudut, diambil dari nilai yang benar-benar dipakai artboard Pen.
-///
-/// Skalanya sengaja tidak dirapikan jadi kelipatan yang enak. Pen memang
-/// memakai 7, 9, dan 11 di tempat-tempat tertentu, dan membulatkannya ke skala
-/// "bersih" membuat kotak centang dan tombol stepper terlihat berbeda dari
-/// desain — persis hal yang diminta supaya cocok.
+/// Radius sudut. Referensi memakai sudut yang lebih bulat dari desain lama:
+/// kartu ±20, tombol utama pil penuh, nav bawah pil melayang.
 abstract final class GymRadius {
   /// Sel kalender aktivitas.
-  static const cell = 2.0;
+  static const cell = 3.0;
 
   /// Batang grafik.
-  static const bar = 4.0;
+  static const bar = 6.0;
 
   /// Kotak centang peralatan.
-  static const check = 7.0;
+  static const check = 8.0;
 
   /// Kotak input kg/rep di tabel set.
-  static const input = 8.0;
+  static const input = 10.0;
 
   /// Segmen terpilih di dalam tab segmented, kotak konfigurasi editor.
-  static const segment = 9.0;
+  static const segment = 12.0;
 
   /// Kotak ikon, thumbnail, tombol aksi kecil, "Add set".
-  static const small = 10.0;
+  static const small = 12.0;
 
   /// Tombol stepper, preset istirahat, kotak tanggal.
-  static const stepper = 11.0;
+  static const stepper = 12.0;
 
   /// Field, baris daftar, tombol sekunder, "Add exercise".
-  static const control = 12.0;
+  static const control = 14.0;
 
-  /// Kartu standar dan tombol utama.
-  static const card = 14.0;
+  /// Kartu standar.
+  static const card = 20.0;
 
   /// Kartu besar — panel istirahat, kartu gerakan, kartu Stats.
-  static const large = 16.0;
+  static const large = 22.0;
 
-  /// Satu-satunya radius 18 di desain: kartu "Next session" di Home.
-  static const hero = 18.0;
+  /// Kartu "Next session" di Home.
+  static const hero = 24.0;
 
   /// Sheet durasi istirahat, hanya sudut atas.
-  static const sheet = 24.0;
+  static const sheet = 28.0;
+
+  /// Nav bawah yang melayang.
+  static const nav = 26.0;
 
   static const pill = 999.0;
 }
 
-/// Pilihan warna aksen di Profil. Semuanya cukup terang untuk teks gelap
-/// [GymColors.accentInk] di atasnya.
+/// Pilihan warna aksen di Profil. Violet dulu — itu aksen referensi.
 const accentChoices = <Color>[
+  Color(0xFF8F7FFF),
   Color(0xFF5AC8FA),
   Color(0xFF4ADE80),
   Color(0xFFFF9F43),
   Color(0xFFFF7AB6),
-  Color(0xFFA78BFA),
 ];
 
-/// Aksen versi tema terang: pilihan Profil dirancang untuk latar gelap dan
-/// terlalu pucat di atas putih. Lima pilihan bawaan punya padanan yang sudah
-/// dicek kontrasnya dengan teks putih (≥ 4,5:1); warna lain digelapkan lewat
-/// HSL.
-Color lightAccent(Color accent) {
+double _contrastOnWhite(Color c) => 1.05 / (c.computeLuminance() + 0.05);
+
+/// Gelapkan [accent] sampai teks putih di atasnya ≥ 4,5:1. Lima pilihan
+/// bawaan punya padanan yang sudah ditentukan supaya warnanya tetap enak,
+/// bukan sekadar lolos angka; warna lain digelapkan lewat HSL.
+Color _fillFor(Color accent) {
   const pairs = {
+    0xFF8F7FFF: 0xFF6A5AE6,
     0xFF5AC8FA: 0xFF0877B0,
     0xFF4ADE80: 0xFF15803D,
     0xFFFF9F43: 0xFFB9520B,
     0xFFFF7AB6: 0xFFBE2468,
-    0xFFA78BFA: 0xFF6D28D9,
   };
   final known = pairs[accent.toARGB32()];
   var hsl = HSLColor.fromColor(known == null ? accent : Color(known));
-  // Gelapkan sampai benar-benar lolos 4,5:1 terhadap putih. Kuning perlu
-  // jauh lebih gelap daripada biru untuk kontras yang sama, jadi batas
-  // lightness tetap tidak cukup.
-  double contrast(Color c) => 1.05 / (c.computeLuminance() + 0.05);
-  while (contrast(hsl.toColor()) < 4.6 && hsl.lightness > 0.05) {
+  while (_contrastOnWhite(hsl.toColor()) < 4.6 && hsl.lightness > 0.05) {
     hsl = hsl.withLightness(hsl.lightness - 0.02);
   }
   return hsl.toColor();
 }
 
+/// Aksen versi tema terang: pilihan Profil dirancang untuk latar gelap dan
+/// terlalu pucat di atas putih. Di tema terang aksen ikon/teks dan latar
+/// tombol sama-sama memakai versi gelap ini.
+Color lightAccent(Color accent) {
+  const pairs = {
+    0xFF8F7FFF: 0xFF5B4BD6,
+    0xFF5AC8FA: 0xFF0877B0,
+    0xFF4ADE80: 0xFF15803D,
+    0xFFFF9F43: 0xFFB9520B,
+    0xFFFF7AB6: 0xFFBE2468,
+  };
+  final known = pairs[accent.toARGB32()];
+  var hsl = HSLColor.fromColor(known == null ? accent : Color(known));
+  while (_contrastOnWhite(hsl.toColor()) < 4.6 && hsl.lightness > 0.05) {
+    hsl = hsl.withLightness(hsl.lightness - 0.02);
+  }
+  return hsl.toColor();
+}
+
+/// Lima tingkat dari [from] ke [to]; untuk ramp peta panas dan kalender.
+List<Color> _ramp(Color from, Color to) =>
+    [for (final t in const [0.0, 0.28, 0.52, 0.76, 1.0]) Color.lerp(from, to, t)!];
+
 ThemeData buildGymTheme({Color? accent, Brightness brightness = Brightness.dark}) {
   final base = brightness == Brightness.light ? GymColors.light : GymColors.dark;
   final pick = accent ?? GymColors.dark.accent;
-  final shownAccent = brightness == Brightness.light ? lightAccent(pick) : pick;
-  final c = accent == null
-      ? base.copyWith(accentBase: pick)
-      : base.copyWith(
-          accent: shownAccent,
-          accentSoft: shownAccent.withValues(alpha: 0.12),
-          accentBase: pick,
-          selected: brightness == Brightness.light ? Color.alphaBlend(shownAccent.withValues(alpha: 0.10), base.surface) : null,
-        );
+  final light = brightness == Brightness.light;
+  final shownAccent = light ? lightAccent(pick) : pick;
+  final fill = light ? shownAccent : _fillFor(pick);
+  final c = base.copyWith(
+    accent: shownAccent,
+    accentFill: fill,
+    accentSoft: shownAccent.withValues(alpha: light ? 0.12 : 0.18),
+    accentBase: pick,
+    selected: Color.alphaBlend(shownAccent.withValues(alpha: light ? 0.10 : 0.16), base.surface),
+    chartIdle: Color.lerp(base.surface2, shownAccent, light ? 0.18 : 0.22),
+    // Ramp mengikuti aksen pilihan: peta panas hijau untuk yang memilih
+    // aksen hijau, bukan tetap ungu.
+    heatRamp: _ramp(base.surface2, shownAccent),
+    activityRamp: _ramp(light ? base.bgNested : const Color(0xFF212126), shownAccent),
+    hues: light ? base.hues : GymHues(
+      violet: pick,
+      pink: base.hues.pink,
+      cyan: base.hues.cyan,
+      orange: base.hues.orange,
+      lime: base.hues.lime,
+      green: base.hues.green,
+    ),
+  );
   final scheme = ColorScheme.fromSeed(
     seedColor: c.accent,
     brightness: brightness,
   ).copyWith(
-    primary: c.accent,
+    primary: c.accentFill,
     onPrimary: c.accentInk,
+    secondary: c.accent,
     surface: c.surface,
     onSurface: c.text,
     error: c.danger,
   );
 
-  // Inter di-bundle, sama seperti artboard Pen. Lima berat yang benar-benar
-  // dipakai saja (400–800) — 1,6 MB, masih jauh di bawah NFR-3 (≤ 25 MB) — dan
-  // di-bundle, bukan diambil saat runtime, supaya janji offline-first tidak
-  // bergantung pada unduhan font.
+  // Inter di-bundle, sama seperti sebelumnya. Lima berat yang benar-benar
+  // dipakai saja (400–800) — 1,6 MB, masih jauh di bawah NFR-3 (≤ 25 MB) —
+  // dan di-bundle, bukan diambil saat runtime, supaya janji offline-first
+  // tidak bergantung pada unduhan font.
   return ThemeData(
     useMaterial3: true,
     fontFamily: 'Inter',
@@ -344,36 +465,50 @@ ThemeData buildGymTheme({Color? accent, Brightness brightness = Brightness.dark}
       TargetPlatform.android: FadeForwardsPageTransitionsBuilder(),
     }),
     textTheme: TextTheme(
-      displaySmall: TextStyle(fontSize: 34, fontWeight: FontWeight.w700, color: c.text),
-      headlineMedium: TextStyle(fontSize: 26, fontWeight: FontWeight.w700, color: c.text),
-      titleLarge: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: c.text),
+      displaySmall: TextStyle(fontSize: 32, fontWeight: FontWeight.w800, letterSpacing: -0.5, color: c.text),
+      headlineMedium: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, letterSpacing: -0.2, color: c.text),
+      titleLarge: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: c.text),
       titleMedium: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: c.text),
       bodyLarge: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: c.text),
       bodyMedium: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: c.text2),
       labelSmall: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, letterSpacing: 1.1, color: c.text2),
     ),
-    // Dialog, sheet, dan snackbar dari Material ikut palet, bukan warna
-    // turunan seed yang di tema terang jadi ungu muda.
-    dialogTheme: DialogThemeData(backgroundColor: c.surface),
-    bottomSheetTheme: BottomSheetThemeData(backgroundColor: c.surface, modalBackgroundColor: c.surface),
-    popupMenuTheme: PopupMenuThemeData(color: c.surface),
-    navigationBarTheme: NavigationBarThemeData(
+    // Dialog, sheet, snackbar, dan chip dari Material ikut palet, bukan warna
+    // turunan seed.
+    dialogTheme: DialogThemeData(
       backgroundColor: c.surface,
-      // Pil redup di belakang ikon aktif: Material menganimasikannya sendiri
-      // saat tab berpindah, jadi perpindahan tab punya "benda" yang bergerak.
-      indicatorColor: c.accentSoft,
-      indicatorShape: const StadiumBorder(),
-      elevation: 0,
-      height: 72,
-      labelTextStyle: WidgetStateProperty.resolveWith((s) => TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.w600,
-            color: s.contains(WidgetState.selected) ? c.accent : c.text3,
-          )),
-      iconTheme: WidgetStateProperty.resolveWith((s) => IconThemeData(
-            size: 24,
-            color: s.contains(WidgetState.selected) ? c.accent : c.text3,
-          )),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(GymRadius.large)),
+    ),
+    bottomSheetTheme: BottomSheetThemeData(backgroundColor: c.surface, modalBackgroundColor: c.surface),
+    popupMenuTheme: PopupMenuThemeData(
+      color: c.surface2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(GymRadius.control)),
+    ),
+    chipTheme: ChipThemeData(
+      backgroundColor: c.surface2,
+      selectedColor: c.accentFill,
+      disabledColor: c.surface2,
+      side: BorderSide.none,
+      shape: const StadiumBorder(),
+      showCheckmark: false,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      labelStyle: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.text),
+      secondaryLabelStyle: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: c.accentInk),
+      iconTheme: IconThemeData(size: 16, color: c.text2),
+    ),
+    switchTheme: SwitchThemeData(
+      thumbColor: WidgetStateProperty.resolveWith(
+          (s) => s.contains(WidgetState.selected) ? c.accentInk : c.text2),
+      trackColor: WidgetStateProperty.resolveWith(
+          (s) => s.contains(WidgetState.selected) ? c.accentFill : c.surface2),
+      trackOutlineColor: const WidgetStatePropertyAll(Colors.transparent),
+    ),
+    dividerTheme: DividerThemeData(color: c.border, thickness: 1, space: 1),
+    snackBarTheme: SnackBarThemeData(
+      backgroundColor: c.surface2,
+      contentTextStyle: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: c.text),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(GymRadius.control)),
+      behavior: SnackBarBehavior.floating,
     ),
   );
 }

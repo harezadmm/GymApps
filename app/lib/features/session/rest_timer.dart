@@ -608,7 +608,7 @@ class _PresetChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.gym;
     return Material(
-      color: selected ? c.accent : Colors.transparent,
+      color: selected ? c.accentFill : Colors.transparent,
       borderRadius: BorderRadius.circular(GymRadius.stepper),
       child: InkWell(
         onTap: onTap,
