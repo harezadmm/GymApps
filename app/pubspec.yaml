@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 2.1.0+16
+version: 2.1.1+17
 
 environment:
   sdk: ^3.13.2
@@ -84,14 +84,15 @@ flutter:
     - family: GymIcons
       fonts:
         - asset: assets/fonts/GymIcons.ttf
-    # Judul dan angka besar: condensed, seperti aplikasi olahraga. OFL, di-bundle.
-    - family: BarlowCondensed
+    # Judul dan angka besar: Manrope, sans membulat geometris seperti di
+    # referensi. OFL, di-bundle (tiga berat statis dari font variabelnya).
+    - family: Manrope
       fonts:
-        - asset: assets/fonts/BarlowCondensed-SemiBold.ttf
+        - asset: assets/fonts/Manrope-SemiBold.ttf
           weight: 600
-        - asset: assets/fonts/BarlowCondensed-Bold.ttf
+        - asset: assets/fonts/Manrope-Bold.ttf
           weight: 700
-        - asset: assets/fonts/BarlowCondensed-ExtraBold.ttf
+        - asset: assets/fonts/Manrope-ExtraBold.ttf
           weight: 800
     - family: Inter
       fonts:
