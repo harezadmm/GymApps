@@ -214,14 +214,20 @@ class _SessionRow extends StatelessWidget {
     final date = DateTime.tryParse(workout.date);
     final volume = _workingSets.fold(0.0, (a, s) => a + s.weight * s.reps);
 
+    // Warna identitas per rutinitas (dari namanya), sebagai garis di tepi
+    // kiri — seperti kartu "Water / Breakfast" di referensi. Pemindai cepat
+    // membedakan Push dari Pull tanpa membaca.
+    final hue = c.hues.at((workout.routine ?? '').hashCode.abs());
     return Material(
       color: c.surface,
       borderRadius: BorderRadius.circular(GymRadius.card),
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: () => _showDetail(context, workout),
         borderRadius: BorderRadius.circular(GymRadius.card),
         child: Container(
           padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+          decoration: BoxDecoration(border: Border(left: BorderSide(color: hue, width: 4))),
           child: Row(
             children: [
               SizedBox(

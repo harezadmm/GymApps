@@ -627,7 +627,7 @@ class _MiniStat extends StatelessWidget {
         // meluber.
         Flexible(
           child: Text(text,
-              maxLines: 1,
+              maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: c.text)),
         ),
@@ -645,25 +645,25 @@ class _HeroFigure extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.gym;
     return SizedBox(
-      width: 112,
-      height: 156,
+      width: 124,
+      height: 160,
       child: ClipRect(
         child: Stack(
           clipBehavior: Clip.none,
           children: [
             Positioned(
-              right: -34,
-              top: 8,
+              right: -30,
+              top: 14,
               child: Container(
-                width: 150,
-                height: 150,
+                width: 140,
+                height: 140,
                 decoration: BoxDecoration(color: c.tint(c.accent), shape: BoxShape.circle),
               ),
             ),
             const Positioned(
-              right: -8,
-              bottom: 0,
-              child: GymIllustration(GymArt.liftOverhead, height: 150),
+              right: 0,
+              bottom: 2,
+              child: GymIllustration(GymArt.heroLift, height: 150),
             ),
           ],
         ),

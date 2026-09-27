@@ -64,13 +64,16 @@ Dipakai untuk judul layar, nama rutinitas, dan angka besar di blok statistik.
 
 ## Ilustrasi (`app/assets/illustrations/`)
 
-Satu kontributor, **Roundsquid**, gaya flat dengan latar gumpalan lavender
-muda yang terbaca di tema gelap maupun terang.
+Satu kontributor, **Nataliia Nesterenko**, figur potongan tanpa latar (flat).
+Lingkaran aksen di belakangnya digambar aplikasi (`GymIllustration(blob: true)`),
+jadi ikut warna aksen dan tema. Ilustrasi Roundsquid sebelumnya diganti
+karena membawa latar gumpalan sendiri yang bertabrakan dengan kartu.
 
 | Berkas | Slug IconScout | Dipakai di |
 | --- | --- | --- |
-| lift_overhead.svg | man-lifting-barbell-at-gym-7807673 | layar masuk |
-| lift_barbell.svg | girl-doing-weightlifting-7807658 | layar daftar |
-| plan_workout.svg | woman-workout-according-to-gym-plan-7807642 | pilih program |
-| empty_history.svg | boy-with-workout-plan-8689251 | riwayat kosong |
-| empty_stats.svg | girl-lifting-barbell-6137974 | statistik kosong |
+| hero_lift.svg | female-powerlifter-lifting-barbell-3857849 | kartu sesi berikutnya (Home) |
+| lift_overhead.svg | athlete-with-barbell-3937472 | layar masuk |
+| lift_barbell.svg | sportswoman-lifting-barbell-3857850 | layar daftar |
+| plan_workout.svg | woman-doing-squat-exercise-4243315 | pilih program |
+| empty_history.svg | athlete-with-sport-equipment-3937483 | riwayat kosong |
+| empty_stats.svg | athlete-exercising-on-bar-3937482 | statistik kosong |

@@ -151,7 +151,7 @@ class _ProgramPickerScreenState extends State<ProgramPickerScreen> {
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                 children: [
-                  const Center(child: GymIllustration(GymArt.planWorkout, height: 140)),
+                  const Center(child: GymIllustration(GymArt.planWorkout, height: 140, blob: true)),
                   const SizedBox(height: 14),
                   Text(context.t.chooseProgram, style: Theme.of(context).textTheme.headlineMedium),
                   const SizedBox(height: 6),
