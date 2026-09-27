@@ -140,7 +140,7 @@ void main() {
   group('tema terang', () {
     test('tema gelap tetap bawaan dan tidak berubah', () {
       final c = buildGymTheme().extension<GymColors>()!;
-      expect(c.bg, const Color(0xFF080B12));
+      expect(c.bg, const Color(0xFF0C0C0F));
       expect(c.isLight, isFalse);
     });
 
@@ -150,6 +150,15 @@ void main() {
       expect(_contrast(c.text, c.surface), greaterThanOrEqualTo(4.5));
       expect(_contrast(c.text2, c.surface), greaterThanOrEqualTo(4.5));
       expect(_contrast(c.doneInk, c.doneBg), greaterThanOrEqualTo(4.5));
+    });
+
+    test('tema gelap: isian tombol tiap aksen ≥ 4,5:1 dengan teks putih, aksen terbaca di atas latar', () {
+      for (final a in accentChoices) {
+        final c = buildGymTheme(accent: a).extension<GymColors>()!;
+        expect(_contrast(c.accentFill, c.accentInk), greaterThanOrEqualTo(4.5), reason: a.toString());
+        expect(_contrast(c.accent, c.bg), greaterThanOrEqualTo(4.5), reason: a.toString());
+        expect(_contrast(c.text2, c.surface), greaterThanOrEqualTo(4.5));
+      }
     });
 
     test('setiap pilihan aksen digelapkan cukup untuk teks putih dan untuk tautan di atas putih', () {

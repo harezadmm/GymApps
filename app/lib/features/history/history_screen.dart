@@ -221,10 +221,6 @@ class _SessionRow extends StatelessWidget {
         borderRadius: BorderRadius.circular(GymRadius.card),
         child: Container(
           padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(GymRadius.card),
-            border: Border.all(color: c.border),
-          ),
           child: Row(
             children: [
               SizedBox(

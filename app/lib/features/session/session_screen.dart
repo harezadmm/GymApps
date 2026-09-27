@@ -1683,7 +1683,7 @@ class _RirChips extends StatelessWidget {
                   height: 28,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: selected == v ? c.accent : c.surface2,
+                    color: selected == v ? c.accentFill : c.surface2,
                     borderRadius: BorderRadius.circular(GymRadius.pill),
                   ),
                   child: Text(v == 4 ? '4+' : '$v',

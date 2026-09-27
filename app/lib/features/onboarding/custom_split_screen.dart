@@ -254,7 +254,7 @@ class _WeekdayPicker extends StatelessWidget {
           if (d > 1) const SizedBox(width: 6),
           Expanded(
             child: Material(
-              color: selected.contains(d) ? c.accent : c.surface,
+              color: selected.contains(d) ? c.accentFill : c.surface,
               borderRadius: BorderRadius.circular(GymRadius.card),
               child: InkWell(
                 onTap: () => onToggle(d),

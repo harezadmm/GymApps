@@ -50,11 +50,14 @@ class BodyweightCard extends StatelessWidget {
     }
     return GymCard(
       radius: GymRadius.large,
+      color: c.block(c.hues.pink),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
+              IconDisc(GymIcons.scale, color: c.hues.pink, size: 34, iconSize: 18),
+              const SizedBox(width: 10),
               Expanded(child: SectionLabel(t.bodyweightTitle)),
               if (last != null)
                 Text(context.wUnit(last.kg),
@@ -66,6 +69,7 @@ class BodyweightCard extends StatelessWidget {
           if (recent.length >= 2) ...[
             const SizedBox(height: 12),
             BarSeries(
+              highlightColor: c.hues.pink,
               // Batang dimulai sedikit di bawah berat terendah, supaya
               // selisih 0,5 kg tetap terlihat.
               values: [for (final e in recent) e.kg - low + 1],

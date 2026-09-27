@@ -197,7 +197,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final onChanged = widget.onAccentChanged;
     if (onChanged == null) return;
     final t = context.t;
-    final names = [t.accentBlue, t.accentGreen, t.accentOrange, t.accentPink, t.accentViolet];
+    // Urutannya harus sama dengan accentChoices: violet dulu.
+    final names = [t.accentViolet, t.accentBlue, t.accentGreen, t.accentOrange, t.accentPink];
     // Di tema terang aksen yang tampil sudah digelapkan; yang dicocokkan
     // pilihan aslinya.
     final current = context.gym.accentBase ?? context.gym.accent;
@@ -420,17 +421,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           padding: const EdgeInsets.all(14),
           child: Row(
             children: [
-              Container(
-                width: 48,
-                height: 48,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: c.accent.withValues(alpha: 0.22),
-                  shape: BoxShape.circle,
-                ),
-                child: Text(_initials(widget.email),
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: c.accent)),
-              ),
+              AvatarCircle(text: _initials(widget.email), size: 50),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
@@ -484,19 +475,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
         const SizedBox(height: 8),
         SettingsGroup(
           children: [
-            SettingsTile(icon: Icons.straighten, label: t.units, value: settings.unit.label, onTap: _pickUnit),
+            SettingsTile(icon: Icons.straighten, hue: c.hues.violet, label: t.units, value: settings.unit.label, onTap: _pickUnit),
             SettingsTile(
-                icon: Icons.timer_outlined,
+                icon: Icons.timer_outlined, hue: c.hues.cyan,
                 label: t.defaultRest,
                 value: _restText(settings.defaultRestSeconds),
                 onTap: _pickDefaultRest),
             SettingsTile(
-                icon: Icons.trending_down,
+                icon: Icons.trending_down, hue: c.hues.orange,
                 label: t.deloadFactor,
                 value: '${(settings.deloadFactor * 100).round()}%',
                 onTap: _pickDeload),
             SettingsTile(
-              icon: Icons.speed,
+              icon: Icons.speed, hue: c.hues.pink,
               label: t.logRir,
               trailing: Switch(
                 value: settings.logRir,
@@ -504,7 +495,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
             SettingsTile(
-              icon: Icons.lightbulb_outline,
+              icon: Icons.lightbulb_outline, hue: c.hues.lime,
               label: t.keepScreenAwake,
               trailing: Switch(
                 value: _keepAwake,
@@ -516,7 +507,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             if (kIsWeb && _restPush != WebRestPush.unavailable)
               SettingsTile(
-                icon: Icons.notifications_active_outlined,
+                icon: Icons.notifications_active_outlined, hue: c.hues.green,
                 label: t.restPushTitle,
                 value: switch (_restPush) {
                   WebRestPush.on => t.restPushOn,
@@ -527,12 +518,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 onTap: _toggleRestPush,
               ),
             SettingsTile(
-                icon: Icons.calendar_view_week,
+                icon: Icons.calendar_view_week, hue: c.hues.violet,
                 label: t.weekStartsOn,
                 value: t.weekdayLong(settings.weekStartsOn),
                 onTap: _pickWeekStart),
             SettingsTile(
-              icon: Icons.fitness_center,
+              icon: Icons.fitness_center, hue: c.hues.cyan,
               label: t.myEquipment,
               value: settings.equipment == null ? t.equipmentAll : t.equipmentCount(settings.equipment!.length),
               onTap: () => editEquipment(context),
@@ -544,10 +535,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
         const SizedBox(height: 8),
         SettingsGroup(
           children: [
-            SettingsTile(icon: Icons.download_outlined, label: t.exportBackup, onTap: _export),
-            SettingsTile(icon: Icons.upload_outlined, label: t.importBackup, onTap: _import),
+            SettingsTile(icon: Icons.download_outlined, hue: c.hues.orange, label: t.exportBackup, onTap: _export),
+            SettingsTile(icon: Icons.upload_outlined, hue: c.hues.pink, label: t.importBackup, onTap: _import),
             SettingsTile(
-              icon: Icons.sync,
+              icon: Icons.sync, hue: c.hues.green,
               label: t.forceSync,
               onTap: _forceSync,
             ),
@@ -560,7 +551,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           children: [
             if (widget.onThemeModeChanged != null)
               SettingsTile(
-                icon: Icons.contrast,
+                icon: Icons.contrast, hue: c.hues.violet,
                 label: t.themeTitle,
                 value: switch (widget.themeMode) {
                   ThemeMode.light => t.themeLight,
@@ -570,7 +561,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 onTap: _pickTheme,
               ),
             SettingsTile(
-              icon: Icons.palette_outlined,
+              icon: Icons.palette_outlined, hue: c.hues.pink,
               label: t.accentColour,
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -583,13 +574,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
               onTap: widget.onAccentChanged == null ? null : _pickAccent,
             ),
             SettingsTile(
-              icon: Icons.translate,
+              icon: Icons.translate, hue: c.hues.cyan,
               label: t.language,
               value: appLanguageLabel[widget.language]!,
               onTap: _pickLanguage,
             ),
             SettingsTile(
-                icon: Icons.info_outline,
+                icon: Icons.info_outline, hue: c.hues.orange,
                 label: t.aboutApp,
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,

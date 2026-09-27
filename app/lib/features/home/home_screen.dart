@@ -6,6 +6,9 @@
 library;
 
 import 'package:flutter/material.dart';
+import '../../core/gym_icons.dart';
+import '../library/library_screen.dart';
+import '../stats/dashboard_screen.dart';
 import '../../core/weights.dart';
 import '../../domain/units.dart';
 
@@ -59,7 +62,13 @@ class _Recent {
 }
 
 class HomeScreen extends StatelessWidget {
-  const HomeScreen({super.key});
+  const HomeScreen({super.key, this.email, this.onOpenProfile});
+
+  /// Email akun, untuk inisial avatar di pojok header (seperti referensi).
+  final String? email;
+
+  /// Avatar diketuk → tab Profil.
+  final VoidCallback? onOpenProfile;
 
   @override
   Widget build(BuildContext context) {
@@ -68,14 +77,19 @@ class HomeScreen extends StatelessWidget {
     final store = context.workouts;
     final now = DateTime.now();
     final recent = _Recent(store.workouts, now);
+    final hasProgram = store.program != null;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       children: [
-        SectionLabel('${t.weekdayLong(now.weekday)} · ${now.day} ${t.monthShort(now.month)}'),
-        const SizedBox(height: 4),
-        Text(t.nextUp, style: Theme.of(context).textTheme.headlineMedium),
-        const SizedBox(height: 16),
+        ScreenHeader(
+          subtitle: '${t.weekdayLong(now.weekday)} · ${now.day} ${t.monthShort(now.month)}',
+          title: t.nextUp,
+          actions: [
+            if (email != null)
+              AvatarCircle(text: initialsOf(email!), tooltip: t.openProfile, onTap: onOpenProfile),
+          ],
+        ),
         if (store.loaded && store.draft != null) ...[
           _ResumeCard(draft: store.draft!),
           const SizedBox(height: 12),
@@ -83,44 +97,100 @@ class HomeScreen extends StatelessWidget {
         if (!store.loaded)
           const SizedBox(height: 200)
         else if (store.program == null || store.nextSessionOn(now) == null)
-          _NoProgramCard(hasProgram: store.program != null)
+          _NoProgramCard(hasProgram: hasProgram)
         else
           _NextSessionCard(next: store.nextSessionOn(now)!, program: store.program!),
+        const SizedBox(height: 18),
+        // Kisi 2×2 seperti "My Fitness Profile / My Nutrition Goals": jalan
+        // pintas ke hal yang dulu tersembunyi di dalam kartu atau tab lain.
+        Row(children: [
+          Expanded(
+            child: _QuickTile(
+              label: t.otherSession,
+              icon: Icons.swap_horiz_rounded,
+              hue: c.hues.cyan,
+              onTap: !hasProgram || store.nextSessionOn(now) == null
+                  ? null
+                  : () async {
+                      final next = store.nextSessionOn(now)!;
+                      final picked = await pickOtherRoutine(context, program: store.program!, current: next.routine);
+                      if (picked != null && context.mounted) await openRoutineSession(context, picked);
+                    },
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _QuickTile(
+              label: t.freestyle,
+              icon: Icons.edit_note_rounded,
+              hue: c.hues.pink,
+              onTap: () => openFreestyleSession(context, t.freestyle),
+            ),
+          ),
+        ]),
+        const SizedBox(height: 10),
+        Row(children: [
+          Expanded(
+            child: _QuickTile(
+              label: t.exerciseLibrary,
+              icon: GymIcons.dumbbell,
+              hue: c.hues.violet,
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ExerciseLibraryScreen())),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _QuickTile(
+              label: t.dashboard,
+              icon: Icons.insights_rounded,
+              hue: c.hues.orange,
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DashboardScreen())),
+            ),
+          ),
+        ]),
         const SizedBox(height: 22),
         Row(
           children: [
-            Expanded(child: SectionLabel(t.thisWeek)),
+            Expanded(child: Text(t.thisWeek, style: Theme.of(context).textTheme.titleLarge)),
             Text(t.sessionsCount(_thisWeek(store.workouts, now, store.settings.weekStartsOn)),
-                style: TextStyle(fontSize: 12, color: c.text2)),
+                style: TextStyle(fontSize: 12.5, color: c.text2)),
           ],
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
         _WeekStrip(
             history: store.workouts, today: now, program: store.program, weekStartsOn: store.settings.weekStartsOn),
         const SizedBox(height: 12),
         Row(
           children: [
             Expanded(
-              child: _StatTile(
+              child: StatBlock(
+                height: 128,
+                label: t.volume7d,
+                icon: Icons.inventory_2_outlined,
+                color: c.hues.orange,
                 value: kgTo(recent.volume, context.unit) >= 1000
                     ? context.volume(recent.volume)
                     : '${formatDelta(kgTo(recent.volume, context.unit).roundToDouble())} ${context.unitLabel}',
-                label: t.volume7d,
               ),
             ),
             const SizedBox(width: 10),
             Expanded(
-              child: _StatTile(
-                value: recent.e1rmUp > 0 ? '+${recent.e1rmUp}' : '0',
+              child: StatBlock(
+                height: 128,
                 label: t.e1rmUp,
-                accent: recent.e1rmUp > 0,
+                icon: Icons.trending_up_rounded,
+                color: c.hues.violet,
+                value: recent.e1rmUp > 0 ? '+${recent.e1rmUp}' : '0',
               ),
             ),
             const SizedBox(width: 10),
             Expanded(
-              child: _StatTile(
-                value: recent.daysSince == null ? '—' : t.daysShort(recent.daysSince!),
+              child: StatBlock(
+                height: 128,
                 label: t.sinceLast,
+                icon: Icons.schedule_rounded,
+                color: c.hues.cyan,
+                value: recent.daysSince == null ? '—' : t.daysShort(recent.daysSince!),
               ),
             ),
           ],
@@ -393,46 +463,29 @@ class _NextSessionCard extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 16),
-          GymButton(label: t.startSession, icon: Icons.play_arrow, onPressed: () => _start(context)),
-          const SizedBox(height: 10),
-          // Jadwal bilang Push, badan bilang Legs. Rutinitas lain dari split
-          // yang sama bisa langsung dimulai dari sini; cursor rotasi lalu
-          // bergeser ke sesudah rutinitas yang benar-benar dikerjakan.
-          GymButton(
-            label: t.otherSession,
-            icon: Icons.swap_horiz,
-            tone: GymButtonTone.neutral,
-            height: 44,
-            onPressed: () async {
-              final picked = await pickOtherRoutine(context, program: program, current: routine);
-              if (picked != null && context.mounted) await _start(context, picked);
-            },
-          ),
-          const SizedBox(height: 10),
+          // "Pilih sesi lain" dan "Bebas" ada di kisi aksi cepat di bawah
+          // kartu; di sini tinggal mulai dan lewati, seperti tombol "Play"
+          // tunggal di kartu referensi.
           Row(
             children: [
               Expanded(
+                flex: 3,
+                child: GymButton(label: t.startSession, icon: Icons.play_arrow_rounded, onPressed: () => _start(context)),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                flex: 2,
                 child: GymButton(
                   label: t.skip,
-                  icon: Icons.skip_next,
+                  icon: Icons.skip_next_rounded,
                   tone: GymButtonTone.neutral,
-                  height: 44,
+                  shape: GymButtonShape.pill,
                   onPressed: () async {
                     final messenger = ScaffoldMessenger.of(context);
                     final msg = t.skipped;
                     await store.skipNext(DateTime.now());
                     messenger.showSnackBar(SnackBar(content: Text(msg)));
                   },
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: GymButton(
-                  label: t.freestyle,
-                  icon: Icons.edit_note_outlined,
-                  tone: GymButtonTone.neutral,
-                  height: 44,
-                  onPressed: () => openFreestyleSession(context, t.freestyle),
                 ),
               ),
             ],
@@ -492,7 +545,7 @@ Future<Routine?> pickOtherRoutine(BuildContext context, {required Program progra
                     ),
                     if (isNext)
                       Pill(
-                        color: c.accent,
+                        color: c.accentFill,
                         textColor: c.accentInk,
                         child: Text(t.upNext, style: const TextStyle(fontSize: 10, letterSpacing: 0.8)),
                       )
@@ -559,10 +612,11 @@ class _WeekStrip extends StatelessWidget {
               child: Container(
                 height: 62,
                 decoration: BoxDecoration(
-                  color: done ? c.accent : c.surface,
-                  borderRadius: BorderRadius.circular(GymRadius.card),
+                  color: done ? c.accentFill : c.surface,
+                  borderRadius: BorderRadius.circular(GymRadius.control),
                   border: Border.all(
-                    color: done ? Colors.transparent : (isToday ? c.accent : c.border),
+                    color: isToday && !done ? c.accent : Colors.transparent,
+                    width: 1.5,
                   ),
                 ),
                 child: Column(
@@ -597,34 +651,50 @@ class _WeekStrip extends StatelessWidget {
   }
 }
 
-class _StatTile extends StatelessWidget {
-  const _StatTile({required this.value, required this.label, this.accent = false});
+/// Ubin jalan pintas — "My Fitness Profile" di referensi: label di kiri,
+/// cakram ikon berwarna di kanan.
+class _QuickTile extends StatelessWidget {
+  const _QuickTile({required this.label, required this.icon, required this.hue, this.onTap});
 
-  final String value;
   final String label;
-  final bool accent;
+  final IconData icon;
+  final Color hue;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final c = context.gym;
-    return GymCard(
-      radius: GymRadius.card,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(
-              value,
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: accent ? c.accent : c.text),
-            ),
+    return Material(
+      color: c.surface,
+      borderRadius: BorderRadius.circular(GymRadius.card),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(GymRadius.card),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 14, 12, 14),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(label,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        fontSize: 14, fontWeight: FontWeight.w700, height: 1.2, color: onTap == null ? c.text3 : c.text)),
+              ),
+              const SizedBox(width: 8),
+              Opacity(opacity: onTap == null ? 0.45 : 1, child: IconDisc(icon, color: hue, size: 42, iconSize: 21)),
+            ],
           ),
-          const SizedBox(height: 2),
-          Text(label, style: TextStyle(fontSize: 11, color: c.text2)),
-        ],
+        ),
       ),
     );
   }
+}
+
+/// Dua huruf pertama dari email, untuk avatar. Bukan nama — aplikasi ini
+/// tidak pernah menanyakannya.
+String initialsOf(String email) {
+  final local = email.split('@').first;
+  final letters = local.replaceAll(RegExp('[^A-Za-z0-9]'), '');
+  return letters.isEmpty ? '?' : letters.substring(0, letters.length >= 2 ? 2 : 1).toUpperCase();
 }
