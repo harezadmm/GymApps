@@ -334,6 +334,11 @@ class WorkoutStore extends ChangeNotifier {
   /// Kalau dorongannya gagal, sesinya tetap ada.
   Future<void> addWorkout(Workout workout, {String? routineId}) async {
     _workouts = [workout, ..._workouts];
+    // Sesi yang baru dicatat tidak mungkin "sudah dihapus". Sidik jari yang
+    // kebetulan sama dengan sesi yang pernah dihapus akan membuat sinkron
+    // berikutnya membuang sesi ini diam-diam.
+    final key = workoutKey(workout);
+    if (_removed.contains(key)) _removed = [for (final k in _removed) if (k != key) k];
     // Sesi dari program menggeser cursor-nya (FR-B3). Sesi bebas tidak.
     final p = _program;
     if (p != null) {
@@ -499,18 +504,94 @@ class WorkoutStore extends ChangeNotifier {
     await _commit();
   }
 
+  /// Selesaikan lagi sesi yang dibuka ulang dari Riwayat: versi lamanya
+  /// (dicari lewat sidik jari [originalKey]) diganti versi baru, dan versi
+  /// lama dicatat terhapus supaya HP lain yang masih memegangnya tidak
+  /// menghidupkannya kembali di sampingnya.
+  ///
+  /// Versi lama sengaja **tidak** dikeluarkan saat sesinya dibuka ulang,
+  /// hanya saat diselesaikan lagi: kalau sesi yang dibuka ulang ternyata
+  /// dibuang ("tinggalkan sesi"), catatan aslinya harus masih ada. Rotasi
+  /// program juga tidak bergeser — sesi ini sudah menggesernya waktu pertama
+  /// kali diselesaikan.
+  ///
+  /// Kalau versi lamanya sudah tidak ada (dihapus di HP lain selagi sesi
+  /// dibuka), sesi baru masuk seperti sesi yang dicatat belakangan.
+  Future<void> replaceWorkoutByKey(String originalKey, Workout updated) async {
+    final key = workoutKey(updated);
+    final i = _workouts.indexWhere((w) => workoutKey(w) == originalKey);
+    if (i >= 0) {
+      _workouts = _replacedAt(_workouts, i, updated);
+      if (originalKey != key) _removed = _capRemoved([..._removed, originalKey]);
+    } else {
+      _workouts = _insertByDate(_workouts, updated);
+    }
+    _removed = [for (final k in _removed) if (k != key) k];
+    await _commit();
+  }
+
+  /// Catat sesi yang dilakukan tanpa aplikasi — kemarin lupa membawa HP —
+  /// dari layar editor, bukan dari sesi berjalan. Disisipkan sesuai tanggalnya
+  /// (terbaru dulu; untuk tanggal yang sama, yang baru dicatat di depan) dan
+  /// **tidak** menggeser cursor program: rotasi mengikuti sesi yang dijalankan
+  /// dari program, dan sesi yang dicatat belakangan tidak tahu apakah ia
+  /// bagian dari rotasi atau bukan.
+  ///
+  /// Sidik jarinya dicabut dari daftar terhapus kalau kebetulan ada — sesi
+  /// yang persis sama pernah dihapus lalu diketik ulang berarti orangnya
+  /// memang menginginkannya kembali.
+  Future<void> addManualWorkout(Workout workout) async {
+    final key = workoutKey(workout);
+    _workouts = _insertByDate(_workouts, workout);
+    _removed = [for (final k in _removed) if (k != key) k];
+    await _commit();
+  }
+
+  // Tidak ada `restoreWorkout`. Urungkan hapus di Riwayat menunda
+  // [removeWorkout] sampai SnackBar-nya tertutup, bukan menghapus lalu
+  // mengembalikan: tombstone hanya bertambah lewat sinkron (`_absorb`
+  // menyatukan `removed` server), jadi tombstone yang sempat terdorong selama
+  // SnackBar tampil akan dibawa balik HP lain dan menghapus sesi yang sudah
+  // diurungkan.
+
+  /// Sisipkan ke daftar yang sudah urut terbaru-dulu, di depan sesi pertama
+  /// yang tanggalnya sama atau lebih lama. Bukan `add` lalu `sort`: sort Dart
+  /// tidak stabil, dan dua sesi sehari bisa bertukar tempat tiap kali.
+  static List<Workout> _insertByDate(List<Workout> list, Workout workout) {
+    final i = list.indexWhere((w) => w.date.compareTo(workout.date) <= 0);
+    return [...list]..insert(i < 0 ? list.length : i, workout);
+  }
+
+  /// Ganti sesi di posisi [i]. Tanggal sama = di tempat, supaya urutan dua
+  /// sesi sehari tidak berubah hanya karena salah satunya disunting. Tanggal
+  /// berganti = dikeluarkan lalu disisipkan lagi menurut tanggal barunya.
+  static List<Workout> _replacedAt(List<Workout> list, int i, Workout updated) {
+    if (list[i].date == updated.date) return [...list]..[i] = updated;
+    return _insertByDate([...list]..removeAt(i), updated);
+  }
+
   /// Ganti satu sesi yang sudah tercatat — salah ketik 600 kg yang mestinya
   /// 60 tidak boleh jadi PR palsu selamanya. Versi lamanya dicatat sebagai
   /// terhapus supaya perangkat lain yang masih memegangnya tidak
   /// menghidupkannya lagi di samping versi yang sudah diperbaiki.
+  ///
+  /// Dicari lewat identitas dulu, lalu sidik jari: sinkron atau muat ulang
+  /// bisa mengganti objeknya selagi editor terbuka, dan suntingan yang
+  /// diam-diam tidak tersimpan lebih buruk daripada mencocokkan lewat isi.
+  ///
+  /// Sidik jari versi barunya dicabut dari daftar terhapus. Suntingan pertama
+  /// mengubur K1; suntingan kedua yang mengembalikan isinya persis ke K1
+  /// tanpa ini meninggalkan K1 di tombstone — HP lain lalu membuang sesi yang
+  /// justru sedang dipakai.
   Future<void> replaceWorkout(Workout old, Workout updated) async {
-    final i = _workouts.indexWhere((w) => identical(w, old));
+    final oldKey = workoutKey(old);
+    var i = _workouts.indexWhere((w) => identical(w, old));
+    if (i < 0) i = _workouts.indexWhere((w) => workoutKey(w) == oldKey);
     if (i < 0) return;
-    _workouts = [..._workouts]..[i] = updated;
-    _workouts.sort((a, b) => b.date.compareTo(a.date));
-    if (workoutKey(old) != workoutKey(updated)) {
-      _removed = _capRemoved([..._removed, workoutKey(old)]);
-    }
+    final newKey = workoutKey(updated);
+    _workouts = _replacedAt(_workouts, i, updated);
+    if (oldKey != newKey) _removed = _capRemoved([..._removed, oldKey]);
+    _removed = [for (final k in _removed) if (k != newKey) k];
     await _commit();
   }
 

@@ -10,15 +10,19 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+
 import '../../core/weights.dart';
 import '../../domain/units.dart';
+
 import 'package:flutter/services.dart';
 
 import '../../core/format.dart';
+import '../../core/gym_icons.dart';
 import '../../core/keep_awake.dart';
 import '../../core/motion.dart';
 import '../../core/rest_alert.dart';
 import '../../core/strings.dart';
+import '../../core/strings_session.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
 import '../../data/exercise_catalog.dart';
@@ -26,6 +30,8 @@ import '../../data/workout_store.dart';
 import '../../domain/models.dart';
 import '../../domain/program.dart';
 import '../../domain/progression.dart';
+import '../../domain/routine_sync.dart';
+import '../../domain/session_plan.dart';
 import 'exercise_history_sheet.dart';
 import 'finish_screen.dart';
 import 'rest_screen.dart';
@@ -46,10 +52,11 @@ class SessionExercise {
     this.expanded = false,
     this.note,
     this.lastNote,
-  })  : sets = List.of(sets),
-        previous = List.of(previous),
-        rowKeys = [for (var i = 0; i < sets.length; i++) UniqueKey()],
-        restDuration = restDuration ?? const Duration(seconds: 90);
+  }) : sets = List.of(sets),
+       previous = List.of(previous),
+       rowKeys = [for (var i = 0; i < sets.length; i++) UniqueKey()],
+       rowIds = [for (var i = 0; i < sets.length; i++) UniqueKey()],
+       restDuration = restDuration ?? const Duration(seconds: 90);
 
   final String name;
 
@@ -66,6 +73,13 @@ class SessionExercise {
   /// memegang teksnya sendiri; tanpa kunci yang ikut pindah, menambah warm-up
   /// di depan membuat angka yang sedang diketik pindah ke baris lain.
   final List<Key> rowKeys;
+
+  /// Identitas baris yang tidak pernah diganti selama barisnya hidup — untuk
+  /// animasi kedatangan. [rowKeys] sengaja diganti saat beban diteruskan ke
+  /// baris di bawahnya (supaya kotak inputnya dibangun ulang), dan kalau
+  /// kunci itu juga yang dipegang animasi, baris-baris di bawah memudar
+  /// hilang lalu muncul lagi setiap kali satu angka diketik.
+  final List<Key> rowIds;
 
   final IconData icon;
 
@@ -88,19 +102,19 @@ class SessionExercise {
   /// Bentuk yang disimpan sebagai draft sesi. Ikon dan catalog dibaca ulang
   /// saat dipulihkan.
   Map<String, dynamic> toDraft() => {
-        'name': name,
-        'cfg': config.toJson(),
-        'sets': [for (final s in sets) s.toJson()],
-        'prev': previous,
-        'rest': restDuration.inSeconds,
-        if (!restEnabled) 'restOff': true,
-        if (expanded) 'open': true,
-        if (note != null && note!.isNotEmpty) 'note': note,
-        if (lastNote != null) 'lastNote': lastNote,
-        if (prescription != null) 'why': prescription!.why,
-        if (prescription != null) 'kind': prescription!.kind.name,
-        if (prescription != null) 'pol': prescription!.policy.name,
-      };
+    'name': name,
+    'cfg': config.toJson(),
+    'sets': [for (final s in sets) s.toJson()],
+    'prev': previous,
+    'rest': restDuration.inSeconds,
+    if (!restEnabled) 'restOff': true,
+    if (expanded) 'open': true,
+    if (note != null && note!.isNotEmpty) 'note': note,
+    if (lastNote != null) 'lastNote': lastNote,
+    if (prescription != null) 'why': prescription!.why,
+    if (prescription != null) 'kind': prescription!.kind.name,
+    if (prescription != null) 'pol': prescription!.policy.name,
+  };
 
   static SessionExercise fromDraft(Map<String, dynamic> j, IconData icon) {
     Prescription? p;
@@ -135,6 +149,9 @@ class SessionExercise {
     while (rowKeys.length < sets.length) {
       rowKeys.add(UniqueKey());
     }
+    while (rowIds.length < sets.length) {
+      rowIds.add(UniqueKey());
+    }
   }
 
   void addRow(SetRow row, {String previous = '—', bool atStart = false}) {
@@ -143,12 +160,14 @@ class SessionExercise {
     sets.insert(at, row);
     this.previous.insert(at.clamp(0, this.previous.length), previous);
     rowKeys.insert(at, UniqueKey());
+    rowIds.insert(at, UniqueKey());
   }
 
   void removeRowAt(int i) {
     sets.removeAt(i);
     if (i < previous.length) previous.removeAt(i);
     rowKeys.removeAt(i);
+    if (i < rowIds.length) rowIds.removeAt(i);
   }
 }
 
@@ -177,9 +196,29 @@ class SessionScreen extends StatefulWidget {
     this.initialElapsed = Duration.zero,
     this.initialNotes,
     this.planned,
+    this.initialDate,
+    this.replacesKey,
+    this.initialRest,
+    this.restored = false,
   });
 
   final String routineName;
+
+  /// Tanggal sesi (`YYYY-MM-DD`). null = hari ini. Diisi untuk sesi yang
+  /// dilanjutkan dari draft atau dibuka ulang dari Riwayat: sesi yang dimulai
+  /// Senin malam tetap tercatat Senin, meski diselesaikan Selasa.
+  final String? initialDate;
+
+  /// Sidik jari sesi di Riwayat yang digantikan sesi ini saat selesai — sesi
+  /// yang dibuka ulang. null = sesi baru.
+  final String? replacesKey;
+
+  /// Istirahat yang sedang berjalan saat draft terakhir ditulis.
+  final ({DateTime deadline, Duration total, int? exercise, String? next})? initialRest;
+
+  /// Sesi ini dipulihkan otomatis dari draft saat aplikasi dibuka lagi —
+  /// layar memberi tahu dengan satu baris supaya tidak mengira sesi baru.
+  final bool restored;
 
   /// Waktu yang sudah berjalan sebelum layar ini dibuka — sesi yang
   /// dipulihkan dari draft.
@@ -206,6 +245,7 @@ class SessionScreen extends StatefulWidget {
 
 class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserver {
   final _rest = RestTimer();
+
   /// Satuan angka di layar ini. Kalau satuan diganti di Profil selagi sesi
   /// terbuka, semua angka sesi dikonversi (lihat [didChangeDependencies]) —
   /// tanpa itu angka kg akan disimpan dengan faktor lb.
@@ -218,12 +258,17 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
 
   /// Susunan gerakan saat sesi dibuka, untuk mengenali sesi yang menyimpang
   /// dari rutinitasnya (FR-B9).
-  late final List<(String, int)> _planned = widget.planned ??
-      [
-        for (final e in widget.exercises) (e.config.exerciseId, e.workCount),
-      ];
+  late final List<(String, int)> _planned =
+      widget.planned ?? [for (final e in widget.exercises) (e.config.exerciseId, e.workCount)];
 
-  late final _notes = TextEditingController(text: widget.initialNotes ?? '');
+  late final _notes = TextEditingController(text: widget.initialNotes ?? '')..addListener(_scheduleDraft);
+
+  /// Tanggal sesi, ditetapkan saat sesi dimulai (lihat [SessionScreen.initialDate]).
+  late final String _date = widget.initialDate ?? isoDate(DateTime.now());
+
+  /// Penulisan draft yang ditunda sebentar setelah perubahan — lihat
+  /// [_scheduleDraft].
+  Timer? _draftSoon;
 
   /// Waktu sesi, termasuk yang berjalan sebelum draft dipulihkan.
   Duration get _elapsedTotal => widget.initialElapsed + _elapsed.elapsed;
@@ -242,10 +287,6 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
 
   String? _nextLabel;
 
-  /// Gerakan yang setnya ditambah di tengah sesi — dibawa ke ringkasan supaya
-  /// bisa ditanyakan "perbarui rutinitasnya?" (FR-B9).
-  String? _addedSetTo;
-
   bool _saving = false;
 
   /// Gerakan yang istirahatnya sedang berjalan. Kartu istirahat dan layar
@@ -254,7 +295,8 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
   SessionExercise? _restingOn;
 
   SessionExercise? get _restingExercise =>
-      _restingOn ?? (_exercises.isEmpty ? null : _exercises.firstWhere((e) => e.expanded, orElse: () => _exercises.first));
+      _restingOn ??
+      (_exercises.isEmpty ? null : _exercises.firstWhere((e) => e.expanded, orElse: () => _exercises.first));
 
   @override
   void initState() {
@@ -263,9 +305,48 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
     KeepAwake.holdIfEnabled();
     _rest.onFinished = _restFinished;
     _rest.onDeadlineChanged = _restDeadlineChanged;
-    // Draft ditulis berkala, dan seketika saat aplikasi ke latar belakang —
-    // Android boleh mematikan aplikasi kapan saja setelah itu.
+    // Draft ditulis berkala, sesaat setelah setiap perubahan, dan seketika
+    // saat aplikasi ke latar belakang — Android boleh mematikan aplikasi kapan
+    // saja setelah itu, dan HP yang ditinggal lama di loker hampir pasti
+    // mematikannya.
     _draftTimer = Timer.periodic(const Duration(seconds: 5), (_) => _saveDraft());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _afterFirstFrame());
+  }
+
+  /// Istirahat yang tertinggal di draft dilanjutkan, dan sesi yang dipulihkan
+  /// otomatis diberi tahu. Setelah frame pertama, bukan di initState:
+  /// menjadwalkan notifikasi istirahat butuh teks yang dibaca dari context.
+  void _afterFirstFrame() {
+    if (!mounted) return;
+    final r = widget.initialRest;
+    if (r != null && r.deadline.isAfter(DateTime.now())) {
+      setState(() {
+        final i = r.exercise;
+        _restingOn = i != null && i >= 0 && i < _exercises.length ? _exercises[i] : null;
+        _nextLabel = r.next;
+      });
+      _rest.resumeUntil(r.deadline, r.total);
+    }
+    if (widget.restored) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text(context.t.draftRestored)));
+    }
+  }
+
+  /// Semua perubahan layar ini lewat setState, jadi di sinilah draft
+  /// dijadwalkan — tidak ada aksi baru yang bisa lupa menyimpannya.
+  @override
+  void setState(VoidCallback fn) {
+    super.setState(fn);
+    _scheduleDraft();
+  }
+
+  /// Tulis draft sebentar lagi. Ketikan beruntun (60 → 62,5) cukup ditulis
+  /// sekali, tapi tidak perlu menunggu timer lima detik: aplikasi yang
+  /// dimatikan tepat setelah set dicentang tetap membawa set itu.
+  void _scheduleDraft() {
+    if (_closed || _saving) return;
+    _draftSoon?.cancel();
+    _draftSoon = Timer(const Duration(milliseconds: 600), () => _saveDraft());
   }
 
   @override
@@ -306,6 +387,7 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _draftTimer?.cancel();
+    _draftSoon?.cancel();
     KeepAwake.release();
     RestAlert.cancel();
     _rest.dispose();
@@ -316,24 +398,36 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
   // ── draft ─────────────────────────────────────────────────────────────
 
   Map<String, dynamic> _draftJson() => {
-        'v': 1,
-        'name': widget.routineName,
-        if (widget.routineId != null) 'rid': widget.routineId,
-        'unit': _unit.name,
-        'elapsed': _elapsedTotal.inSeconds,
-        'saved': DateTime.now().millisecondsSinceEpoch,
-        if (_notes.text.trim().isNotEmpty) 'notes': _notes.text,
-        'planned': [
-          for (final (id, n) in _planned) [id, n],
-        ],
-        'ex': [for (final e in _exercises) e.toDraft()],
-      };
+    'v': 1,
+    'name': widget.routineName,
+    if (widget.routineId != null) 'rid': widget.routineId,
+    'date': _date,
+    if (widget.replacesKey != null) 'replaces': widget.replacesKey,
+    'unit': _unit.name,
+    'elapsed': _elapsedTotal.inSeconds,
+    'saved': DateTime.now().millisecondsSinceEpoch,
+    if (_notes.text.trim().isNotEmpty) 'notes': _notes.text,
+    'planned': [
+      for (final (id, n) in _planned) [id, n],
+    ],
+    'ex': [for (final e in _exercises) e.toDraft()],
+    if (_rest.isRunning && _rest.deadline != null)
+      'rest': {
+        'end': _rest.deadline!.millisecondsSinceEpoch,
+        'total': _rest.total.inSeconds,
+        if (_restingOn != null && _exercises.contains(_restingOn)) 'on': _exercises.indexOf(_restingOn!),
+        if (_nextLabel != null) 'next': _nextLabel,
+      },
+  };
 
   /// Simpan sesi yang sedang berjalan supaya tidak hilang kalau aplikasi
   /// dimatikan. Tidak menulis apa pun kalau isinya tidak berubah.
   Future<void> _saveDraft({bool force = false}) async {
     final store = _store;
-    if (_closed || store == null) return;
+    // Selagi sesi disimpan, draft tidak boleh ditulis lagi: ia akan dibuang
+    // sesaat lagi, dan draft yang lolos sesudahnya membuka sesi yang sama
+    // untuk kedua kalinya saat aplikasi dibuka.
+    if (_closed || _saving || store == null) return;
     if (_exercises.isEmpty && _notes.text.trim().isEmpty) return;
     final json = _draftJson();
     // Waktu ikut kunci pembanding per setengah menit: cukup supaya durasi sesi
@@ -463,6 +557,7 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
   void _onEdited(SessionExercise ex, int index, {double? weight, int? reps, int? seconds, bool refresh = false}) {
     final old = ex.sets[index];
     ex.sets[index] = old.copyWith(weight: weight, reps: reps, seconds: seconds);
+    _scheduleDraft();
     if (refresh) setState(() {});
     if (weight == null || !old.isWork) return;
     var cascaded = false;
@@ -493,13 +588,34 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
     return false;
   }
 
-  /// Selesai: simpan, tunjukkan ringkasannya, baru tutup sesinya. Menutup
-  /// begitu saja akan membuang satu-satunya kesempatan menampilkan rekor dan
-  /// target berikutnya selagi orangnya masih memperhatikan.
+  /// Susunan (id gerakan, set kerja) sesi ini, untuk dibandingkan dengan
+  /// rutinitasnya.
+  List<(String, int)> get _layout => [for (final e in _exercises) (e.config.exerciseId, e.workCount)];
+
+  /// Rutinitas asal sesi ini, seperti tersimpan sekarang. null untuk sesi
+  /// bebas atau kalau rutinitasnya sudah dihapus selagi sesi berjalan.
+  Routine? get _routine =>
+      widget.routineId == null ? null : (_store ?? context.workouts).routineById(widget.routineId!);
+
+  /// Selisih sesi ini terhadap rutinitasnya, atau null kalau tidak ada yang
+  /// perlu diselaraskan. [_drifted] membandingkan dengan *rencana saat sesi
+  /// dibuka*; yang dibandingkan di sini rutinitasnya sendiri — kalau sesi
+  /// menyimpang dari rencana tapi kebetulan cocok dengan rutinitas (set yang
+  /// disarankan progresi lalu dihapus lagi), tidak ada yang perlu disimpan.
+  RoutineDiff? _pendingDiff(Routine? routine) {
+    if (routine == null || !_drifted) return null;
+    final diff = diffRoutine(routine, _layout);
+    return diff.isEmpty ? null : diff;
+  }
+
+  /// Tombol FINISH: tanyakan dulu, baru simpan.
   ///
-  /// Simpan lebih dulu, sebelum ringkasan dibuka: kalau aplikasi mati saat
-  /// ringkasan terbuka, yang hilang cuma tampilan, bukan latihannya.
-  Future<void> _finish() async {
+  /// Dulu tombol ini langsung menutup sesi, dan orang yang ingin "menyelesaikan
+  /// timer" menekannya lalu kehilangan sesinya di tengah latihan. Lembar ini
+  /// menunjukkan apa yang akan terjadi — set yang belum dicentang, istirahat
+  /// yang masih jalan, dan perubahan rutinitas yang ikut disimpan — sebelum
+  /// ada yang tidak bisa dibatalkan.
+  Future<void> _confirmFinish() async {
     if (_saving) return;
     FocusScope.of(context).unfocus();
     if (!_anythingLogged) {
@@ -508,52 +624,156 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.t.noWorkingSets)));
       return;
     }
+    final c = context.gym;
+    final routine = _routine;
+    final diff = _pendingDiff(routine);
+    // Dihitung sama dengan ringkasan sesudahnya (drop set dan rest-pause ikut),
+    // supaya lembar ini dan ringkasan satu detik kemudian tidak menyebut
+    // angka yang berbeda.
+    final total = _exercises.fold(0, (a, e) => a + e.sets.where((s) => !s.isWarmup).length);
+    final done = _exercises.fold(0, (a, e) => a + e.sets.where((s) => s.done && !s.isWarmup).length);
+    final volume = _exercises
+        .expand((e) => e.sets)
+        .where((s) => s.done && !s.isWarmup)
+        .fold(0.0, (a, s) => a + s.weight * s.reps);
+    final save = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: c.surface,
+      showDragHandle: true,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(GymRadius.sheet))),
+      builder: (_) => _FinishSheet(
+        routineName: widget.routineName,
+        elapsed: _elapsedTotal,
+        setsDone: done,
+        setsTotal: total,
+        // Volume dihitung dalam satuan tampilan; [WeightTextX.volume] minta kg.
+        volumeKg: toKg(volume, _unit),
+        restRunning: _rest.isRunning,
+        routine: routine,
+        diff: diff,
+        sessionNames: {for (final e in _exercises) e.config.exerciseId: e.name},
+        // Sesi lama yang dibuka ulang dari Riwayat untuk membetulkan salah
+        // ketik tidak boleh menimpa rutinitas yang sudah diubah sejak itu —
+        // pilihannya tetap ada, tapi mati secara bawaan.
+        saveByDefault: widget.replacesKey == null,
+      ),
+    );
+    if (save == null || !mounted) return;
+    await _finish(saveRoutine: save);
+  }
+
+  /// Selesai: simpan, tunjukkan ringkasannya, baru tutup sesinya. Menutup
+  /// begitu saja akan membuang satu-satunya kesempatan menampilkan rekor dan
+  /// target berikutnya selagi orangnya masih memperhatikan.
+  ///
+  /// Simpan lebih dulu, sebelum ringkasan dibuka: kalau aplikasi mati saat
+  /// ringkasan terbuka, yang hilang cuma tampilan, bukan latihannya.
+  ///
+  /// [saveRoutine] dari lembar konfirmasi: susunan sesi ditulis ke rutinitas
+  /// asalnya, sesudah sesi tersimpan dan sebelum ringkasan dibuka — ringkasan
+  /// lalu bisa membatalkannya dengan rutinitas asli yang dibawa serta.
+  Future<void> _finish({required bool saveRoutine}) async {
+    if (_saving) return;
+    if (!_anythingLogged) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.t.noWorkingSets)));
+      return;
+    }
     _saving = true;
+    _draftSoon?.cancel();
     _rest.skip();
     _elapsed.stop();
 
     final store = context.workouts;
     final notes = _notes.text.trim();
     // Sesi dicatat dalam satuan tampilan; yang disimpan selalu kg.
-    final workout = workoutToKg(Workout(
-      date: isoDate(DateTime.now()),
-      routine: widget.routineName,
-      durationSeconds: _elapsedTotal.inSeconds,
-      notes: notes.isEmpty ? null : notes,
-      entries: [
-        for (final ex in _exercises)
-          WorkoutEntry(
-            exerciseId: ex.config.exerciseId,
-            target: ex.config,
-            sets: List.of(ex.sets),
-            note: (ex.note ?? '').trim().isEmpty ? null : ex.note!.trim(),
-          ),
-      ],
-    ), _unit);
-    final drifted = _drifted;
-    await store.addWorkout(workout, routineId: widget.routineId);
+    final workout = workoutToKg(
+      Workout(
+        date: _date,
+        routine: widget.routineName,
+        durationSeconds: _elapsedTotal.inSeconds,
+        notes: notes.isEmpty ? null : notes,
+        entries: [
+          for (final ex in _exercises)
+            WorkoutEntry(
+              exerciseId: ex.config.exerciseId,
+              target: ex.config,
+              sets: List.of(ex.sets),
+              note: (ex.note ?? '').trim().isEmpty ? null : ex.note!.trim(),
+            ),
+        ],
+      ),
+      _unit,
+    );
+    final original = _routine;
+    final diff = _pendingDiff(original);
+    final replaces = widget.replacesKey;
+    if (replaces != null) {
+      // Sesi yang dibuka ulang dari Riwayat menggantikan catatan lamanya di
+      // tempat, tanpa menggeser rotasi lagi.
+      await store.replaceWorkoutByKey(replaces, workout);
+    } else {
+      await store.addWorkout(workout, routineId: widget.routineId);
+    }
+    // Sesinya sudah tersimpan: draft dibuang sekarang, sebelum pekerjaan lain
+    // yang bisa gagal. Draft yang tertinggal di sini membuka sesi yang sama
+    // lagi saat aplikasi dibuka, dan menyelesaikannya mencatat sesi dua kali.
     await _dropDraft();
+    var routineUpdated = false;
+    if (saveRoutine && original != null && diff != null) {
+      try {
+        await store.saveRoutine(
+          syncRoutineWithSession(original, [for (final e in _exercises) (_routineConfigFor(e, original), e.workCount)]),
+        );
+        routineUpdated = true;
+      } catch (e) {
+        debugPrint('rutinitas tidak tersimpan: $e');
+      }
+    }
     if (!mounted) return;
 
-    await Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => FinishScreen(
-        routineName: widget.routineName,
-        routineId: drifted ? widget.routineId : null,
-        exercises: _exercises,
-        history: _history,
-        elapsed: _elapsedTotal,
-        dateLabel: _dateLabel(context),
-        addedSetTo: drifted ? _addedSetTo : null,
-        drifted: drifted,
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => FinishScreen(
+          routineName: widget.routineName,
+          exercises: _exercises,
+          history: _history,
+          elapsed: _elapsedTotal,
+          dateLabel: _dateLabel(context),
+          originalRoutine: diff == null ? null : original,
+          diff: diff,
+          routineUpdated: routineUpdated,
+        ),
       ),
-    ));
+    );
     if (mounted) Navigator.of(context).pop();
+  }
+
+  /// Konfigurasi gerakan ini untuk ditulis ke rutinitas, dalam kg.
+  ///
+  /// Gerakan baru membawa konfigurasi sesi, yang berisi hal yang tidak pernah
+  /// dipilih orangnya: policy rutinitas dan faktor deload Profil yang sudah
+  /// "dibekukan" ke target sesi. Kalau ikut tertulis, keduanya jadi
+  /// pengaturan khusus gerakan itu — mengganti policy rutinitas atau deload di
+  /// Profil nanti tidak lagi berlaku untuknya. Istirahat yang diubah di tengah
+  /// sesi justru pilihan orangnya, jadi itu yang ditulis.
+  ExerciseConfig _routineConfigFor(SessionExercise e, Routine original) {
+    final kg = configToKg(e.config, _unit);
+    if (original.exercises.any((c) => c.exerciseId == kg.exerciseId)) return kg;
+    final json = kg.toJson();
+    if (json['pol'] == original.policy?.name) json.remove('pol');
+    if (kg.deloadFactor != null && kg.deloadFactor == _store?.settings.deloadFactor) json.remove('dl');
+    json['rest'] = e.restDuration.inSeconds;
+    return ExerciseConfig.fromJson(json);
   }
 
   /// Keluar dari sesi selalu ditanyakan. Tombol panah di kiri atas dulu
   /// langsung menyimpan sesi — keliru dari sisi mana pun: yang ingin
   /// menyimpan menekan Finish, yang menekan panah belum tentu selesai.
   Future<void> _confirmLeave() async {
+    // Tombol kembali di tengah penyimpanan: sesinya sedang ditulis, dan
+    // "buang" dari dialog ini akan melewatkan ringkasannya.
+    if (_saving) return;
     if (!_anythingLogged) {
       await _dropDraft();
       if (mounted) Navigator.of(context).pop();
@@ -574,11 +794,17 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop('discard'),
-              child: Text(context.t.discard, style: TextStyle(fontWeight: FontWeight.w700, color: c.danger)),
+              child: Text(
+                context.t.discard,
+                style: TextStyle(fontWeight: FontWeight.w700, color: c.danger),
+              ),
             ),
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: Text(context.t.keepTraining, style: TextStyle(fontWeight: FontWeight.w700, color: c.text2)),
+              child: Text(
+                context.t.keepTraining,
+                style: TextStyle(fontWeight: FontWeight.w700, color: c.text2),
+              ),
             ),
             GymButton(
               label: context.t.finishAndSave,
@@ -597,7 +823,7 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
         await _dropDraft();
         if (mounted) Navigator.of(context).pop();
       case 'finish':
-        await _finish();
+        await _confirmFinish();
     }
   }
 
@@ -622,12 +848,12 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
   }
 
   Future<void> _openRestScreen(SessionExercise ex) => showRestScreen(
-        context,
-        timer: _rest,
-        exerciseName: ex.name,
-        nextLabel: _nextLabel ?? '',
-        onEditDuration: () => _editRest(ex),
-      );
+    context,
+    timer: _rest,
+    exerciseName: ex.name,
+    nextLabel: _nextLabel ?? '',
+    onEditDuration: () => _editRest(ex),
+  );
 
   Future<void> _editRest(SessionExercise ex) async {
     final picked = await showRestDurationSheet(
@@ -666,17 +892,47 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
     await store.saveRoutine(routine.copyWith(exercises: updated));
   }
 
+  /// Policy bawaan rutinitas asal sesi ini; null untuk sesi bebas.
+  ProgressionPolicy? get _routineDefault => _routine?.policy;
+
+  /// Konfigurasi untuk gerakan yang ditambah atau diganti di tengah sesi.
+  ///
+  /// Gerakan yang belum pernah dicatat mengikuti policy rutinitasnya, bukan
+  /// double progression bawaan [configForAdded]: aturan rutinitas berlaku
+  /// untuk semua gerakan di dalamnya, jadi Cable Fly yang ditambah ke Push
+  /// (linear) ikut naik bebannya tiap sesi sukses — sama seperti Bench Press
+  /// di sebelahnya. Gerakan yang pernah dicatat mempertahankan target
+  /// terakhirnya, termasuk policy-nya.
+  ExerciseConfig _configForNew(String exerciseId) {
+    var cfg = configForAdded(exerciseId, _history);
+    final def = _routineDefault;
+    if (def != null &&
+        lastEntryFor(_history, exerciseId) == null &&
+        (policiesFor[cfg.mode] ?? const <ProgressionPolicy>[]).contains(def)) {
+      cfg = cfg.copyWith(policy: def);
+    }
+    return cfg;
+  }
+
+  SessionExercise _buildNew(ExerciseCatalog catalog, String exerciseId) => buildSessionExercise(
+    catalog,
+    _configForNew(exerciseId),
+    _history,
+    routineDefault: _routineDefault,
+    settings: _store?.settings,
+    expanded: true,
+  );
+
   Future<void> _addExercise() async {
     final picked = await pickExercise(context);
     if (picked == null || !mounted) return;
     final catalog = await ExerciseCatalog.load();
     if (!mounted) return;
-    final cfg = configForAdded(picked.id, _history);
     setState(() {
       for (final e in _exercises) {
         e.expanded = false;
       }
-      _exercises.add(buildSessionExercise(catalog, cfg, _history, settings: _store?.settings, expanded: true));
+      _exercises.add(_buildNew(catalog, picked.id));
     });
   }
 
@@ -691,16 +947,18 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
       case _ExerciseAction.replace:
         final logged = ex.sets.where((s) => s.done).length;
         if (logged > 0) {
-          final ok = await _confirm(context.t.replaceConfirmTitle, context.t.replaceConfirmBody(logged), context.t.replace);
+          final ok = await _confirm(
+            context.t.replaceConfirmTitle,
+            context.t.replaceConfirmBody(logged),
+            context.t.replace,
+          );
           if (ok != true || !mounted) return;
         }
         final picked = await pickExercise(context);
         if (picked == null || !mounted) return;
         final catalog = await ExerciseCatalog.load();
         if (!mounted) return;
-        final cfg = configForAdded(picked.id, _history);
-        setState(() => _exercises[_exercises.indexOf(ex)] =
-            buildSessionExercise(catalog, cfg, _history, settings: _store?.settings, expanded: true));
+        setState(() => _exercises[_exercises.indexOf(ex)] = _buildNew(catalog, picked.id));
       case _ExerciseAction.addWarmup:
         final firstWork = ex.sets.firstWhere((s) => !s.isWarmup, orElse: () => const SetRow());
         final inc = weightIncrement(ex.config, _unit.label);
@@ -720,14 +978,16 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
         final inc = weightIncrement(ex.config, _unit.label);
         final drop = action == _ExerciseAction.addDropSet;
         setState(() {
-          ex.addRow(SetRow(
-            phase: drop ? SetPhase.drop : SetPhase.restPause,
-            // Drop set: turun sekitar 20 %. Rest-pause: beban sama, rep jauh
-            // lebih sedikit — beberapa rep lagi setelah jeda 15 detik.
-            weight: base.weight <= 0 ? 0 : (drop ? snapWeight(base.weight * 0.8, inc) : base.weight),
-            reps: drop ? base.reps : math.max(1, (base.reps / 3).round()),
-            seconds: base.seconds,
-          ));
+          ex.addRow(
+            SetRow(
+              phase: drop ? SetPhase.drop : SetPhase.restPause,
+              // Drop set: turun sekitar 20 %. Rest-pause: beban sama, rep jauh
+              // lebih sedikit — beberapa rep lagi setelah jeda 15 detik.
+              weight: base.weight <= 0 ? 0 : (drop ? snapWeight(base.weight * 0.8, inc) : base.weight),
+              reps: drop ? base.reps : math.max(1, (base.reps / 3).round()),
+              seconds: base.seconds,
+            ),
+          );
           ex.expanded = true;
         });
       case _ExerciseAction.superset:
@@ -757,36 +1017,39 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
   }
 
   Future<bool?> _confirm(String title, String body, String action) => showDialog<bool>(
-        context: context,
-        builder: (context) {
-          final c = context.gym;
-          return AlertDialog(
-            backgroundColor: c.surface,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(GymRadius.large)),
-            title: Text(title, style: Theme.of(context).textTheme.titleLarge),
-            content: Text(body, style: TextStyle(fontSize: 14, height: 1.4, color: c.text2)),
-            actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: Text(context.t.cancel, style: TextStyle(fontWeight: FontWeight.w700, color: c.text2)),
-              ),
-              GymButton(
-                label: action,
-                height: 42,
-                expand: false,
-                tone: GymButtonTone.danger,
-                onPressed: () => Navigator.of(context).pop(true),
-              ),
-            ],
-          );
-        },
+    context: context,
+    builder: (context) {
+      final c = context.gym;
+      return AlertDialog(
+        backgroundColor: c.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(GymRadius.large)),
+        title: Text(title, style: Theme.of(context).textTheme.titleLarge),
+        content: Text(body, style: TextStyle(fontSize: 14, height: 1.4, color: c.text2)),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(
+              context.t.cancel,
+              style: TextStyle(fontWeight: FontWeight.w700, color: c.text2),
+            ),
+          ),
+          GymButton(
+            label: action,
+            height: 42,
+            expand: false,
+            tone: GymButtonTone.danger,
+            onPressed: () => Navigator.of(context).pop(true),
+          ),
+        ],
       );
+    },
+  );
 
   Future<String?> _editNote(SessionExercise ex) => showDialog<String>(
-        context: context,
-        builder: (_) => _NoteDialog(title: ex.name, initial: ex.note ?? ''),
-      );
+    context: context,
+    builder: (_) => _NoteDialog(title: ex.name, initial: ex.note ?? ''),
+  );
 
   Future<bool?> _confirmRemove(SessionExercise ex) {
     // Menghapus gerakan yang belum disentuh tidak perlu ditanyakan. Yang
@@ -805,7 +1068,10 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
-              child: Text(context.t.cancel, style: TextStyle(fontWeight: FontWeight.w700, color: c.text2)),
+              child: Text(
+                context.t.cancel,
+                style: TextStyle(fontWeight: FontWeight.w700, color: c.text2),
+              ),
             ),
             GymButton(
               label: context.t.delete,
@@ -843,32 +1109,54 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
                 elapsed: () => _elapsedTotal,
                 rest: _rest,
                 onLeave: _confirmLeave,
-                onFinish: _finish,
+                onFinish: _confirmFinish,
               ),
-              LinearProgressIndicator(
+              // Bilah progres bergerak ke nilai barunya, bukan melompat: satu
+              // set dicentang → bilahnya terlihat "bertambah".
+              AnimatedValue(
                 value: total == 0 ? 0 : done / total,
-                minHeight: 3,
-                backgroundColor: c.surface2,
-                valueColor: AlwaysStoppedAnimation(c.accent),
+                duration: GymMotion.normal,
+                builder: (context, v) => LinearProgressIndicator(
+                  value: v,
+                  minHeight: 3,
+                  backgroundColor: c.surface2,
+                  valueColor: AlwaysStoppedAnimation(c.accent),
+                ),
               ),
               Expanded(
                 child: ListView(
                   padding: const EdgeInsets.fromLTRB(14, 14, 14, 28),
                   keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
                   children: [
+                    // Kartu istirahat memudar masuk, dan saat pergi ia
+                    // menyusut sambil memudar supaya daftar di bawahnya naik
+                    // pelan — bukan melompat 150 dp begitu istirahat dilewati.
+                    // Tingginya penuh sejak frame pertama: kartu ini selalu
+                    // muncul di frame yang sama dengan layar istirahat penuh
+                    // yang menutupinya, jadi tinggi yang tumbuh dari nol tidak
+                    // pernah terlihat — hanya membuat kartu belum ada satu
+                    // frame saat sesi kembali di depan.
                     AnimatedBuilder(
                       animation: _rest,
                       builder: (context, _) {
                         final resting = _restingExercise;
-                        if (!_rest.isRunning || resting == null) return const SizedBox.shrink();
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: RestTimerCard(
-                            timer: _rest,
-                            nextLabel: _nextLabel ?? '',
-                            onEditDuration: () => _editRest(resting),
-                            onOpen: () => _openRestScreen(resting),
-                          ),
+                        final show = _rest.isRunning && resting != null;
+                        return _ExitCollapse(
+                          show: show,
+                          child: !show
+                              ? const SizedBox.shrink()
+                              : Reveal(
+                                  slide: false,
+                                  child: Padding(
+                                    padding: const EdgeInsets.only(bottom: 12),
+                                    child: RestTimerCard(
+                                      timer: _rest,
+                                      nextLabel: _nextLabel ?? '',
+                                      onEditDuration: () => _editRest(resting),
+                                      onOpen: () => _openRestScreen(resting),
+                                    ),
+                                  ),
+                                ),
                         );
                       },
                     ),
@@ -877,8 +1165,11 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
                     if (_exercises.isEmpty)
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 20),
-                        child: Text(context.t.emptySessionHint,
-                            textAlign: TextAlign.center, style: TextStyle(fontSize: 13.5, color: c.text2)),
+                        child: Text(
+                          context.t.emptySessionHint,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontSize: 13.5, color: c.text2),
+                        ),
                       ),
                     for (final (i, ex) in _exercises.indexed) ...[
                       _ExerciseCard(
@@ -899,12 +1190,11 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
                         onAddSet: () => setState(() {
                           final last = ex.sets.lastWhere((s) => s.isWork, orElse: () => const SetRow());
                           ex.addRow(SetRow(weight: last.weight, reps: last.reps, seconds: last.seconds));
-                          _addedSetTo = ex.name;
                         }),
                       ),
                       const SizedBox(height: 12),
                     ],
-                    _DashedAction(icon: Icons.add, label: context.t.addExercise, onTap: _addExercise),
+                    _DashedAction(icon: GymIcons.plus, label: context.t.addExercise, onTap: _addExercise),
                   ],
                 ),
               ),
@@ -934,59 +1224,382 @@ class _TopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.gym;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 6, 14, 10),
-      child: Row(
-        children: [
-          IconButton(
-            onPressed: onLeave,
-            icon: Icon(Icons.keyboard_arrow_down, color: c.text2),
-            tooltip: context.t.minimise,
-          ),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(routineName,
-                    maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleLarge),
-                // Waktu berjalan berdetak sendiri tiap detik. Dulu angkanya
-                // hanya berubah saat layar kebetulan digambar ulang.
-                StreamBuilder<int>(
-                  stream: Stream.periodic(const Duration(seconds: 1), (i) => i),
-                  builder: (context, _) {
-                    final e = elapsed();
-                    final text = e.inHours > 0
-                        ? '${e.inHours}:${(e.inMinutes % 60).toString().padLeft(2, '0')}:${(e.inSeconds % 60).toString().padLeft(2, '0')}'
-                        : '${e.inMinutes}:${(e.inSeconds % 60).toString().padLeft(2, '0')}';
-                    return Text(context.t.elapsedOf(text), style: TextStyle(fontSize: 12, color: c.text2));
+    // Seluruh bilah dibangun ulang mengikuti timer: kapsul istirahat hanya
+    // menjadi anak Row yang lentur selagi tampil. Flexible yang kosong tetap
+    // memakan jatah ruang dan mempersempit judul tanpa alasan.
+    return AnimatedBuilder(
+      animation: rest,
+      builder: (context, _) => Padding(
+        padding: const EdgeInsets.fromLTRB(8, 6, 14, 10),
+        child: Row(
+          children: [
+            IconButton(
+              onPressed: onLeave,
+              icon: Icon(Icons.keyboard_arrow_down, color: c.text2),
+              tooltip: context.t.minimise,
+            ),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    routineName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  // Waktu berjalan berdetak sendiri tiap detik. Dulu angkanya
+                  // hanya berubah saat layar kebetulan digambar ulang.
+                  StreamBuilder<int>(
+                    stream: _secondTicks,
+                    builder: (context, _) => Text(
+                      context.t.elapsedOf(_formatElapsed(elapsed())),
+                      style: TextStyle(fontSize: 12, color: c.text2),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Kapsul timer adalah tombol "lewati istirahat" — dengan ✕ yang
+            // terlihat. Dulu kapsul ini hanya angka di sebelah FINISH, dan orang
+            // yang ingin menghentikan timer menekan tombol di sebelahnya.
+            // Flexible: berbagi sisa lebar dengan judul, bukan mendorong
+            // tombol SELESAI keluar layar.
+            if (rest.isRunning)
+              Flexible(
+                child: Builder(
+                  builder: (context) {
+                    // Target sentuh setinggi 44 dp: kapsul ini bersebelahan dengan
+                    // SELESAI, dan salah ketuk di sini yang dulu menutup sesi.
+                    // FittedBox mengecilkan isinya di HP 360 dp dengan huruf besar,
+                    // bukan meluber keluar bilah.
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 12),
+                      child: Semantics(
+                        button: true,
+                        label: context.t.skipRest,
+                        child: Tooltip(
+                          message: context.t.skipRest,
+                          child: Material(
+                            color: c.accentSoft,
+                            borderRadius: BorderRadius.circular(GymRadius.pill),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(GymRadius.pill),
+                              onTap: () {
+                                GymHaptics.tap();
+                                rest.skip();
+                              },
+                              child: ConstrainedBox(
+                                constraints: const BoxConstraints(minHeight: 44),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                                  child: Center(
+                                    widthFactor: 1,
+                                    child: FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(GymIcons.alarm, size: 15, color: c.accent),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            formatRestWide(rest.remaining),
+                                            style: TextStyle(
+                                              fontSize: 12.5,
+                                              fontWeight: FontWeight.w700,
+                                              color: c.accent,
+                                              fontFeatures: const [FontFeature.tabularFigures()],
+                                            ),
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Icon(Icons.close, size: 15, color: c.accent),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
                   },
                 ),
+              ),
+            GymButton(
+              label: context.t.finish,
+              height: 38,
+              expand: false,
+              shape: GymButtonShape.pill,
+              onPressed: onFinish,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Detak satu detik untuk waktu sesi, satu aliran untuk semua pembangun.
+/// Membuat `Stream.periodic` baru di dalam build membuat StreamBuilder
+/// berlangganan ulang setiap kali bilahnya dibangun ulang — dan bilah ini
+/// dibangun ulang lima kali sedetik selama istirahat, jadi detaknya tidak
+/// pernah sempat datang. Dijeda saat tidak ada yang mendengarkan.
+final Stream<int> _secondTicks = Stream<int>.periodic(
+  const Duration(seconds: 1),
+  (i) => i,
+).asBroadcastStream(onListen: (sub) => sub.resume(), onCancel: (sub) => sub.pause());
+
+/// [AnimatedSize] yang hormat "kurangi gerak".
+///
+/// [AnimatedSize] tidak boleh diberi durasi nol: controller-nya selesai
+/// seketika di tengah `performLayout` dan menandai dirinya perlu layout lagi
+/// — assertion di mode debug. Jadi saat gerak dimatikan, ukuran baru
+/// diterapkan langsung tanpa [AnimatedSize].
+class _SizeChange extends StatelessWidget {
+  const _SizeChange({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final d = GymMotion.of(context, GymMotion.normal);
+    if (d == Duration.zero) return child;
+    return AnimatedSize(duration: d, curve: GymMotion.curve, alignment: Alignment.topCenter, child: child);
+  }
+}
+
+/// Anak yang tampil seketika saat [show] menyala, dan saat padam pergi dengan
+/// menyusut tingginya sambil memudar — supaya isi di bawahnya naik pelan.
+///
+/// Bukan [AnimatedSize]: ia mulai dari tinggi nol saat anak pertama kali
+/// muncul (dan di dalam ListView, anak setinggi nol dianggap tidak ada
+/// selama satu frame), dan ia tidak menerima durasi nol saat gerak
+/// dikurangi. Saat gerak dikurangi, anak langsung hilang.
+class _ExitCollapse extends StatefulWidget {
+  const _ExitCollapse({required this.show, required this.child});
+
+  final bool show;
+  final Widget child;
+
+  @override
+  State<_ExitCollapse> createState() => _ExitCollapseState();
+}
+
+class _ExitCollapseState extends State<_ExitCollapse> {
+  /// Anak terakhir yang tampil, dipegang selama animasi keluar.
+  Widget? _leaving;
+
+  @override
+  void didUpdateWidget(_ExitCollapse old) {
+    super.didUpdateWidget(old);
+    if (old.show && !widget.show) {
+      _leaving = old.child;
+    } else if (widget.show) {
+      _leaving = null;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final d = GymMotion.of(context, GymMotion.normal);
+    final child = widget.show ? widget.child : _leaving;
+    if (child == null || (!widget.show && d == Duration.zero)) return const SizedBox(width: double.infinity);
+    // Satu susunan untuk dua keadaan. Kalau saat tampil anaknya dipasang
+    // langsung dan baru dibungkus ClipRect/Align/Opacity saat pergi, elemen
+    // anaknya dibuang dan dibuat ulang — Reveal di dalamnya mulai lagi dari
+    // opacity nol, dan yang terlihat hanya kotak kosong yang menyusut.
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 1, end: widget.show ? 1 : 0),
+      // Masuk seketika (lihat dokumentasi kelas), pergi beranimasi.
+      duration: widget.show ? Duration.zero : d,
+      curve: GymMotion.curve,
+      onEnd: () {
+        if (mounted && !widget.show) setState(() => _leaving = null);
+      },
+      child: child,
+      builder: (context, v, child) => ClipRect(
+        child: Align(
+          alignment: Alignment.topCenter,
+          heightFactor: v,
+          child: Opacity(opacity: v, child: child),
+        ),
+      ),
+    );
+  }
+}
+
+/// `42:10`, atau `1:02:10` lewat satu jam.
+String _formatElapsed(Duration e) => e.inHours > 0
+    ? '${e.inHours}:${(e.inMinutes % 60).toString().padLeft(2, '0')}:${(e.inSeconds % 60).toString().padLeft(2, '0')}'
+    : '${e.inMinutes}:${(e.inSeconds % 60).toString().padLeft(2, '0')}';
+
+/// Lembar konfirmasi selesai. Mengembalikan `true`/`false` = selesai dengan/
+/// tanpa menyimpan susunan ke rutinitas, `null` = kembali ke sesi.
+class _FinishSheet extends StatefulWidget {
+  const _FinishSheet({
+    required this.routineName,
+    required this.elapsed,
+    required this.setsDone,
+    required this.setsTotal,
+    required this.volumeKg,
+    required this.restRunning,
+    required this.routine,
+    required this.diff,
+    required this.sessionNames,
+    this.saveByDefault = true,
+  });
+
+  final bool saveByDefault;
+
+  final String routineName;
+  final Duration elapsed;
+  final int setsDone;
+  final int setsTotal;
+  final double volumeKg;
+  final bool restRunning;
+
+  /// Rutinitas asal dan selisihnya; keduanya null kalau tidak ada yang perlu
+  /// diselaraskan (sesi bebas, atau susunannya sama).
+  final Routine? routine;
+  final RoutineDiff? diff;
+
+  /// Nama gerakan yang ada di sesi. Gerakan yang dibuang dicari di katalog.
+  final Map<String, String> sessionNames;
+
+  @override
+  State<_FinishSheet> createState() => _FinishSheetState();
+}
+
+class _FinishSheetState extends State<_FinishSheet> {
+  /// Nyala secara bawaan. Ini jawaban atas keluhan "gerakan yang kutambah
+  /// hilang lagi": orang yang menyusun sesinya sendiri hampir selalu ingin
+  /// susunan itu kembali, dan yang tidak ingin tinggal mematikan satu switch —
+  /// atau membatalkannya di ringkasan.
+  late bool _saveRoutine = widget.saveByDefault;
+
+  bool get _canSync => widget.routine != null && widget.diff != null;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gym;
+    final t = context.t;
+    final unfinished = widget.setsTotal - widget.setsDone;
+    final numStyle = TextStyle(
+      fontSize: 20,
+      fontWeight: FontWeight.w800,
+      color: c.text,
+      fontFeatures: const [FontFeature.tabularFigures()],
+    );
+
+    Widget stat(String label, String value) => Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        decoration: BoxDecoration(color: c.bgNested, borderRadius: BorderRadius.circular(GymRadius.small)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(value, style: numStyle),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 11, color: c.text2),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(16, 0, 16, MediaQuery.of(context).viewPadding.bottom + 16),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(t.finishConfirmTitle, style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 2),
+            Text(
+              '${widget.routineName} · ${_formatElapsed(widget.elapsed)}',
+              style: TextStyle(fontSize: 13, color: c.text2),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                stat(t.workingSetsLabel, '${widget.setsDone}/${widget.setsTotal}'),
+                const SizedBox(width: 8),
+                stat(t.volume, context.volume(widget.volumeKg)),
+                const SizedBox(width: 8),
+                stat(t.duration, _formatElapsed(widget.elapsed)),
               ],
             ),
-          ),
-          AnimatedBuilder(
-            animation: rest,
-            builder: (context, _) {
-              if (!rest.isRunning) return const SizedBox.shrink();
-              return Padding(
-                padding: const EdgeInsets.only(right: 10),
-                child: Pill(
-                  color: c.accentSoft,
-                  textColor: c.accent,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.timer_outlined),
-                      const SizedBox(width: 6),
-                      Text(formatRestWide(rest.remaining)),
-                    ],
-                  ),
+            if (unfinished > 0) ...[
+              const SizedBox(height: 10),
+              NoteBanner(text: t.unfinishedSetsNote(unfinished), icon: GymIcons.info, tone: c.warn),
+            ],
+            if (widget.restRunning) ...[
+              const SizedBox(height: 10),
+              NoteBanner(text: t.finishRestNote, icon: GymIcons.alarm, tone: c.text2),
+            ],
+            if (_canSync) ...[
+              const SizedBox(height: 10),
+              GymCard(
+                color: c.surface2,
+                radius: GymRadius.card,
+                padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(t.saveLayoutTo(widget.routine!.name), style: Theme.of(context).textTheme.titleMedium),
+                          const SizedBox(height: 3),
+                          // Nama gerakan yang dibuang tidak ada di sesi lagi —
+                          // diambil dari katalog begitu terbaca; sampai saat
+                          // itu barisnya tetap tampil dengan yang sudah ada.
+                          FutureBuilder<ExerciseCatalog>(
+                            future: ExerciseCatalog.load(),
+                            builder: (context, snap) => Text(
+                              t.routineDiffSummary(
+                                widget.diff!,
+                                (id) => widget.sessionNames[id] ?? snap.data?.nameOf(id) ?? '…',
+                              ),
+                              style: TextStyle(fontSize: 12.5, height: 1.35, color: c.text2),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Switch(
+                      value: _saveRoutine,
+                      onChanged: (v) {
+                        GymHaptics.tap();
+                        setState(() => _saveRoutine = v);
+                      },
+                    ),
+                  ],
                 ),
-              );
-            },
-          ),
-          GymButton(label: context.t.finish, height: 38, expand: false, shape: GymButtonShape.pill, onPressed: onFinish),
-        ],
+              ),
+            ],
+            const SizedBox(height: 16),
+            GymButton(label: t.finishAndSave, onPressed: () => Navigator.of(context).pop(_canSync && _saveRoutine)),
+            const SizedBox(height: 8),
+            GymButton(
+              label: t.backToSessionUpper,
+              tone: GymButtonTone.neutral,
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1076,26 +1689,31 @@ class _ExerciseCard extends StatelessWidget {
     final t = context.t;
     final w = weightLabel(firstWork.weight, bodyweight: ex.config.bodyweight);
 
-    PopupMenuItem<_ExerciseAction> item(_ExerciseAction a, IconData icon, String label,
-            {bool enabled = true, Color? tone}) =>
-        PopupMenuItem(
-          value: a,
-          enabled: enabled,
-          height: 44,
-          child: Row(
-            children: [
-              Icon(icon, size: 17, color: enabled ? (tone ?? c.text2) : c.text3),
-              const SizedBox(width: 12),
-              Flexible(
-                child: Text(label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                        fontSize: 14, fontWeight: FontWeight.w600, color: enabled ? (tone ?? c.text) : c.text3)),
-              ),
-            ],
+    PopupMenuItem<_ExerciseAction> item(
+      _ExerciseAction a,
+      IconData icon,
+      String label, {
+      bool enabled = true,
+      Color? tone,
+    }) => PopupMenuItem(
+      value: a,
+      enabled: enabled,
+      height: 44,
+      child: Row(
+        children: [
+          Icon(icon, size: 17, color: enabled ? (tone ?? c.text2) : c.text3),
+          const SizedBox(width: 12),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: enabled ? (tone ?? c.text) : c.text3),
+            ),
           ),
-        );
+        ],
+      ),
+    );
 
     return GymCard(
       radius: GymRadius.large,
@@ -1108,10 +1726,7 @@ class _ExerciseCard extends StatelessWidget {
               Container(
                 width: 38,
                 height: 38,
-                decoration: BoxDecoration(
-                  color: c.surface2,
-                  borderRadius: BorderRadius.circular(GymRadius.small),
-                ),
+                decoration: BoxDecoration(color: c.surface2, borderRadius: BorderRadius.circular(GymRadius.small)),
                 child: Icon(ex.icon, size: 24, color: c.text2),
               ),
               const SizedBox(width: 12),
@@ -1127,7 +1742,11 @@ class _ExerciseCard extends StatelessWidget {
                       Text(
                         ex.expanded
                             ? t.targetLine(
-                                w, firstWork.reps, t.policy(policyName[policy]!).toLowerCase(), context.unitLabel)
+                                w,
+                                firstWork.reps,
+                                t.policy(policyName[policy]!).toLowerCase(),
+                                context.unitLabel,
+                              )
                             : t.setsTarget(ex.workCount, w, firstWork.reps, context.unitLabel),
                         style: TextStyle(fontSize: 12, color: c.text2),
                       ),
@@ -1145,11 +1764,19 @@ class _ExerciseCard extends StatelessWidget {
               ),
               IconButton(
                 onPressed: onToggleExpand,
-                icon: Icon(ex.expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, color: c.text2),
+                // Satu chevron yang berputar, bukan dua ikon yang bertukar:
+                // mata mengikuti benda yang bergerak, dan arahnya bilang
+                // "ini akan menutup" sebelum kartunya bergerak.
+                icon: AnimatedRotation(
+                  turns: ex.expanded ? 0.5 : 0,
+                  duration: GymMotion.of(context, GymMotion.normal),
+                  curve: GymMotion.curve,
+                  child: Icon(Icons.keyboard_arrow_down, color: c.text2),
+                ),
                 tooltip: ex.expanded ? t.collapse : t.expand,
               ),
               PopupMenuButton<_ExerciseAction>(
-                icon: Icon(Icons.more_vert, size: 20, color: c.text2),
+                icon: Icon(GymIcons.moreVertical, size: 20, color: c.text2),
                 tooltip: t.exerciseActions,
                 color: c.surface2,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(GymRadius.control)),
@@ -1161,13 +1788,21 @@ class _ExerciseCard extends StatelessWidget {
                   item(_ExerciseAction.addWarmup, Icons.whatshot_outlined, t.addWarmup),
                   item(_ExerciseAction.addDropSet, Icons.south_east, t.addDropSet),
                   item(_ExerciseAction.addRestPause, Icons.pause_circle_outline, t.addRestPause),
-                  item(_ExerciseAction.superset, Icons.link, ex.config.superset ? t.endSuperset : t.supersetWithNext,
-                      enabled: ex.config.superset || !isLast),
+                  item(
+                    _ExerciseAction.superset,
+                    Icons.link,
+                    ex.config.superset ? t.endSuperset : t.supersetWithNext,
+                    enabled: ex.config.superset || !isLast,
+                  ),
                   item(_ExerciseAction.note, Icons.sticky_note_2_outlined, t.exerciseNote),
-                  item(_ExerciseAction.history, Icons.history, t.exerciseHistory),
-                  item(_ExerciseAction.removeLastSet, Icons.remove_circle_outline, t.removeLastSet,
-                      enabled: ex.sets.length > 1),
-                  item(_ExerciseAction.remove, Icons.delete_outline, t.removeExercise, tone: c.danger),
+                  item(_ExerciseAction.history, GymIcons.chart, t.exerciseHistory),
+                  item(
+                    _ExerciseAction.removeLastSet,
+                    Icons.remove_circle_outline,
+                    t.removeLastSet,
+                    enabled: ex.sets.length > 1,
+                  ),
+                  item(_ExerciseAction.remove, GymIcons.trash, t.removeExercise, tone: c.danger),
                 ],
               ),
             ],
@@ -1189,25 +1824,35 @@ class _ExerciseCard extends StatelessWidget {
                 ],
               ),
             ),
-          if (ex.expanded)
-            Padding(
-              padding: const EdgeInsets.only(right: 10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 12),
-                  _RestRow(exercise: ex, onEdit: onEditRest, onToggle: onToggleRest, onStart: onStartRest),
-                  if (p != null) ...[
-                    const SizedBox(height: 10),
-                    _WhyBanner(text: t.why(p.why), kind: p.kind),
-                  ],
-                  const SizedBox(height: 12),
-                  _SetTable(exercise: ex, onToggled: onSetToggled, onEdited: onEdited, rirRow: rirRow, onRir: onRir),
-                  const SizedBox(height: 10),
-                  _DashedAction(icon: Icons.add, label: t.addSet, onTap: onAddSet, compact: true),
-                ],
-              ),
-            ),
+          // Kartu membuka dan menutup dengan tinggi yang bergerak, supaya
+          // kartu-kartu di bawahnya ikut turun — bukan melompat ke posisi
+          // barunya. Saat tertutup anaknya kotak setinggi nol; isinya tidak
+          // dibangun, jadi kartu yang tertutup tetap murah.
+          _SizeChange(
+            child: !ex.expanded
+                ? const SizedBox(width: double.infinity)
+                : Padding(
+                    padding: const EdgeInsets.only(right: 10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 12),
+                        _RestRow(exercise: ex, onEdit: onEditRest, onToggle: onToggleRest, onStart: onStartRest),
+                        if (p != null) ...[const SizedBox(height: 10), _WhyBanner(text: t.why(p.why), kind: p.kind)],
+                        const SizedBox(height: 12),
+                        _SetTable(
+                          exercise: ex,
+                          onToggled: onSetToggled,
+                          onEdited: onEdited,
+                          rirRow: rirRow,
+                          onRir: onRir,
+                        ),
+                        const SizedBox(height: 10),
+                        _DashedAction(icon: GymIcons.plus, label: t.addSet, onTap: onAddSet, compact: true),
+                      ],
+                    ),
+                  ),
+          ),
         ],
       ),
     );
@@ -1220,12 +1865,7 @@ class _ExerciseCard extends StatelessWidget {
 /// durasi, tombol START berlabel, dan Switch berukuran penuh berjajar tanpa
 /// batas, sehingga Switch terdorong keluar kartu dan tidak bisa disentuh.
 class _RestRow extends StatelessWidget {
-  const _RestRow({
-    required this.exercise,
-    required this.onEdit,
-    required this.onToggle,
-    required this.onStart,
-  });
+  const _RestRow({required this.exercise, required this.onEdit, required this.onToggle, required this.onStart});
 
   final SessionExercise exercise;
   final VoidCallback onEdit;
@@ -1248,16 +1888,18 @@ class _RestRow extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(Icons.timer_outlined, size: 17, color: on ? c.text2 : c.text3),
+          Icon(GymIcons.alarm, size: 17, color: on ? c.text2 : c.text3),
           const SizedBox(width: 8),
           Expanded(
             child: Row(
               children: [
                 Flexible(
-                  child: Text(context.t.restTimer,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: on ? c.text : c.text3)),
+                  child: Text(
+                    context.t.restTimer,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: on ? c.text : c.text3),
+                  ),
                 ),
                 const SizedBox(width: 4),
                 InkWell(
@@ -1268,10 +1910,12 @@ class _RestRow extends StatelessWidget {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(text,
-                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: on ? c.accent : c.text3)),
+                        Text(
+                          text,
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: on ? c.accent : c.text3),
+                        ),
                         const SizedBox(width: 4),
-                        Icon(Icons.edit_outlined, size: 14, color: c.text2),
+                        Icon(GymIcons.edit, size: 14, color: c.text2),
                       ],
                     ),
                   ),
@@ -1287,13 +1931,9 @@ class _RestRow extends StatelessWidget {
               tooltip: context.t.start,
               visualDensity: VisualDensity.compact,
               style: IconButton.styleFrom(backgroundColor: c.accentSoft),
-              icon: Icon(Icons.play_arrow_rounded, size: 20, color: c.accent),
+              icon: Icon(GymIcons.play, size: 18, color: c.accent),
             ),
-          Switch(
-            value: on,
-            onChanged: onToggle,
-            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          ),
+          Switch(value: on, onChanged: onToggle, materialTapTargetSize: MaterialTapTargetSize.shrinkWrap),
         ],
       ),
     );
@@ -1330,7 +1970,12 @@ class _WhyBanner extends StatelessWidget {
         children: [
           Icon(icon, size: 16, color: tint),
           const SizedBox(width: 9),
-          Expanded(child: Text(text, style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: tint))),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: tint),
+            ),
+          ),
         ],
       ),
     );
@@ -1369,37 +2014,49 @@ class _SetTable extends StatelessWidget {
           ),
         ),
         for (var i = 0; i < exercise.sets.length; i++)
-          Builder(builder: (context) {
-            final s = exercise.sets[i];
-            if (s.isWork) workIndex++;
-            final (label, tone) = switch (s.phase) {
-              SetPhase.warmup => ('W', c.warn),
-              SetPhase.drop => ('D', c.accent),
-              SetPhase.restPause => ('RP', c.accent),
-              SetPhase.work => ('$workIndex', c.doneInk),
-            };
-            return Padding(
-              key: exercise.rowKeys[i],
-              padding: const EdgeInsets.only(bottom: 6),
-              child: Column(
-                children: [
-                  _SetRowTile(
-                    label: label,
-                    labelColor: tone,
-                    previous: i < exercise.previous.length ? exercise.previous[i] : '—',
-                    set: s,
-                    bodyweight: exercise.config.bodyweight,
-                    timed: timed,
-                    step: inc,
-                    onToggled: (v) => onToggled(i, v),
-                    onWeight: (w, {refresh = false}) => onEdited(i, weight: w, refresh: refresh),
-                    onReps: (r) => timed ? onEdited(i, seconds: r) : onEdited(i, reps: r),
+          Builder(
+            builder: (context) {
+              final s = exercise.sets[i];
+              if (s.isWork) workIndex++;
+              final (label, tone) = switch (s.phase) {
+                SetPhase.warmup => ('W', c.warn),
+                SetPhase.drop => ('D', c.accent),
+                SetPhase.restPause => ('RP', c.accent),
+                SetPhase.work => ('$workIndex', c.doneInk),
+              };
+              // Identitas baris dipegang [Reveal], elemen terluar baris: baris
+              // lama tidak beranimasi ulang saat warm-up disisipkan di depan —
+              // hanya baris yang benar-benar baru yang muncul dengan memudar.
+              // Kunci penyegar input ([SessionExercise.rowKeys]) ada di
+              // dalamnya, jadi menggantinya membangun ulang kotak input tanpa
+              // menyentuh animasinya.
+              return Reveal(
+                key: exercise.rowIds[i],
+                index: i,
+                child: Padding(
+                  key: exercise.rowKeys[i],
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Column(
+                    children: [
+                      _SetRowTile(
+                        label: label,
+                        labelColor: tone,
+                        previous: i < exercise.previous.length ? exercise.previous[i] : '—',
+                        set: s,
+                        bodyweight: exercise.config.bodyweight,
+                        timed: timed,
+                        step: inc,
+                        onToggled: (v) => onToggled(i, v),
+                        onWeight: (w, {refresh = false}) => onEdited(i, weight: w, refresh: refresh),
+                        onReps: (r) => timed ? onEdited(i, seconds: r) : onEdited(i, reps: r),
+                      ),
+                      if (rirRow == i && onRir != null) _RirChips(selected: s.rir, onPick: (v) => onRir!(i, v)),
+                    ],
                   ),
-                  if (rirRow == i && onRir != null) _RirChips(selected: s.rir, onPick: (v) => onRir!(i, v)),
-                ],
-              ),
-            );
-          }),
+                ),
+              );
+            },
+          ),
       ],
     );
   }
@@ -1451,17 +2108,25 @@ class _SetRowTile extends StatelessWidget {
         children: [
           SizedBox(
             width: 30,
-            child: Text(label,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                    fontSize: label.length > 1 && label != '${int.tryParse(label)}' ? 11 : 13,
-                    fontWeight: FontWeight.w800,
-                    color: done || !set.isWork ? labelColor : c.text2)),
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: label.length > 1 && label != '${int.tryParse(label)}' ? 11 : 13,
+                fontWeight: FontWeight.w800,
+                color: done || !set.isWork ? labelColor : c.text2,
+              ),
+            ),
           ),
           SizedBox(
             width: 56,
-            child: Text(previous, maxLines: 1, overflow: TextOverflow.fade, softWrap: false,
-                style: TextStyle(fontSize: 12, color: c.text2)),
+            child: Text(
+              previous,
+              maxLines: 1,
+              overflow: TextOverflow.fade,
+              softWrap: false,
+              style: TextStyle(fontSize: 12, color: c.text2),
+            ),
           ),
           Expanded(
             flex: 5,
@@ -1474,18 +2139,14 @@ class _SetRowTile extends StatelessWidget {
               onChanged: (v) => onWeight(double.tryParse(v.replaceAll(',', '.')) ?? 0),
               // Tombol −/+ selangkah increment: tangan berkapur tidak perlu
               // membuka keyboard untuk 60 → 62,5.
-              onStep: step <= 0
-                  ? null
-                  : (dir) => onWeight(stepWeight(set.weight, step, dir), refresh: true),
+              onStep: step <= 0 ? null : (dir) => onWeight(stepWeight(set.weight, step, dir), refresh: true),
             ),
           ),
           Expanded(
             flex: 3,
             child: _Cell(
               text: timed ? (set.seconds == 0 ? '' : '${set.seconds}') : (set.reps == 0 ? '' : '${set.reps}'),
-              doneText: timed
-                  ? '${set.seconds}s'
-                  : (set.rir == null ? '${set.reps}' : '${set.reps} @${set.rir}'),
+              doneText: timed ? '${set.seconds}s' : (set.rir == null ? '${set.reps}' : '${set.reps} @${set.rir}'),
               hint: '0',
               done: done,
               decimal: false,
@@ -1591,21 +2252,22 @@ class _CellState extends State<_Cell> {
     );
 
     if (widget.done) {
-      return Center(child: FittedBox(fit: BoxFit.scaleDown, child: Text(widget.doneText, style: style)));
+      return Center(
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(widget.doneText, style: style),
+        ),
+      );
     }
 
     Widget stepButton(int dir) => InkWell(
-          onTap: () {
-            GymHaptics.tap();
-            widget.onStep!(dir);
-          },
-          borderRadius: BorderRadius.circular(GymRadius.input),
-          child: SizedBox(
-            width: 24,
-            height: 36,
-            child: Icon(dir < 0 ? Icons.remove : Icons.add, size: 16, color: c.text2),
-          ),
-        );
+      onTap: () {
+        GymHaptics.tap();
+        widget.onStep!(dir);
+      },
+      borderRadius: BorderRadius.circular(GymRadius.input),
+      child: SizedBox(width: 24, height: 36, child: Icon(dir < 0 ? Icons.remove : Icons.add, size: 16, color: c.text2)),
+    );
 
     final field = TextField(
       controller: _controller,
@@ -1644,7 +2306,13 @@ class _CellState extends State<_Cell> {
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 5),
       child: widget.onStep == null
           ? field
-          : Row(children: [stepButton(-1), Expanded(child: field), stepButton(1)]),
+          : Row(
+              children: [
+                stepButton(-1),
+                Expanded(child: field),
+                stepButton(1),
+              ],
+            ),
     );
   }
 }
@@ -1686,11 +2354,14 @@ class _RirChips extends StatelessWidget {
                     color: selected == v ? c.accentFill : c.surface2,
                     borderRadius: BorderRadius.circular(GymRadius.pill),
                   ),
-                  child: Text(v == 4 ? '4+' : '$v',
-                      style: TextStyle(
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w700,
-                          color: selected == v ? c.accentInk : c.text)),
+                  child: Text(
+                    v == 4 ? '4+' : '$v',
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      color: selected == v ? c.accentInk : c.text,
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -1741,7 +2412,10 @@ class _NoteDialogState extends State<_NoteDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: Text(t.cancel, style: TextStyle(fontWeight: FontWeight.w700, color: c.text2)),
+          child: Text(
+            t.cancel,
+            style: TextStyle(fontWeight: FontWeight.w700, color: c.text2),
+          ),
         ),
         GymButton(
           label: t.save,

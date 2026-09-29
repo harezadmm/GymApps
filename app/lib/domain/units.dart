@@ -97,5 +97,10 @@ Workout workoutToKg(Workout w, WeightUnit u) => u == WeightUnit.kg ? w : _workou
 
 /// Volume (beban × rep) dalam satuan tampilan sebagai teks: "1.2 t" untuk kg,
 /// "2.6k lb" untuk lb. Ton metrik tidak lazim di kalangan pemakai pound.
-String volumeText(double volume, WeightUnit u) =>
-    u == WeightUnit.kg ? '${(volume / 1000).toStringAsFixed(1)} t' : '${(volume / 1000).toStringAsFixed(1)}k lb';
+///
+/// Di bawah seribu ditulis utuh: satu sesi pendek 70 × 6 adalah "420 kg",
+/// bukan "0.4 t" yang harus dihitung ulang di kepala.
+String volumeText(double volume, WeightUnit u) {
+  if (volume.abs() < 1000) return '${volume.round()} ${u.label}';
+  return u == WeightUnit.kg ? '${(volume / 1000).toStringAsFixed(1)} t' : '${(volume / 1000).toStringAsFixed(1)}k lb';
+}

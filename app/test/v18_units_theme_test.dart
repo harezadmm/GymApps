@@ -90,6 +90,8 @@ void main() {
     test('volume: ton untuk kg, ribuan lb untuk lb', () {
       expect(volumeText(1234, WeightUnit.kg), '1.2 t');
       expect(volumeText(2645, WeightUnit.lb), '2.6k lb');
+      expect(volumeText(420, WeightUnit.kg), '420 kg', reason: 'sesi kecil tidak ditulis 0.4 t');
+      expect(volumeText(925.6, WeightUnit.lb), '926 lb');
     });
 
     testWidgets('layar yang membaca store menampilkan lb', (tester) async {

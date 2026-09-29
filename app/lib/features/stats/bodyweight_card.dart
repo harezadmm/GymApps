@@ -61,7 +61,12 @@ class BodyweightCard extends StatelessWidget {
               Expanded(child: SectionLabel(t.bodyweightTitle)),
               if (last != null)
                 Text(context.wUnit(last.kg),
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: c.text)),
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: c.text,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    )),
             ],
           ),
           const SizedBox(height: 6),
@@ -73,6 +78,10 @@ class BodyweightCard extends StatelessWidget {
               // Batang dimulai sedikit di bawah berat terendah, supaya
               // selisih 0,5 kg tetap terlihat.
               values: [for (final e in recent) e.kg - low + 1],
+              // Gelembung menampilkan berat sesungguhnya, bukan tinggi batang
+              // yang sudah digeser — angka itulah yang ditanyakan.
+              labels: [for (final e in recent) e.date.substring(5)],
+              valueFormat: (v) => context.wUnit(v + low - 1),
               leftLabel: recent.first.date.substring(5),
               midLabel: '',
               rightLabel: recent.last.date.substring(5),

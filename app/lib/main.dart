@@ -28,6 +28,7 @@ import 'features/home/home_screen.dart';
 import 'features/onboarding/onboarding_screens.dart';
 import 'features/onboarding/program_flow.dart';
 import 'features/profile/profile_screen.dart';
+import 'features/session/session_launcher.dart';
 import 'features/stats/stats_screen.dart';
 import 'features/workout/workout_screen.dart';
 
@@ -589,6 +590,23 @@ class _HomeShellState extends State<HomeShell> {
   int _tab = 1;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _resumeUnfinished());
+  }
+
+  /// Sesi yang tertinggal karena aplikasi dimatikan (sistem mematikannya di
+  /// latar belakang, HP mati, atau aplikasi ditutup di loker) langsung dibuka
+  /// lagi — seperti aplikasi latihan lain, sesi yang sedang berjalan adalah
+  /// tempat orang kembali. Dulu sesinya hanya menunggu di kartu kecil di Home,
+  /// dan menekan "Mulai sesi" di atasnya menimpanya tanpa bertanya.
+  void _resumeUnfinished() {
+    if (!mounted) return;
+    final draft = WorkoutScope.read(context).draft;
+    if (draft != null && draftIsRecent(draft)) resumeDraftSession(context, restored: true);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final c = context.gym;
     final t = context.t;
@@ -613,20 +631,35 @@ class _HomeShellState extends State<HomeShell> {
         // di dalam tiap layar bertahan saat berpindah-pindah.
         child: FadeIndexedStack(
           index: _tab,
+          // Tab selain Home baru dibangun saat pertama kali dibuka
+          // (_LazyTab): IndexedStack menata semua anaknya sejak awal, jadi
+          // tanpa ini animasi kedatangan kartu di tab Workout/Profil habis
+          // berjalan diam-diam saat aplikasi dibuka, dan yang dilihat orang
+          // saat pindah tab hanya layar yang sudah diam. Sekali dibangun,
+          // tab tetap hidup seperti sebelumnya.
           children: [
-            const WorkoutScreen(),
-            HomeScreen(email: widget.email, onOpenProfile: () => setState(() => _tab = 4)),
-            const StatsScreen(),
-            const HistoryScreen(),
-            ProfileScreen(
-              language: widget.language,
-              onLanguageChanged: widget.onLanguageChanged,
-              onSignOut: widget.onSignOut,
+            _LazyTab(active: _tab == 0, child: const WorkoutScreen()),
+            HomeScreen(
               email: widget.email,
-              onConnect: widget.onConnect,
-              onAccentChanged: widget.onAccentChanged,
-              themeMode: widget.themeMode,
-              onThemeModeChanged: widget.onThemeModeChanged,
+              onOpenProfile: () => setState(() => _tab = 4),
+              // Blok statistik dan sheet hari di Home membuka tab lain —
+              // angka yang dilihat di sana bisa langsung ditelusuri.
+              onOpenTab: (i) => setState(() => _tab = i),
+            ),
+            _LazyTab(active: _tab == 2, child: const StatsScreen()),
+            _LazyTab(active: _tab == 3, child: const HistoryScreen()),
+            _LazyTab(
+              active: _tab == 4,
+              child: ProfileScreen(
+                language: widget.language,
+                onLanguageChanged: widget.onLanguageChanged,
+                onSignOut: widget.onSignOut,
+                email: widget.email,
+                onConnect: widget.onConnect,
+                onAccentChanged: widget.onAccentChanged,
+                themeMode: widget.themeMode,
+                onThemeModeChanged: widget.onThemeModeChanged,
+              ),
             ),
           ],
         ),
@@ -641,6 +674,29 @@ class _HomeShellState extends State<HomeShell> {
         },
       ),
     );
+  }
+}
+
+/// Anak IndexedStack yang kosong sampai tab-nya pertama kali dipilih, lalu
+/// tetap hidup selamanya. Posisi gulir dan pilihan di dalam tab tidak hilang
+/// saat berpindah — yang berubah cuma kapan layar itu lahir.
+class _LazyTab extends StatefulWidget {
+  const _LazyTab({required this.active, required this.child});
+
+  final bool active;
+  final Widget child;
+
+  @override
+  State<_LazyTab> createState() => _LazyTabState();
+}
+
+class _LazyTabState extends State<_LazyTab> {
+  bool _built = false;
+
+  @override
+  Widget build(BuildContext context) {
+    _built = _built || widget.active;
+    return _built ? widget.child : const SizedBox.shrink();
   }
 }
 
@@ -687,13 +743,21 @@ class _FloatingNav extends StatelessWidget {
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              AnimatedSwitcher(
+                              // Ikon tab aktif membesar sedikit dengan
+                              // sedikit pantulan: ibu jari yang baru
+                              // memindah tab langsung melihat jawabannya.
+                              AnimatedScale(
+                                scale: i == index ? 1.12 : 1,
                                 duration: GymMotion.of(context, GymMotion.quick),
-                                child: Icon(
-                                  i == index ? activeIcon : icon,
-                                  key: ValueKey(i == index),
-                                  size: 26,
-                                  color: i == index ? c.accent : c.text2,
+                                curve: GymMotion.pop,
+                                child: AnimatedSwitcher(
+                                  duration: GymMotion.of(context, GymMotion.quick),
+                                  child: Icon(
+                                    i == index ? activeIcon : icon,
+                                    key: ValueKey(i == index),
+                                    size: 26,
+                                    color: i == index ? c.accent : c.text2,
+                                  ),
                                 ),
                               ),
                               const SizedBox(height: 5),

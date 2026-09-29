@@ -129,41 +129,48 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     final routines = program == null ? store.routines : programRoutines(program, store.routines);
     final next = store.nextSessionOn(DateTime.now());
 
+    // Kartu-kartu datang bertingkat dari atas ke bawah saat tab terbuka:
+    // library dulu, lalu dua kartu mulai, lalu daftar rutinitas satu per satu.
     return [
-      GymCard(
-        radius: GymRadius.large,
-        padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(context.t.exerciseLibrary, style: Theme.of(context).textTheme.titleLarge),
-                  const SizedBox(height: 3),
-                  FutureBuilder<ExerciseCatalog>(
-                    future: ExerciseCatalog.load(),
-                    builder: (context, snap) => Text(
-                      context.t.libraryCount(formatCount(snap.data?.all.length ?? 1324)),
-                      style: TextStyle(fontSize: 12.5, color: c.text2),
+      Reveal(
+        child: GymCard(
+          radius: GymRadius.large,
+          padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(context.t.exerciseLibrary, style: Theme.of(context).textTheme.titleLarge),
+                    const SizedBox(height: 3),
+                    FutureBuilder<ExerciseCatalog>(
+                      future: ExerciseCatalog.load(),
+                      builder: (context, snap) => Text(
+                        context.t.libraryCount(formatCount(snap.data?.all.length ?? 1324)),
+                        style: TextStyle(fontSize: 12.5, color: c.text2),
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 12),
-            Material(
-              color: c.accentSoft,
-              borderRadius: BorderRadius.circular(GymRadius.small),
-              child: InkWell(
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const ExerciseLibraryScreen()),
+                  ],
                 ),
-                borderRadius: BorderRadius.circular(GymRadius.small),
-                child: SizedBox(width: 42, height: 42, child: Icon(GymIcons.dumbbell, size: 20, color: c.accent)),
               ),
-            ),
-          ],
+              const SizedBox(width: 12),
+              PressScale(
+                scale: 0.92,
+                child: Material(
+                  color: c.accentSoft,
+                  borderRadius: BorderRadius.circular(GymRadius.small),
+                  child: InkWell(
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const ExerciseLibraryScreen()),
+                    ),
+                    borderRadius: BorderRadius.circular(GymRadius.small),
+                    child: SizedBox(width: 42, height: 42, child: Icon(GymIcons.dumbbell, size: 20, color: c.accent)),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
       const SizedBox(height: 22),
@@ -172,20 +179,26 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       Row(
         children: [
           Expanded(
-            child: _StartCard(
-              icon: GymIcons.edit,
-              title: context.t.startEmpty,
-              detail: context.t.freestyleLog,
-              onTap: () => openFreestyleSession(context, context.t.freestyle),
+            child: Reveal(
+              index: 1,
+              child: _StartCard(
+                icon: GymIcons.edit,
+                title: context.t.startEmpty,
+                detail: context.t.freestyleLog,
+                onTap: () => openFreestyleSession(context, context.t.freestyle),
+              ),
             ),
           ),
           const SizedBox(width: 10),
           Expanded(
-            child: _StartCard(
-              icon: GymIcons.play,
-              title: context.t.fromProgram,
-              detail: next == null ? context.t.noProgramYet : context.t.isNext(next.routine.name),
-              onTap: next == null ? () => setState(() => _tab = 1) : () => _start(next.routine),
+            child: Reveal(
+              index: 2,
+              child: _StartCard(
+                icon: GymIcons.play,
+                title: context.t.fromProgram,
+                detail: next == null ? context.t.noProgramYet : context.t.isNext(next.routine.name),
+                onTap: next == null ? () => setState(() => _tab = 1) : () => _start(next.routine),
+              ),
             ),
           ),
         ],
@@ -203,29 +216,32 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       ),
       const SizedBox(height: 4),
       if (program != null && routines.isNotEmpty)
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-          decoration: BoxDecoration(
-            color: c.bgNested,
-            borderRadius: BorderRadius.circular(GymRadius.control),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                    program.mode == ProgramMode.weekday
-                        ? context.t.weekdayOf(program.name)
-                        : context.t.rotationOf(program.name),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 13, color: c.text2)),
-              ),
-              // Posisi cursor di rotasi (FR-B3) — "rutinitas ke berapa dari
-              // berapa", bukan progres sesi hari ini.
-              if (next != null)
-                Text('${routines.indexWhere((r) => r.id == next.routine.id) + 1} / ${routines.length}',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: c.accent)),
-            ],
+        Reveal(
+          index: 3,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+            decoration: BoxDecoration(
+              color: c.bgNested,
+              borderRadius: BorderRadius.circular(GymRadius.control),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                      program.mode == ProgramMode.weekday
+                          ? context.t.weekdayOf(program.name)
+                          : context.t.rotationOf(program.name),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 13, color: c.text2)),
+                ),
+                // Posisi cursor di rotasi (FR-B3) — "rutinitas ke berapa dari
+                // berapa", bukan progres sesi hari ini.
+                if (next != null)
+                  Text('${routines.indexWhere((r) => r.id == next.routine.id) + 1} / ${routines.length}',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: c.accent)),
+              ],
+            ),
           ),
         ),
       const SizedBox(height: 10),
@@ -235,24 +251,27 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
           child: Center(child: Text(context.t.noRoutines, style: TextStyle(fontSize: 13.5, color: c.text2))),
         )
       else
-        for (final r in routines) ...[
-          _RoutineRow(
-            routine: r,
-            isNext: next?.routine.id == r.id,
-            canMakeNext: program?.mode == ProgramMode.rotation && next?.routine.id != r.id,
-            onTap: () => _start(r),
-            onAction: (action) => switch (action) {
-              _RoutineAction.edit => _openEditor(r),
-              _RoutineAction.rename => _rename(r),
-              _RoutineAction.duplicate => _duplicate(r),
-              _RoutineAction.makeNext => store.setNext(r.id),
-              _RoutineAction.delete => _delete(r),
-            },
+        for (final (i, r) in routines.indexed) ...[
+          Reveal(
+            index: i + 4,
+            child: _RoutineRow(
+              routine: r,
+              isNext: next?.routine.id == r.id,
+              canMakeNext: program?.mode == ProgramMode.rotation && next?.routine.id != r.id,
+              onTap: () => _start(r),
+              onAction: (action) => switch (action) {
+                _RoutineAction.edit => _openEditor(r),
+                _RoutineAction.rename => _rename(r),
+                _RoutineAction.duplicate => _duplicate(r),
+                _RoutineAction.makeNext => store.setNext(r.id),
+                _RoutineAction.delete => _delete(r),
+              },
+            ),
           ),
           const SizedBox(height: 10),
         ],
       const SizedBox(height: 4),
-      _AddRoutineRow(onTap: _newRoutine),
+      Reveal(index: routines.length + 4, child: _AddRoutineRow(onTap: _newRoutine)),
     ];
   }
 
@@ -295,137 +314,148 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     }
 
     return [
-      GymCard(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SectionLabel(t.activeProgram),
-            const SizedBox(height: 10),
-            Text(program.name, style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 4),
-            Text(
-              program.mode == ProgramMode.weekday
-                  ? '${t.weekdayMode} · ${[for (final d in [...program.days]..sort()) t.weekdayShort(d)].join(', ')}'
-                  : '${t.rotationMode} · ${t.restRule(program.minRestDays)}',
-              style: TextStyle(fontSize: 13, color: c.text2),
-            ),
-            const SizedBox(height: 14),
-            GymButton(
-              label: t.changeProgram.toUpperCase(),
-              icon: GymIcons.dataTransfer,
-              tone: GymButtonTone.neutral,
-              height: 44,
-              onPressed: _changeProgram,
-            ),
-          ],
+      Reveal(
+        child: GymCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SectionLabel(t.activeProgram),
+              const SizedBox(height: 10),
+              Text(program.name, style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 4),
+              Text(
+                program.mode == ProgramMode.weekday
+                    ? '${t.weekdayMode} · ${[for (final d in [...program.days]..sort()) t.weekdayShort(d)].join(', ')}'
+                    : '${t.rotationMode} · ${t.restRule(program.minRestDays)}',
+                style: TextStyle(fontSize: 13, color: c.text2),
+              ),
+              const SizedBox(height: 14),
+              GymButton(
+                label: t.changeProgram.toUpperCase(),
+                icon: GymIcons.dataTransfer,
+                tone: GymButtonTone.neutral,
+                height: 44,
+                onPressed: _changeProgram,
+              ),
+            ],
+          ),
         ),
       ),
       const SizedBox(height: 12),
       // Jadwal bisa diganti kapan saja — dulu mode dan hari latihan terkunci
       // sejak program dibuat, dan satu-satunya jalan adalah menyusun ulang
       // split dari nol.
-      GymCard(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SectionLabel(t.scheduleTitle),
-            const SizedBox(height: 10),
-            FilterChips(
-              labels: [t.rotationMode, t.weekdayMode],
-              index: program.mode == ProgramMode.weekday ? 1 : 0,
-              onChanged: (i) {
-                final weekday = i == 1;
-                if (weekday == (program.mode == ProgramMode.weekday)) return;
-                store.updateProgram(program.copyWith(
-                  mode: weekday ? ProgramMode.weekday : ProgramMode.rotation,
-                  days: weekday && program.days.isEmpty ? const [1, 3, 5] : program.days,
-                  clearSkip: true,
-                ));
-              },
-            ),
-            if (program.mode == ProgramMode.weekday) ...[
-              const SizedBox(height: 12),
-              Text(t.trainingDays, style: TextStyle(fontSize: 12.5, color: c.text2)),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: [
-                  for (var d = 1; d <= 7; d++)
-                    FilterChip(
-                      label: Text(t.weekdayShort(d)),
-                      selected: program.days.contains(d),
-                      onSelected: (on) {
-                        final days = {...program.days};
-                        on ? days.add(d) : days.remove(d);
-                        // Paling tidak satu hari: jadwal tanpa hari latihan
-                        // bukan jadwal.
-                        if (days.isEmpty) return;
-                        store.updateProgram(program.copyWith(days: days.toList()..sort(), clearSkip: true));
-                      },
-                    ),
-                ],
+      Reveal(
+        index: 1,
+        child: GymCard(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SectionLabel(t.scheduleTitle),
+              const SizedBox(height: 10),
+              FilterChips(
+                labels: [t.rotationMode, t.weekdayMode],
+                index: program.mode == ProgramMode.weekday ? 1 : 0,
+                onChanged: (i) {
+                  final weekday = i == 1;
+                  if (weekday == (program.mode == ProgramMode.weekday)) return;
+                  store.updateProgram(program.copyWith(
+                    mode: weekday ? ProgramMode.weekday : ProgramMode.rotation,
+                    days: weekday && program.days.isEmpty ? const [1, 3, 5] : program.days,
+                    clearSkip: true,
+                  ));
+                },
               ),
+              if (program.mode == ProgramMode.weekday) ...[
+                const SizedBox(height: 12),
+                Text(t.trainingDays, style: TextStyle(fontSize: 12.5, color: c.text2)),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    for (var d = 1; d <= 7; d++)
+                      FilterChip(
+                        label: Text(t.weekdayShort(d)),
+                        selected: program.days.contains(d),
+                        onSelected: (on) {
+                          final days = {...program.days};
+                          on ? days.add(d) : days.remove(d);
+                          // Paling tidak satu hari: jadwal tanpa hari latihan
+                          // bukan jadwal.
+                          if (days.isEmpty) return;
+                          store.updateProgram(program.copyWith(days: days.toList()..sort(), clearSkip: true));
+                        },
+                      ),
+                  ],
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
       if (program.mode == ProgramMode.rotation) ...[
         const SizedBox(height: 12),
-        GymCard(
-          padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(t.restDaysBetween, style: Theme.of(context).textTheme.bodyLarge),
-                    Text(t.restDaysValue(program.minRestDays), style: TextStyle(fontSize: 12.5, color: c.text2)),
-                  ],
+        Reveal(
+          index: 2,
+          child: GymCard(
+            padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(t.restDaysBetween, style: Theme.of(context).textTheme.bodyLarge),
+                      Text(t.restDaysValue(program.minRestDays), style: TextStyle(fontSize: 12.5, color: c.text2)),
+                    ],
+                  ),
                 ),
-              ),
-              IconButton(
-                onPressed: program.minRestDays <= 0
-                    ? null
-                    : () => store.updateProgram(program.copyWith(minRestDays: program.minRestDays - 1)),
-                icon: Icon(Icons.remove, color: c.accent),
-                tooltip: t.fewer,
-              ),
-              IconButton(
-                onPressed: program.minRestDays >= 7
-                    ? null
-                    : () => store.updateProgram(program.copyWith(minRestDays: program.minRestDays + 1)),
-                icon: Icon(GymIcons.plus, color: c.accent),
-                tooltip: t.more,
-              ),
-            ],
+                IconButton(
+                  onPressed: program.minRestDays <= 0
+                      ? null
+                      : () => store.updateProgram(program.copyWith(minRestDays: program.minRestDays - 1)),
+                  icon: Icon(Icons.remove, color: c.accent),
+                  tooltip: t.fewer,
+                ),
+                IconButton(
+                  onPressed: program.minRestDays >= 7
+                      ? null
+                      : () => store.updateProgram(program.copyWith(minRestDays: program.minRestDays + 1)),
+                  icon: Icon(GymIcons.plus, color: c.accent),
+                  tooltip: t.more,
+                ),
+              ],
+            ),
           ),
         ),
       ],
       const SizedBox(height: 18),
       SectionLabel(t.order),
       const SizedBox(height: 8),
-      SettingsGroup(
-        children: [
-          for (final (i, r) in routines.indexed)
-            _OrderRow(
-              name: r.name,
-              detail: [
-                t.exerciseCount(r.exercises.length),
-                if (program.mode == ProgramMode.weekday)
-                  [for (final d in weekdaysOf(program, store.routines, r.id)) t.weekdayShort(d)].join(', '),
-              ].where((s) => s.isNotEmpty).join(' · '),
-              isNext: next?.routine.id == r.id,
-              canUp: i > 0,
-              canDown: i < routines.length - 1,
-              onTap: () => _openEditor(r),
-              onUp: () => move(i, -1),
-              onDown: () => move(i, 1),
-              onMakeNext: program.mode == ProgramMode.rotation ? () => store.setNext(r.id) : null,
-            ),
-        ],
+      Reveal(
+        index: 3,
+        child: SettingsGroup(
+          children: [
+            for (final (i, r) in routines.indexed)
+              _OrderRow(
+                name: r.name,
+                detail: [
+                  t.exerciseCount(r.exercises.length),
+                  if (program.mode == ProgramMode.weekday)
+                    [for (final d in weekdaysOf(program, store.routines, r.id)) t.weekdayShort(d)].join(', '),
+                ].where((s) => s.isNotEmpty).join(' · '),
+                isNext: next?.routine.id == r.id,
+                canUp: i > 0,
+                canDown: i < routines.length - 1,
+                onTap: () => _openEditor(r),
+                onUp: () => move(i, -1),
+                onDown: () => move(i, 1),
+                onMakeNext: program.mode == ProgramMode.rotation ? () => store.setNext(r.id) : null,
+              ),
+          ],
+        ),
       ),
     ];
   }
@@ -460,28 +490,30 @@ class _AddRoutineRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.gym;
-    return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(GymRadius.control),
-      child: InkWell(
-        onTap: onTap,
+    return PressScale(
+      child: Material(
+        color: Colors.transparent,
         borderRadius: BorderRadius.circular(GymRadius.control),
-        child: Container(
-          height: 46,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(GymRadius.control),
-            border: Border.all(color: c.border),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(GymIcons.plus, size: 17, color: c.accent),
-              const SizedBox(width: 8),
-              Text(context.t.newRoutine,
-                  style: TextStyle(
-                      fontSize: 13, fontWeight: FontWeight.w800, letterSpacing: 0.6, color: c.accent)),
-            ],
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(GymRadius.control),
+          child: Container(
+            height: 46,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(GymRadius.control),
+              border: Border.all(color: c.border),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(GymIcons.plus, size: 17, color: c.accent),
+                const SizedBox(width: 8),
+                Text(context.t.newRoutine,
+                    style: TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w800, letterSpacing: 0.6, color: c.accent)),
+              ],
+            ),
           ),
         ),
       ),

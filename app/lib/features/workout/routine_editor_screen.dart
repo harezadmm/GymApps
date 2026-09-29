@@ -14,6 +14,7 @@ import '../../core/weights.dart';
 import '../../domain/units.dart';
 
 import '../../core/format.dart';
+import '../../core/motion.dart';
 import '../../core/strings.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
@@ -60,6 +61,11 @@ class RoutineEditorScreen extends StatefulWidget {
 
 class _RoutineEditorScreenState extends State<RoutineEditorScreen> {
   late List<ExerciseConfig> _exercises = List.of(widget.routine.exercises);
+
+  /// Identitas tiap baris, bergerak bersama barisnya. Key dari indeks membuat
+  /// baris yang dipindah atau yang ada di bawah baris yang dihapus dianggap
+  /// baris baru — dan memudar masuk lagi.
+  late List<Key> _rowKeys = [for (final _ in _exercises) UniqueKey()];
   late ProgressionPolicy? _policy = widget.routine.policy;
   late final _nameController = TextEditingController(text: widget.routine.name);
   late final Future<ExerciseCatalog> _catalog = ExerciseCatalog.load();
@@ -90,6 +96,7 @@ class _RoutineEditorScreenState extends State<RoutineEditorScreen> {
     if (picked == null || !mounted) return;
     _change(() {
       _exercises = [..._exercises, _configFor(picked)];
+      _rowKeys = [..._rowKeys, UniqueKey()];
       _expanded = _exercises.length - 1;
     });
   }
@@ -117,6 +124,7 @@ class _RoutineEditorScreenState extends State<RoutineEditorScreen> {
           final item = list.removeAt(i);
           list.insert(i - 1, item);
           _exercises = list;
+          _rowKeys = [..._rowKeys]..insert(i - 1, _rowKeys[i])..removeAt(i + 1);
           _expanded = i - 1;
         });
       case _RowAction.moveDown when i < _exercises.length - 1:
@@ -125,6 +133,9 @@ class _RoutineEditorScreenState extends State<RoutineEditorScreen> {
           final item = list.removeAt(i);
           list.insert(i + 1, item);
           _exercises = list;
+          final keys = [..._rowKeys];
+          keys.insert(i + 1, keys.removeAt(i));
+          _rowKeys = keys;
           _expanded = i + 1;
         });
       case _RowAction.replace:
@@ -134,6 +145,7 @@ class _RoutineEditorScreenState extends State<RoutineEditorScreen> {
       case _RowAction.remove:
         _change(() {
           _exercises = [..._exercises]..removeAt(i);
+          _rowKeys = [..._rowKeys]..removeAt(i);
           if (_expanded >= _exercises.length) _expanded = _exercises.length - 1;
         });
       default:
@@ -284,24 +296,31 @@ class _RoutineEditorScreenState extends State<RoutineEditorScreen> {
                             padding: const EdgeInsets.symmetric(vertical: 12),
                             child: Text(t.noExercisesYet, style: TextStyle(fontSize: 13.5, color: c.text2)),
                           ),
+                        // Key-nya di Reveal: gerakan yang dipindah membawa
+                        // keadaan animasinya, jadi menaikkan satu baris tidak
+                        // membuatnya memudar masuk lagi — hanya gerakan yang
+                        // baru ditambahkan yang datang dengan gerak.
                         for (final (i, cfg) in _exercises.indexed) ...[
-                          _ExerciseEditor(
-                            key: ValueKey('${cfg.exerciseId}-$i'),
-                            name: catalog?.nameOf(cfg.exerciseId) ?? '…',
-                            subtitle: catalog?.byId(cfg.exerciseId)?.subtitle ?? '',
-                            config: cfg,
-                            routinePolicy: _policy,
-                            expanded: i == _expanded,
-                            isFirst: i == 0,
-                            isLast: i == _exercises.length - 1,
-                            onToggle: () => setState(() => _expanded = i == _expanded ? -1 : i),
-                            onChanged: (next) => _change(() => _exercises = [..._exercises]..[i] = next),
-                            onAction: (a) => _rowAction(i, a),
+                          Reveal(
+                            key: _rowKeys[i],
+                            index: i,
+                            child: _ExerciseEditor(
+                              name: catalog?.nameOf(cfg.exerciseId) ?? '…',
+                              subtitle: catalog?.byId(cfg.exerciseId)?.subtitle ?? '',
+                              config: cfg,
+                              routinePolicy: _policy,
+                              expanded: i == _expanded,
+                              isFirst: i == 0,
+                              isLast: i == _exercises.length - 1,
+                              onToggle: () => setState(() => _expanded = i == _expanded ? -1 : i),
+                              onChanged: (next) => _change(() => _exercises = [..._exercises]..[i] = next),
+                              onAction: (a) => _rowAction(i, a),
+                            ),
                           ),
                           const SizedBox(height: 10),
                         ],
                         const SizedBox(height: 4),
-                        _AddExercise(onTap: _add),
+                        PressScale(child: _AddExercise(onTap: _add)),
                         if (widget.allowDelete) ...[
                           const SizedBox(height: 24),
                           GymButton(
@@ -326,7 +345,6 @@ class _RoutineEditorScreenState extends State<RoutineEditorScreen> {
 
 class _ExerciseEditor extends StatelessWidget {
   const _ExerciseEditor({
-    super.key,
     required this.name,
     required this.subtitle,
     required this.config,

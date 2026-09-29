@@ -417,212 +417,230 @@ class _ProfileScreenState extends State<ProfileScreen> {
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       children: [
         ScreenHeader(title: t.profile),
-        GymCard(
-          radius: GymRadius.large,
-          padding: const EdgeInsets.all(14),
-          child: Row(
-            children: [
-              AvatarCircle(text: _initials(widget.email), size: 50),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(widget.email ?? '…',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(fontSize: 15)),
-                    const SizedBox(height: 3),
-                    // Status sinkron dibaca dari store, bukan dari konstanta
-                    // build. Kredensial yang terpasang tidak sama dengan sinkron
-                    // yang berhasil, dan bedanya baru ketahuan saat ganti HP —
-                    // saat itu sudah terlambat.
-                    Builder(builder: (context) {
-                      final store = context.workouts;
-                      final (label, tone, icon) = switch (store.syncStatus) {
-                        _ when !store.hasBackend => (t.syncOff, c.text2, Icons.cloud_off_outlined),
-                        SyncStatus.syncing => (t.syncing, c.text2, Icons.cloud_sync_outlined),
-                        SyncStatus.synced => (t.syncedNow, c.doneInk, Icons.cloud_done_outlined),
-                        SyncStatus.failed => (t.syncFailed, c.warn, Icons.cloud_off_outlined),
-                        SyncStatus.idle => (t.syncPending, c.text2, Icons.cloud_queue),
-                        SyncStatus.noSession => (t.syncNoSession, c.warn, Icons.cloud_off_outlined),
-                      };
-                      final syncing = store.hasBackend && store.syncStatus == SyncStatus.syncing;
-                      return FadeSwap(
-                        alignment: Alignment.centerLeft,
-                        child: Row(
-                          key: ValueKey(label),
-                          children: [
-                            if (syncing)
-                              SpinIcon(icon, size: 14, color: tone)
-                            else
-                              Icon(icon, size: 14, color: tone),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: Text(label,
-                                  style: TextStyle(
-                                      fontSize: 12.5, fontWeight: FontWeight.w600, color: tone)),
-                            ),
-                          ],
-                        ),
-                      );
-                    }),
-                  ],
+        // Kartu akun dulu, lalu tiap grup setelan menyusul bertingkat —
+        // urutan yang sama dengan urutan bacanya.
+        Reveal(
+          child: GymCard(
+            radius: GymRadius.large,
+            padding: const EdgeInsets.all(14),
+            child: Row(
+              children: [
+                Reveal(scale: true, slide: false, child: AvatarCircle(text: _initials(widget.email), size: 50)),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(widget.email ?? '…',
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(fontSize: 15)),
+                      const SizedBox(height: 3),
+                      // Status sinkron dibaca dari store, bukan dari konstanta
+                      // build. Kredensial yang terpasang tidak sama dengan sinkron
+                      // yang berhasil, dan bedanya baru ketahuan saat ganti HP —
+                      // saat itu sudah terlambat.
+                      Builder(builder: (context) {
+                        final store = context.workouts;
+                        final (label, tone, icon) = switch (store.syncStatus) {
+                          _ when !store.hasBackend => (t.syncOff, c.text2, Icons.cloud_off_outlined),
+                          SyncStatus.syncing => (t.syncing, c.text2, Icons.cloud_sync_outlined),
+                          SyncStatus.synced => (t.syncedNow, c.doneInk, Icons.cloud_done_outlined),
+                          SyncStatus.failed => (t.syncFailed, c.warn, Icons.cloud_off_outlined),
+                          SyncStatus.idle => (t.syncPending, c.text2, Icons.cloud_queue),
+                          SyncStatus.noSession => (t.syncNoSession, c.warn, Icons.cloud_off_outlined),
+                        };
+                        final syncing = store.hasBackend && store.syncStatus == SyncStatus.syncing;
+                        return FadeSwap(
+                          alignment: Alignment.centerLeft,
+                          child: Row(
+                            key: ValueKey(label),
+                            children: [
+                              if (syncing)
+                                SpinIcon(icon, size: 14, color: tone)
+                              else
+                                Icon(icon, size: 14, color: tone),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(label,
+                                    style: TextStyle(
+                                        fontSize: 12.5, fontWeight: FontWeight.w600, color: tone)),
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
         const SizedBox(height: 18),
         SectionLabel(t.training),
         const SizedBox(height: 8),
-        SettingsGroup(
-          children: [
-            SettingsTile(icon: GymIcons.scale, hue: c.hues.violet, label: t.units, value: settings.unit.label, onTap: _pickUnit),
-            SettingsTile(
-                icon: GymIcons.alarm, hue: c.hues.cyan,
-                label: t.defaultRest,
-                value: _restText(settings.defaultRestSeconds),
-                onTap: _pickDefaultRest),
-            SettingsTile(
-                icon: GymIcons.chart, hue: c.hues.orange,
-                label: t.deloadFactor,
-                value: '${(settings.deloadFactor * 100).round()}%',
-                onTap: _pickDeload),
-            SettingsTile(
-              icon: GymIcons.menu, hue: c.hues.pink,
-              label: t.logRir,
-              trailing: Switch(
-                value: settings.logRir,
-                onChanged: (v) => store.updateSettings(settings.copyWith(logRir: v)),
-              ),
-            ),
-            SettingsTile(
-              icon: GymIcons.eye, hue: c.hues.lime,
-              label: t.keepScreenAwake,
-              trailing: Switch(
-                value: _keepAwake,
-                onChanged: (v) {
-                  setState(() => _keepAwake = v);
-                  KeepAwake.set(v);
-                },
-              ),
-            ),
-            if (kIsWeb && _restPush != WebRestPush.unavailable)
+        Reveal(
+          index: 1,
+          child: SettingsGroup(
+            children: [
+              SettingsTile(icon: GymIcons.scale, hue: c.hues.violet, label: t.units, value: settings.unit.label, onTap: _pickUnit),
               SettingsTile(
-                icon: GymIcons.bell, hue: c.hues.green,
-                label: t.restPushTitle,
-                value: switch (_restPush) {
-                  WebRestPush.on => t.restPushOn,
-                  WebRestPush.blocked => t.restPushBlocked,
-                  WebRestPush.needsHomeScreen => t.restPushNeedsHome,
-                  _ => t.restPushOff,
-                },
-                onTap: _toggleRestPush,
+                  icon: GymIcons.alarm, hue: c.hues.cyan,
+                  label: t.defaultRest,
+                  value: _restText(settings.defaultRestSeconds),
+                  onTap: _pickDefaultRest),
+              SettingsTile(
+                  icon: GymIcons.chart, hue: c.hues.orange,
+                  label: t.deloadFactor,
+                  value: '${(settings.deloadFactor * 100).round()}%',
+                  onTap: _pickDeload),
+              SettingsTile(
+                icon: GymIcons.menu, hue: c.hues.pink,
+                label: t.logRir,
+                trailing: Switch(
+                  value: settings.logRir,
+                  onChanged: (v) => store.updateSettings(settings.copyWith(logRir: v)),
+                ),
               ),
-            SettingsTile(
-                icon: GymIcons.calendar, hue: c.hues.violet,
-                label: t.weekStartsOn,
-                value: t.weekdayLong(settings.weekStartsOn),
-                onTap: _pickWeekStart),
-            SettingsTile(
-              icon: GymIcons.dumbbell, hue: c.hues.cyan,
-              label: t.myEquipment,
-              value: settings.equipment == null ? t.equipmentAll : t.equipmentCount(settings.equipment!.length),
-              onTap: () => editEquipment(context),
-            ),
-          ],
+              SettingsTile(
+                icon: GymIcons.eye, hue: c.hues.lime,
+                label: t.keepScreenAwake,
+                trailing: Switch(
+                  value: _keepAwake,
+                  onChanged: (v) {
+                    setState(() => _keepAwake = v);
+                    KeepAwake.set(v);
+                  },
+                ),
+              ),
+              if (kIsWeb && _restPush != WebRestPush.unavailable)
+                SettingsTile(
+                  icon: GymIcons.bell, hue: c.hues.green,
+                  label: t.restPushTitle,
+                  value: switch (_restPush) {
+                    WebRestPush.on => t.restPushOn,
+                    WebRestPush.blocked => t.restPushBlocked,
+                    WebRestPush.needsHomeScreen => t.restPushNeedsHome,
+                    _ => t.restPushOff,
+                  },
+                  onTap: _toggleRestPush,
+                ),
+              SettingsTile(
+                  icon: GymIcons.calendar, hue: c.hues.violet,
+                  label: t.weekStartsOn,
+                  value: t.weekdayLong(settings.weekStartsOn),
+                  onTap: _pickWeekStart),
+              SettingsTile(
+                icon: GymIcons.dumbbell, hue: c.hues.cyan,
+                label: t.myEquipment,
+                value: settings.equipment == null ? t.equipmentAll : t.equipmentCount(settings.equipment!.length),
+                onTap: () => editEquipment(context),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 18),
         SectionLabel(t.data),
         const SizedBox(height: 8),
-        SettingsGroup(
-          children: [
-            SettingsTile(icon: GymIcons.download, hue: c.hues.orange, label: t.exportBackup, onTap: _export),
-            SettingsTile(icon: GymIcons.dataTransfer, hue: c.hues.pink, label: t.importBackup, onTap: _import),
-            SettingsTile(
-              icon: GymIcons.sync, hue: c.hues.green,
-              label: t.forceSync,
-              onTap: _forceSync,
-            ),
-          ],
+        Reveal(
+          index: 2,
+          child: SettingsGroup(
+            children: [
+              SettingsTile(icon: GymIcons.download, hue: c.hues.orange, label: t.exportBackup, onTap: _export),
+              SettingsTile(icon: GymIcons.dataTransfer, hue: c.hues.pink, label: t.importBackup, onTap: _import),
+              SettingsTile(
+                icon: GymIcons.sync, hue: c.hues.green,
+                label: t.forceSync,
+                onTap: _forceSync,
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 18),
         SectionLabel(t.app),
         const SizedBox(height: 8),
-        SettingsGroup(
-          children: [
-            if (widget.onThemeModeChanged != null)
+        Reveal(
+          index: 3,
+          child: SettingsGroup(
+            children: [
+              if (widget.onThemeModeChanged != null)
+                SettingsTile(
+                  icon: GymIcons.moon, hue: c.hues.violet,
+                  label: t.themeTitle,
+                  value: switch (widget.themeMode) {
+                    ThemeMode.light => t.themeLight,
+                    ThemeMode.system => t.themeSystem,
+                    ThemeMode.dark => t.themeDark,
+                  },
+                  onTap: _pickTheme,
+                ),
               SettingsTile(
-                icon: GymIcons.moon, hue: c.hues.violet,
-                label: t.themeTitle,
-                value: switch (widget.themeMode) {
-                  ThemeMode.light => t.themeLight,
-                  ThemeMode.system => t.themeSystem,
-                  ThemeMode.dark => t.themeDark,
-                },
-                onTap: _pickTheme,
-              ),
-            SettingsTile(
-              icon: GymIcons.settings, hue: c.hues.pink,
-              label: t.accentColour,
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(width: 18, height: 18, decoration: BoxDecoration(color: c.accent, shape: BoxShape.circle)),
-                  const SizedBox(width: 8),
-                  Icon(Icons.chevron_right, size: 18, color: c.text3),
-                ],
-              ),
-              onTap: widget.onAccentChanged == null ? null : _pickAccent,
-            ),
-            SettingsTile(
-              icon: GymIcons.globe, hue: c.hues.cyan,
-              label: t.language,
-              value: appLanguageLabel[widget.language]!,
-              onTap: _pickLanguage,
-            ),
-            SettingsTile(
-                icon: GymIcons.info, hue: c.hues.orange,
-                label: t.aboutApp,
+                icon: GymIcons.settings, hue: c.hues.pink,
+                label: t.accentColour,
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    FutureBuilder<String>(
-                      future: _version,
-                      // Kosong selagi dibaca, bukan placeholder — angka versi
-                      // yang salah sekejap tetap sempat terbaca dan dilaporkan.
-                      builder: (context, snap) => Text(snap.data ?? '',
-                          style: TextStyle(fontSize: 13.5, color: c.text2)),
-                    ),
+                    Container(width: 18, height: 18, decoration: BoxDecoration(color: c.accent, shape: BoxShape.circle)),
                     const SizedBox(width: 8),
                     Icon(Icons.chevron_right, size: 18, color: c.text3),
                   ],
                 ),
-                onTap: _about),
-          ],
+                onTap: widget.onAccentChanged == null ? null : _pickAccent,
+              ),
+              SettingsTile(
+                icon: GymIcons.globe, hue: c.hues.cyan,
+                label: t.language,
+                value: appLanguageLabel[widget.language]!,
+                onTap: _pickLanguage,
+              ),
+              SettingsTile(
+                  icon: GymIcons.info, hue: c.hues.orange,
+                  label: t.aboutApp,
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      FutureBuilder<String>(
+                        future: _version,
+                        // Kosong selagi dibaca, bukan placeholder — angka versi
+                        // yang salah sekejap tetap sempat terbaca dan dilaporkan.
+                        builder: (context, snap) => Text(snap.data ?? '',
+                            style: TextStyle(fontSize: 13.5, color: c.text2)),
+                      ),
+                      const SizedBox(width: 8),
+                      Icon(Icons.chevron_right, size: 18, color: c.text3),
+                    ],
+                  ),
+                  onTap: _about),
+            ],
+          ),
         ),
         const SizedBox(height: 20),
-        Material(
-          color: c.danger.withValues(alpha: 0.10),
-          borderRadius: BorderRadius.circular(GymRadius.card),
-          child: InkWell(
-            onTap: widget.onSignOut,
-            borderRadius: BorderRadius.circular(GymRadius.card),
-            child: Container(
-              height: 52,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
+        Reveal(
+          index: 4,
+          child: PressScale(
+            child: Material(
+              color: c.danger.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(GymRadius.card),
+              child: InkWell(
+                onTap: widget.onSignOut,
                 borderRadius: BorderRadius.circular(GymRadius.card),
-                border: Border.all(color: c.danger.withValues(alpha: 0.4)),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(GymIcons.logout, size: 17, color: c.danger),
-                  const SizedBox(width: 9),
-                  Text(t.logOut,
-                      style: TextStyle(
-                          fontSize: 13, fontWeight: FontWeight.w800, letterSpacing: 0.6, color: c.danger)),
-                ],
+                child: Container(
+                  height: 52,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(GymRadius.card),
+                    border: Border.all(color: c.danger.withValues(alpha: 0.4)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(GymIcons.logout, size: 17, color: c.danger),
+                      const SizedBox(width: 9),
+                      Text(t.logOut,
+                          style: TextStyle(
+                              fontSize: 13, fontWeight: FontWeight.w800, letterSpacing: 0.6, color: c.danger)),
+                    ],
+                  ),
+                ),
               ),
             ),
           ),

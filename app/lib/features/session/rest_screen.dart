@@ -14,6 +14,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../core/gym_icons.dart';
+import '../../core/motion.dart';
 import '../../core/strings.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
@@ -117,7 +119,13 @@ class _RestScreenState extends State<RestScreen> {
                   ),
                 ),
                 const Spacer(),
-                _Dial(progress: t.progress, remaining: t.remaining, total: t.total),
+                // Cincin membesar sedikit saat layar terbuka — kedatangan,
+                // bukan hiasan: detik-detiknya sendiri tidak dianimasikan.
+                Reveal(
+                  scale: true,
+                  slide: false,
+                  child: _Dial(progress: t.progress, remaining: t.remaining, total: t.total),
+                ),
                 const SizedBox(height: 22),
                 if (widget.nextLabel.isNotEmpty)
                   Text(widget.nextLabel, style: TextStyle(fontSize: 14, color: c.text2)),
@@ -127,7 +135,7 @@ class _RestScreenState extends State<RestScreen> {
                     await widget.onEditDuration();
                     if (mounted) setState(() {});
                   },
-                  icon: Icon(Icons.edit_outlined, size: 15, color: c.text2),
+                  icon: Icon(GymIcons.edit, size: 15, color: c.text2),
                   label: Text(context.t.changeDuration,
                       style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.text2)),
                 ),
@@ -161,6 +169,7 @@ class _RestScreenState extends State<RestScreen> {
                       GymButton(
                         label: context.t.skipRest,
                         onPressed: () {
+                          GymHaptics.tap();
                           t.skip();
                           Navigator.of(context).maybePop();
                         },
