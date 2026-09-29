@@ -189,6 +189,7 @@ class StatBlock extends StatelessWidget {
     this.icon,
     this.onTap,
     this.height,
+    this.valueWidget,
   });
 
   final String label;
@@ -199,18 +200,50 @@ class StatBlock extends StatelessWidget {
   final VoidCallback? onTap;
   final double? height;
 
+  /// Menggantikan teks [value] — untuk angka yang menghitung naik
+  /// ([CountUp]) atau nilai yang butuh lebih dari satu gaya. [value] tetap
+  /// wajib supaya pemanggil lama tidak berubah; di sini ia diabaikan.
+  final Widget? valueWidget;
+
+  /// Gaya angka besar, dibuka supaya [valueWidget] bisa memakai gaya yang
+  /// sama persis dengan teks bawaan. Angka tabular: "1.2 t" yang berganti ke
+  /// "1.3 t" tidak boleh bergeser ke kiri-kanan selagi menghitung.
+  static TextStyle valueStyle(BuildContext context) => TextStyle(
+        fontFamily: 'Manrope',
+        fontSize: 28,
+        fontWeight: FontWeight.w800,
+        height: 1.05,
+        letterSpacing: -0.6,
+        color: context.gym.text,
+        fontFeatures: const [FontFeature.tabularFigures()],
+      );
+
   @override
   Widget build(BuildContext context) {
     final c = context.gym;
-    final body = Container(
+    final tappable = onTap != null;
+    final content = Container(
       height: height,
       padding: const EdgeInsets.fromLTRB(14, 13, 14, 14),
-      decoration: BoxDecoration(color: c.block(color), borderRadius: BorderRadius.circular(GymRadius.card)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          if (icon != null) ...[Icon(icon, size: 18, color: color), const SizedBox(height: 8)],
+          if (icon != null || tappable) ...[
+            // spaceBetween, bukan Spacer: blok ini juga dipakai di tempat
+            // yang lebarnya tak terbatas, dan Spacer di sana melempar error.
+            Row(
+              mainAxisAlignment: icon == null ? MainAxisAlignment.end : MainAxisAlignment.spaceBetween,
+              children: [
+                if (icon != null) Icon(icon, size: 18, color: color),
+                // Blok yang bisa diketuk diberi chevron kecil: di kolom sempit
+                // tidak ada ruang untuk teks "ketuk untuk…", dan tanpa tanda
+                // apa pun blok berwarna terbaca sebagai angka mati.
+                if (tappable) Icon(Icons.chevron_right, size: 16, color: c.text3),
+              ],
+            ),
+            const SizedBox(height: 8),
+          ],
           // Dua baris: "Volume 7 hari" di ubin sepertiga lebar HP 360 dp tidak
           // muat satu baris, dan "Volum…" bukan label.
           Text(label,
@@ -221,9 +254,7 @@ class StatBlock extends StatelessWidget {
           FittedBox(
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerLeft,
-            child: Text(value,
-                style: TextStyle(
-                    fontFamily: 'Manrope', fontSize: 28, fontWeight: FontWeight.w800, height: 1.05, letterSpacing: -0.6, color: c.text)),
+            child: valueWidget ?? Text(value, style: valueStyle(context)),
           ),
           if (hint != null) ...[
             const SizedBox(height: 3),
@@ -232,10 +263,29 @@ class StatBlock extends StatelessWidget {
         ],
       ),
     );
-    if (onTap == null) return body;
-    return Material(
-      type: MaterialType.transparency,
-      child: InkWell(onTap: onTap, borderRadius: BorderRadius.circular(GymRadius.card), child: body),
+    if (!tappable) {
+      return DecoratedBox(
+        decoration: BoxDecoration(color: c.block(color), borderRadius: BorderRadius.circular(GymRadius.card)),
+        child: content,
+      );
+    }
+    // Material-nya yang berwarna, bukan Container di dalamnya: riak InkWell
+    // digambar di Material terdekat, dan Container berwarna di atasnya akan
+    // menutupi riak itu.
+    return PressScale(
+      child: Material(
+        color: c.block(color),
+        borderRadius: BorderRadius.circular(GymRadius.card),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () {
+            GymHaptics.tap();
+            onTap!();
+          },
+          borderRadius: BorderRadius.circular(GymRadius.card),
+          child: content,
+        ),
+      ),
     );
   }
 }

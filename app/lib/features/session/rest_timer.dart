@@ -7,6 +7,8 @@ import 'dart:async';
 import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/gym_icons.dart';
+import '../../core/motion.dart';
 import '../../core/strings.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
@@ -59,6 +61,10 @@ class RestTimer extends ChangeNotifier {
 
   bool get isRunning => _deadline != null;
 
+  /// Kapan istirahat ini habis, menurut jam dinding. Disimpan di draft sesi
+  /// supaya istirahat berlanjut kalau aplikasi dimatikan di tengahnya.
+  DateTime? get deadline => _deadline;
+
   Duration get remaining {
     final end = _deadline;
     if (end == null) return Duration.zero;
@@ -85,6 +91,26 @@ class RestTimer extends ChangeNotifier {
       }
     });
     onDeadlineChanged?.call(_total);
+    notifyListeners();
+  }
+
+  /// Lanjutkan istirahat yang dimulai sebelum aplikasi dimatikan: tenggatnya
+  /// tetap tenggat lama, bukan dihitung ulang dari sekarang. Tenggat yang
+  /// sudah lewat tidak memulai apa pun — istirahatnya sudah habis selagi
+  /// aplikasi mati, dan membunyikan tanda sekarang hanya mengagetkan.
+  void resumeUntil(DateTime deadline, Duration total) {
+    if (!deadline.isAfter(clock.now())) return;
+    _total = clampRest(total);
+    _deadline = deadline;
+    _tick?.cancel();
+    _tick = Timer.periodic(const Duration(milliseconds: 200), (_) {
+      if (remaining == Duration.zero) {
+        _stop(finished: true);
+      } else {
+        notifyListeners();
+      }
+    });
+    onDeadlineChanged?.call(remaining);
     notifyListeners();
   }
 
@@ -246,7 +272,7 @@ class RestTimerCard extends StatelessWidget {
                                 borderRadius: BorderRadius.circular(GymRadius.pill),
                                 child: Padding(
                                   padding: const EdgeInsets.all(4),
-                                  child: Icon(Icons.edit_outlined, size: 15, color: c.text2),
+                                  child: Icon(GymIcons.edit, size: 15, color: c.text2),
                                 ),
                               ),
                             ),
@@ -282,7 +308,18 @@ class RestTimerCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 10),
-                  Expanded(child: GymButton(label: context.t.skip.toUpperCase(), height: 46, onPressed: timer.skip)),
+                  Expanded(
+                    child: GymButton(
+                      label: context.t.skip.toUpperCase(),
+                      height: 46,
+                      onPressed: () {
+                        // Getar kecil: kapsul timer di atas melakukan hal yang
+                        // sama, dan keduanya harus terasa seperti satu aksi.
+                        GymHaptics.tap();
+                        timer.skip();
+                      },
+                    ),
+                  ),
                 ],
               ),
             ],

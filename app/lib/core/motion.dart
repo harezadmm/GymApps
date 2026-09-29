@@ -1,10 +1,13 @@
 /// Gerak yang dipakai bersama.
 ///
-/// Aturannya satu: animasi di sini menjawab sentuhan atau perubahan keadaan.
+/// Aturannya satu: animasi di sini menjawab sentuhan, perubahan keadaan, atau
+/// kedatangan isi baru (layar terbuka, angka selesai dihitung).
 /// Tidak ada yang bergerak sendiri untuk menghias — di gym orang melihat layar
 /// sekilas di antara set, dan yang bergerak tanpa sebab hanya menghabiskan
 /// perhatian itu.
 library;
+
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -17,6 +20,21 @@ abstract final class GymMotion {
   static const normal = Duration(milliseconds: 220);
 
   static const curve = Curves.easeOutCubic;
+
+  /// Kedatangan kartu dan daftar.
+  static const slow = Duration(milliseconds: 360);
+
+  /// Angka yang menghitung naik ke nilainya.
+  static const count = Duration(milliseconds: 700);
+
+  /// Jeda antar anak dalam satu daftar, dikali indeksnya. Dibatasi delapan
+  /// langkah: daftar panjang tidak boleh membuat baris ke-30 datang sedetik
+  /// setelah layar terbuka.
+  static const stagger = Duration(milliseconds: 45);
+  static const staggerCap = 8;
+
+  /// Sedikit melewati target lalu kembali — untuk centang dan lencana rekor.
+  static const pop = Curves.easeOutBack;
 
   /// Nol kalau sistem meminta gerak dikurangi. Semua animasi di aplikasi
   /// lewat sini supaya satu setelan aksesibilitas benar-benar mematikan semua.
@@ -177,5 +195,224 @@ class _SpinIconState extends State<SpinIcon> with SingleTickerProviderStateMixin
     final icon = Icon(widget.icon, size: widget.size, color: widget.color);
     if (MediaQuery.disableAnimationsOf(context)) return icon;
     return RotationTransition(turns: _controller, child: icon);
+  }
+}
+
+// ── Kedatangan isi ─────────────────────────────────────────────────────────
+//
+// Tiga widget di bawah ini untuk isi yang *baru datang*: layar yang baru
+// terbuka, angka yang baru dihitung, grafik yang baru digambar. Itu perubahan
+// keadaan juga — dari "belum ada" ke "ada" — dan gerak singkat memberi tahu
+// mata di mana yang baru itu. Semuanya sekali jalan, tidak berulang, dan
+// hilang total kalau sistem meminta gerak dikurangi.
+
+/// Memudar masuk sambil naik sedikit (atau membesar sedikit) saat pertama kali
+/// dibangun. [index] memberi jeda bertingkat untuk anak-anak satu daftar.
+///
+/// Hanya sekali: kalau widget dibangun ulang karena state, tidak ada yang
+/// bergerak lagi. Kartu yang berkedip setiap setState adalah gangguan, bukan
+/// animasi.
+class Reveal extends StatefulWidget {
+  const Reveal({super.key, required this.child, this.index = 0, this.delay, this.slide = true, this.scale = false});
+
+  final Widget child;
+  final int index;
+
+  /// Jeda sebelum mulai. null = [GymMotion.stagger] × [index].
+  final Duration? delay;
+  final bool slide;
+  final bool scale;
+
+  @override
+  State<Reveal> createState() => _RevealState();
+}
+
+class _RevealState extends State<Reveal> with SingleTickerProviderStateMixin {
+  late final _controller = AnimationController(vsync: this, duration: GymMotion.slow);
+  late final _anim = CurvedAnimation(parent: _controller, curve: GymMotion.curve);
+  Timer? _timer;
+  bool _started = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_started) return;
+    _started = true;
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _controller.value = 1;
+      return;
+    }
+    final steps = widget.index.clamp(0, GymMotion.staggerCap);
+    final delay = widget.delay ?? GymMotion.stagger * steps;
+    if (delay == Duration.zero) {
+      _controller.forward();
+    } else {
+      _timer = Timer(delay, () {
+        if (mounted) _controller.forward();
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _anim.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    Widget child = FadeTransition(opacity: _anim, child: widget.child);
+    if (widget.slide) {
+      child = SlideTransition(
+        position: Tween(begin: const Offset(0, 0.06), end: Offset.zero).animate(_anim),
+        child: child,
+      );
+    }
+    if (widget.scale) {
+      child = ScaleTransition(scale: Tween(begin: 0.94, end: 1.0).animate(_anim), child: child);
+    }
+    return child;
+  }
+}
+
+/// Angka yang menghitung naik ke nilainya, dan menghitung lagi ke nilai baru
+/// kalau berubah. Untuk angka besar di kartu statistik — volume minggu ini,
+/// e1RM — supaya mata sempat menangkap bahwa angkanya baru dihitung.
+class CountUp extends StatefulWidget {
+  const CountUp(
+    this.value, {
+    super.key,
+    this.style,
+    this.decimals = 0,
+    this.prefix = '',
+    this.suffix = '',
+    this.format,
+    this.textAlign,
+    this.maxLines,
+    this.delay = Duration.zero,
+  });
+
+  final double value;
+  final TextStyle? style;
+  final int decimals;
+  final String prefix;
+  final String suffix;
+
+  /// Pembentuk teks kustom; kalau diisi, [decimals] diabaikan.
+  final String Function(double value)? format;
+  final TextAlign? textAlign;
+  final int? maxLines;
+
+  /// Tahan di nol selama ini sebelum mulai menghitung — samakan dengan jeda
+  /// [Reveal] di sekitarnya, supaya hitungannya terjadi saat angkanya sudah
+  /// terlihat, bukan di balik opacity nol.
+  final Duration delay;
+
+  @override
+  State<CountUp> createState() => _CountUpState();
+}
+
+class _CountUpState extends State<CountUp> {
+  late bool _armed = widget.delay == Duration.zero;
+  Timer? _timer;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_armed || _timer != null) return;
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _armed = true;
+      return;
+    }
+    _timer = Timer(widget.delay, () {
+      if (mounted) setState(() => _armed = true);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final w = widget;
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: _armed ? w.value : 0),
+      duration: GymMotion.of(context, GymMotion.count),
+      curve: GymMotion.curve,
+      builder: (context, v, _) => Text(
+        '${w.prefix}${w.format?.call(v) ?? v.toStringAsFixed(w.decimals)}${w.suffix}',
+        style: w.style,
+        textAlign: w.textAlign,
+        maxLines: w.maxLines,
+        overflow: w.maxLines == null ? null : TextOverflow.ellipsis,
+      ),
+    );
+  }
+}
+
+/// Nilai 0..1 (atau apa pun) yang bergerak mulus ke targetnya, untuk
+/// pembangun yang menggambar dari satu angka — tinggi batang grafik, isi
+/// bilah progres, sudut cincin. Mulai dari [begin] saat pertama dibangun.
+class AnimatedValue extends StatefulWidget {
+  const AnimatedValue({
+    super.key,
+    required this.value,
+    required this.builder,
+    this.begin = 0,
+    this.duration,
+    this.curve,
+    this.delay = Duration.zero,
+  });
+
+  final double value;
+  final double begin;
+  final Duration? duration;
+  final Curve? curve;
+
+  /// Tahan di [begin] selama ini sebelum bergerak (lihat [CountUp.delay]).
+  final Duration delay;
+  final Widget Function(BuildContext context, double value) builder;
+
+  @override
+  State<AnimatedValue> createState() => _AnimatedValueState();
+}
+
+class _AnimatedValueState extends State<AnimatedValue> {
+  late bool _armed = widget.delay == Duration.zero;
+  Timer? _timer;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_armed || _timer != null) return;
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _armed = true;
+      return;
+    }
+    _timer = Timer(widget.delay, () {
+      if (mounted) setState(() => _armed = true);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final w = widget;
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: w.begin, end: _armed ? w.value : w.begin),
+      duration: GymMotion.of(context, w.duration ?? GymMotion.slow),
+      curve: w.curve ?? GymMotion.curve,
+      builder: (context, v, _) => w.builder(context, v),
+    );
   }
 }

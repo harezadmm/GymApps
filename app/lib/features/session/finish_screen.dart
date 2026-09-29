@@ -6,12 +6,16 @@
 library;
 
 import 'package:flutter/material.dart';
+
 import '../../core/weights.dart';
 import '../../domain/units.dart';
 
 import '../../core/charts.dart';
 import '../../core/format.dart';
+import '../../core/gym_icons.dart';
+import '../../core/motion.dart';
 import '../../core/strings.dart';
+import '../../core/strings_session.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
 import '../../domain/models.dart';
@@ -20,6 +24,7 @@ import '../../data/workout_store.dart';
 import '../../domain/muscle_volume.dart';
 import '../../domain/onerm.dart';
 import '../../domain/progression.dart';
+import '../../domain/routine_sync.dart';
 import '../../domain/session_plan.dart';
 import 'session_screen.dart';
 
@@ -31,28 +36,27 @@ class FinishScreen extends StatefulWidget {
     required this.history,
     required this.elapsed,
     required this.dateLabel,
-    this.addedSetTo,
-    this.routineId,
-    this.drifted = false,
+    this.originalRoutine,
+    this.diff,
+    this.routineUpdated = false,
   });
 
-  /// Susunan sesi berbeda dari rutinitasnya — memunculkan pertanyaan
-  /// "perbarui rutinitas?" meski tidak ada set yang ditambah.
-  final bool drifted;
-
   final String routineName;
-
-  /// Rutinitas yang bisa diperbarui dari sesi ini. Diisi hanya kalau sesinya
-  /// menyimpang dari rutinitas itu (FR-B9).
-  final String? routineId;
   final List<SessionExercise> exercises;
   final List<Workout> history;
   final Duration elapsed;
   final String dateLabel;
 
-  /// Nama gerakan yang setnya ditambah di tengah sesi, kalau ada — memicu
-  /// pertanyaan "perbarui rutinitasnya?" di bawah (FR-D10).
-  final String? addedSetTo;
+  /// Rutinitas asal **sebelum** sesi ini menulisinya, bersama selisihnya.
+  /// Keduanya diisi hanya kalau sesi menyimpang dari rutinitas (FR-B9);
+  /// dengan rutinitas aslinya di tangan, "batalkan" tinggal menyimpan
+  /// kembali — tidak perlu menebak apa yang tadi berubah.
+  final Routine? originalRoutine;
+  final RoutineDiff? diff;
+
+  /// Susunan sesi sudah ditulis ke rutinitas oleh layar sesi (switch di lembar
+  /// konfirmasi nyala). Kartu status di bawah menawarkan kebalikannya.
+  final bool routineUpdated;
 
   @override
   State<FinishScreen> createState() => _FinishScreenState();
@@ -64,69 +68,16 @@ class _FinishScreenState extends State<FinishScreen> {
   /// Volume per otot dari sesi ini saja — bukan seluruh riwayat. Ini ringkasan
   /// satu sesi, jadi petanya harus menjawab "tadi saya melatih apa".
   List<Workout> get _thisSession => [
-        Workout(date: widget.dateLabel, entries: [
-          for (final ex in widget.exercises)
-            WorkoutEntry(exerciseId: ex.config.exerciseId, target: ex.config, sets: ex.sets),
-        ]),
-      ];
+    Workout(
+      date: widget.dateLabel,
+      entries: [
+        for (final ex in widget.exercises)
+          WorkoutEntry(exerciseId: ex.config.exerciseId, target: ex.config, sets: ex.sets),
+      ],
+    ),
+  ];
 
-  /// null = belum dijawab. Pertanyaannya tidak boleh punya jawaban default:
-  /// menebak "update all" akan menulis ulang rutinitas diam-diam.
-  String? _routineAnswer;
-
-  /// Rutinitas persis seperti sebelum ringkasan ini dibuka. Jawaban bisa
-  /// diganti — "Update all" lalu "Keep" harus mengembalikan yang asli, bukan
-  /// menumpuk perubahan di atas perubahan.
-  Routine? _original;
-
-  @override
-  void initState() {
-    super.initState();
-    final id = widget.routineId;
-    if (id != null) {
-      // Dibaca setelah frame pertama: store datang dari InheritedWidget, dan
-      // context belum boleh dipakai untuk itu di initState.
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _original = WorkoutScope.read(context).routineById(id);
-      });
-    }
-  }
-
-  /// Terapkan jawaban ke rutinitas (FR-B9).
-  ///
-  /// * `Sets only` — jumlah set tiap gerakan disamakan dengan sesi ini.
-  /// * `Update all` — susunan gerakan ikut sesi ini: yang ditambah masuk,
-  ///   yang dibuang keluar, urutannya mengikuti.
-  /// * `Keep` — rutinitas kembali seperti semula.
-  Future<void> _answer(String option) async {
-    setState(() => _routineAnswer = option);
-    final original = _original;
-    if (original == null) return;
-    final store = WorkoutScope.read(context);
-    final unit = store.settings.unit;
-    final counts = {for (final e in widget.exercises) e.config.exerciseId: e.workCount};
-    final Routine next;
-    switch (option) {
-      case 'Sets only':
-        next = original.copyWith(exercises: [
-          for (final cfg in original.exercises) cfg.copyWith(sets: counts[cfg.exerciseId] ?? cfg.sets),
-        ]);
-      case 'Update all':
-        final byId = {for (final cfg in original.exercises) cfg.exerciseId: cfg};
-        next = original.copyWith(exercises: [
-          for (final e in widget.exercises)
-            // Gerakan baru dari sesi ini: konfigurasinya dalam satuan
-            // tampilan, rutinitas menyimpan kg.
-            (byId[e.config.exerciseId] ?? configToKg(e.config, unit)).copyWith(sets: e.workCount),
-        ]);
-      default:
-        next = original;
-    }
-    await store.saveRoutine(next);
-  }
-
-  Iterable<SetRow> get _workingSets =>
-      widget.exercises.expand((e) => e.sets).where((s) => s.done && !s.isWarmup);
+  Iterable<SetRow> get _workingSets => widget.exercises.expand((e) => e.sets).where((s) => s.done && !s.isWarmup);
 
   double get _volume => _workingSets.fold(0.0, (a, s) => a + s.weight * s.reps);
 
@@ -149,155 +100,198 @@ class _FinishScreenState extends State<FinishScreen> {
     final c = context.gym;
     final records = _records;
     final setsDone = _workingSets.length;
+    final original = widget.originalRoutine;
+    final diff = widget.diff;
 
     return Scaffold(
       backgroundColor: c.bg,
       body: SafeArea(
         child: Column(
           children: [
+            // SingleChildScrollView, bukan ListView: ListView membuang kartu
+            // yang tergulir keluar layar, dan kartu status rutinitas di bawah
+            // lupa sudah "dibatalkan" begitu digulir lagi — plus semua Reveal
+            // dan CountUp diputar ulang. Ringkasan ini pendek; tidak ada yang
+            // perlu dibangun malas.
             Expanded(
-              child: ListView(
+              child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Kartu-kartu datang berurutan dari atas: ini layar yang
+                    // dibuka sekali per sesi, dan urutan kedatangannya memandu
+                    // mata dari "selesai" ke angka lalu ke target berikutnya.
+                    Reveal(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                SectionLabel(context.t.sessionComplete, color: c.doneInk),
+                                const SizedBox(height: 4),
+                                Text(widget.routineName, style: Theme.of(context).textTheme.headlineMedium),
+                              ],
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Text(widget.dateLabel, style: TextStyle(fontSize: 12.5, color: c.text2)),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Reveal(
+                      index: 1,
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: _Metric(
+                              icon: GymIcons.clock,
+                              value: _clock(widget.elapsed),
+                              label: context.t.duration,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _Metric(
+                              icon: GymIcons.barbell,
+                              count: _volume,
+                              format: (v) => volumeText(v, context.unit),
+                              label: context.t.volume,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Reveal(
+                      index: 2,
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: _Metric(icon: Icons.done_all, count: setsDone.toDouble(), label: context.t.setsDone),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _Metric(
+                              icon: Icons.emoji_events_outlined,
+                              count: records.length.toDouble(),
+                              label: context.t.newPRs,
+                              tone: records.isEmpty ? null : c.warn,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (records.isNotEmpty) ...[
+                      const SizedBox(height: 14),
+                      // Rekor membesar sedikit saat datang — satu-satunya kartu
+                      // yang boleh sedikit merayakan.
+                      Reveal(index: 3, scale: true, child: _RecordsCard(records: records)),
+                    ],
+                    const SizedBox(height: 14),
+                    Reveal(
+                      index: 4,
+                      child: GymCard(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            SectionLabel(context.t.sessionComplete, color: c.doneInk),
-                            const SizedBox(height: 4),
-                            Text(widget.routineName, style: Theme.of(context).textTheme.headlineMedium),
+                            SectionLabel(context.t.musclesWorked),
+                            const SizedBox(height: 12),
+                            Container(
+                              decoration: BoxDecoration(
+                                color: c.bgNested,
+                                borderRadius: BorderRadius.circular(GymRadius.card),
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              child: FutureBuilder<ExerciseCatalog>(
+                                future: _catalog,
+                                builder: (context, snap) => MuscleMap(
+                                  height: 210,
+                                  share: snap.hasData ? muscleShare(volumeByMuscle(_thisSession, snap.data!)) : null,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            FutureBuilder<ExerciseCatalog>(
+                              future: _catalog,
+                              builder: (context, snap) {
+                                if (!snap.hasData) return const SizedBox(height: 44);
+                                final v = volumeByMuscle(_thisSession, snap.data!);
+                                final total = v.values.fold(0.0, (a, b) => a + b);
+                                if (total <= 0) {
+                                  return Text(
+                                    context.t.noWorkingSets,
+                                    style: TextStyle(fontSize: 12.5, color: c.text2),
+                                  );
+                                }
+                                // Empat otot teratas sesi ini, persentasenya dari
+                                // total volume sesi — bukan dari maksimum, karena di
+                                // sini pertanyaannya "porsinya berapa", bukan
+                                // "seberapa dekat ke yang tertinggi".
+                                final top = v.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+                                return Row(
+                                  children: [
+                                    for (final e in top.take(4)) ...[
+                                      Expanded(
+                                        child: _SharePill(
+                                          label: context.t.muscle(muscleGroupLabel[e.key]!),
+                                          pct: '${(e.value / total * 100).round()}%',
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                    ],
+                                  ],
+                                );
+                              },
+                            ),
                           ],
                         ),
                       ),
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: Text(widget.dateLabel, style: TextStyle(fontSize: 12.5, color: c.text2)),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _Metric(
-                          icon: Icons.timer_outlined,
-                          value: _clock(widget.elapsed),
-                          label: context.t.duration,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: _Metric(
-                          icon: Icons.inventory_2_outlined,
-                          value: volumeText(_volume, context.unit),
-                          label: context.t.volume,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _Metric(icon: Icons.done_all, value: '$setsDone', label: context.t.setsDone),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: _Metric(
-                          icon: Icons.emoji_events_outlined,
-                          value: '${records.length}',
-                          label: context.t.newPRs,
-                          tone: records.isEmpty ? null : c.warn,
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (records.isNotEmpty) ...[
+                    ),
                     const SizedBox(height: 14),
-                    _RecordsCard(records: records),
-                  ],
-                  const SizedBox(height: 14),
-                  GymCard(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        SectionLabel(context.t.musclesWorked),
-                        const SizedBox(height: 12),
-                        Container(
-                          decoration: BoxDecoration(
-                            color: c.bgNested,
-                            borderRadius: BorderRadius.circular(GymRadius.card),
-                          ),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          child: FutureBuilder<ExerciseCatalog>(
-                            future: _catalog,
-                            builder: (context, snap) => MuscleMap(
-                              height: 210,
-                              share: snap.hasData
-                                  ? muscleShare(volumeByMuscle(_thisSession, snap.data!))
-                                  : null,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        FutureBuilder<ExerciseCatalog>(
+                    // Target berikutnya dihitung dengan sesi ini ikut di riwayat.
+                    // Tanpa sesi ini, "target berikutnya" hanya mengulang target
+                    // yang baru saja dikerjakan.
+                    Reveal(
+                      index: 5,
+                      child: _NextTargetsCard(
+                        exercises: widget.exercises,
+                        history: [...widget.history, ..._thisSession],
+                      ),
+                    ),
+                    if (original != null && diff != null) ...[
+                      const SizedBox(height: 14),
+                      Reveal(
+                        index: 6,
+                        child: FutureBuilder<ExerciseCatalog>(
                           future: _catalog,
-                          builder: (context, snap) {
-                            if (!snap.hasData) return const SizedBox(height: 44);
-                            final v = volumeByMuscle(_thisSession, snap.data!);
-                            final total = v.values.fold(0.0, (a, b) => a + b);
-                            if (total <= 0) {
-                              return Text(context.t.noWorkingSets,
-                                  style: TextStyle(fontSize: 12.5, color: c.text2));
-                            }
-                            // Empat otot teratas sesi ini, persentasenya dari
-                            // total volume sesi — bukan dari maksimum, karena di
-                            // sini pertanyaannya "porsinya berapa", bukan
-                            // "seberapa dekat ke yang tertinggi".
-                            final top = v.entries.toList()
-                              ..sort((a, b) => b.value.compareTo(a.value));
-                            return Row(
-                              children: [
-                                for (final e in top.take(4)) ...[
-                                  Expanded(
-                                    child: _SharePill(
-                                      label: context.t.muscle(muscleGroupLabel[e.key]!),
-                                      pct: '${(e.value / total * 100).round()}%',
-                                    ),
-                                  ),
-                                  const SizedBox(width: 6),
-                                ],
-                              ],
-                            );
-                          },
+                          builder: (context, snap) => _RoutineSyncCard(
+                            original: original,
+                            diff: diff,
+                            initiallySynced: widget.routineUpdated,
+                            exercises: widget.exercises,
+                            nameOf: (id) {
+                              for (final ex in widget.exercises) {
+                                if (ex.config.exerciseId == id) return ex.name;
+                              }
+                              return snap.data?.nameOf(id) ?? '…';
+                            },
+                          ),
                         ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  // Target berikutnya dihitung dengan sesi ini ikut di riwayat.
-                  // Tanpa sesi ini, "target berikutnya" hanya mengulang target
-                  // yang baru saja dikerjakan.
-                  _NextTargetsCard(exercises: widget.exercises, history: [...widget.history, ..._thisSession]),
-                  if (widget.drifted && widget.routineId != null) ...[
-                    const SizedBox(height: 14),
-                    _RoutineDriftCard(
-                      title: widget.addedSetTo != null
-                          ? context.t.addedSetTo(widget.addedSetTo!)
-                          : context.t.sessionDiffers(widget.routineName),
-                      routineName: widget.routineName,
-                      answer: _routineAnswer,
-                      onAnswer: _answer,
-                    ),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 14),
+              // GymButton sudah mengecil saat ditekan (PressScale di dalamnya).
               child: GymButton(label: context.t.done, onPressed: () => Navigator.of(context).pop()),
             ),
           ],
@@ -306,21 +300,35 @@ class _FinishScreenState extends State<FinishScreen> {
     );
   }
 
-  static String _clock(Duration d) =>
-      '${d.inMinutes}:${(d.inSeconds % 60).toString().padLeft(2, '0')}';
+  static String _clock(Duration d) => '${d.inMinutes}:${(d.inSeconds % 60).toString().padLeft(2, '0')}';
 }
 
+/// Kotak angka besar. Angka yang bisa dihitung ([count]) menghitung naik ke
+/// nilainya; yang bukan angka ([value], mis. durasi `42:10`) ditulis apa
+/// adanya — menghitung durasi dari nol terlihat seperti stopwatch, bukan
+/// ringkasan.
 class _Metric extends StatelessWidget {
-  const _Metric({required this.icon, required this.value, required this.label, this.tone});
+  const _Metric({required this.icon, required this.label, this.value, this.count, this.format, this.tone})
+    : assert(value != null || count != null, 'butuh value atau count');
 
   final IconData icon;
-  final String value;
   final String label;
+  final String? value;
+  final double? count;
+
+  /// Pembentuk teks untuk [count]; null = bilangan bulat.
+  final String Function(double)? format;
   final Color? tone;
 
   @override
   Widget build(BuildContext context) {
     final c = context.gym;
+    final style = TextStyle(
+      fontSize: 26,
+      fontWeight: FontWeight.w700,
+      color: tone ?? c.text,
+      fontFeatures: const [FontFeature.tabularFigures()],
+    );
     return GymCard(
       radius: GymRadius.card,
       padding: const EdgeInsets.fromLTRB(14, 13, 14, 14),
@@ -329,7 +337,10 @@ class _Metric extends StatelessWidget {
         children: [
           Icon(icon, size: 17, color: c.text2),
           const SizedBox(height: 12),
-          Text(value, style: TextStyle(fontSize: 26, fontWeight: FontWeight.w700, color: tone ?? c.text)),
+          if (count != null)
+            CountUp(count!, style: style, format: format, maxLines: 1)
+          else
+            Text(value!, style: style, maxLines: 1),
           const SizedBox(height: 2),
           Text(label, style: TextStyle(fontSize: 12, color: c.text2)),
         ],
@@ -397,13 +408,13 @@ class _SharePill extends StatelessWidget {
     final c = context.gym;
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 8),
-      decoration: BoxDecoration(
-        color: c.bgNested,
-        borderRadius: BorderRadius.circular(GymRadius.small),
-      ),
+      decoration: BoxDecoration(color: c.bgNested, borderRadius: BorderRadius.circular(GymRadius.small)),
       child: Column(
         children: [
-          Text(pct, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: c.accent)),
+          Text(
+            pct,
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: c.accent),
+          ),
           const SizedBox(height: 1),
           Text(label, style: TextStyle(fontSize: 10.5, color: c.text2)),
         ],
@@ -429,24 +440,28 @@ class _NextTargetsCard extends StatelessWidget {
           const SizedBox(height: 12),
           for (final (i, ex) in exercises.indexed) ...[
             if (i > 0) const SizedBox(height: 10),
-            Builder(builder: (context) {
-              // Fungsi yang sama dengan yang menyusun sesi berikutnya, supaya
-              // angka di sini persis angka yang akan terbuka nanti.
-              final plan = planExercise(ex.config, history, unit: context.unitLabel);
-              final p = plan.prescription;
-              final work = plan.sets.firstWhere((s) => !s.isWarmup, orElse: () => const SetRow());
-              final weight = work.weight;
-              final reps = work.reps;
-              return Row(
-                children: [
-                  Expanded(child: Text(ex.name, style: Theme.of(context).textTheme.bodyLarge)),
-                  Text('${weightLabel(weight, bodyweight: ex.config.bodyweight)} ${context.unitLabel} × $reps',
-                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: c.text)),
-                  const SizedBox(width: 8),
-                  _DeltaTag(prescription: p, current: ex.config.weight),
-                ],
-              );
-            }),
+            Builder(
+              builder: (context) {
+                // Fungsi yang sama dengan yang menyusun sesi berikutnya, supaya
+                // angka di sini persis angka yang akan terbuka nanti.
+                final plan = planExercise(ex.config, history, unit: context.unitLabel);
+                final p = plan.prescription;
+                final work = plan.sets.firstWhere((s) => !s.isWarmup, orElse: () => const SetRow());
+                final weight = work.weight;
+                final reps = work.reps;
+                return Row(
+                  children: [
+                    Expanded(child: Text(ex.name, style: Theme.of(context).textTheme.bodyLarge)),
+                    Text(
+                      '${weightLabel(weight, bodyweight: ex.config.bodyweight)} ${context.unitLabel} × $reps',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: c.text),
+                    ),
+                    const SizedBox(width: 8),
+                    _DeltaTag(prescription: p, current: ex.config.weight),
+                  ],
+                );
+              },
+            ),
           ],
         ],
       ),
@@ -478,88 +493,121 @@ class _DeltaTag extends StatelessWidget {
         color: tone.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(GymRadius.pill),
       ),
-      child: Text(text, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: tone)),
-    );
-  }
-}
-
-/// Sesi menyimpang dari rutinitas — tanya sekali, jangan menyimpan diam-diam.
-class _RoutineDriftCard extends StatelessWidget {
-  const _RoutineDriftCard({
-    required this.title,
-    required this.routineName,
-    required this.answer,
-    required this.onAnswer,
-  });
-
-  final String title;
-  final String routineName;
-  final String? answer;
-  final ValueChanged<String> onAnswer;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.gym;
-    return GymCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 3),
-          Text(context.t.updateRoutine(routineName), style: TextStyle(fontSize: 12.5, color: c.text2)),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              for (final option in ['Sets only', 'Update all', 'Keep']) ...[
-                Expanded(
-                  child: _DriftOption(
-                    label: context.t.catalogue(option),
-                    selected: answer == option,
-                    onTap: () => onAnswer(option),
-                  ),
-                ),
-                if (option != 'Keep') const SizedBox(width: 8),
-              ],
-            ],
-          ),
-        ],
+      child: Text(
+        text,
+        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: tone),
       ),
     );
   }
 }
 
-class _DriftOption extends StatelessWidget {
-  const _DriftOption({required this.label, required this.selected, required this.onTap});
+enum _SyncState { synced, unsaved, reverted }
 
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
+/// Status rutinitas setelah sesi yang menyimpang (FR-B9).
+///
+/// Bukan pertanyaan tiga pilihan seperti dulu — keputusannya sudah diambil di
+/// lembar konfirmasi (dengan jawaban bawaan "simpan"). Kartu ini hanya
+/// memberi tahu apa yang terjadi dan menawarkan kebalikannya: yang tersimpan
+/// bisa dibatalkan, yang tidak tersimpan bisa disimpan.
+class _RoutineSyncCard extends StatefulWidget {
+  const _RoutineSyncCard({
+    required this.original,
+    required this.diff,
+    required this.initiallySynced,
+    required this.exercises,
+    required this.nameOf,
+  });
+
+  final Routine original;
+  final RoutineDiff diff;
+  final bool initiallySynced;
+  final List<SessionExercise> exercises;
+  final String Function(String exerciseId) nameOf;
+
+  @override
+  State<_RoutineSyncCard> createState() => _RoutineSyncCardState();
+}
+
+class _RoutineSyncCardState extends State<_RoutineSyncCard> {
+  late _SyncState _state = widget.initiallySynced ? _SyncState.synced : _SyncState.unsaved;
+  bool _busy = false;
+
+  Future<void> _apply(bool sync) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    final store = WorkoutScope.read(context);
+    // Gerakan baru dari sesi ini: konfigurasinya dalam satuan tampilan,
+    // rutinitas menyimpan kg.
+    final unit = store.settings.unit;
+    final next = sync
+        ? syncRoutineWithSession(widget.original, [
+            for (final e in widget.exercises) (configToKg(e.config, unit), e.workCount),
+          ])
+        : widget.original;
+    await store.saveRoutine(next);
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      _state = sync ? _SyncState.synced : _SyncState.reverted;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final c = context.gym;
-    return Material(
-      color: selected ? c.accentFill : Colors.transparent,
-      borderRadius: BorderRadius.circular(GymRadius.small),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(GymRadius.small),
-        child: Container(
-          height: 42,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(GymRadius.small),
-            border: Border.all(color: selected ? Colors.transparent : c.border),
+    final t = context.t;
+    final name = widget.original.name;
+    final (title, hue) = switch (_state) {
+      _SyncState.synced => (t.routineUpdatedTitle(name), c.accent),
+      _SyncState.unsaved => (t.layoutNotSaved, c.text2),
+      _SyncState.reverted => (t.routineRevertedTitle(name), c.text2),
+    };
+
+    return GymCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              IconDisc(GymIcons.sync, color: hue, size: 36, iconSize: 18),
+              const SizedBox(width: 12),
+              Expanded(
+                child: FadeSwap(
+                  alignment: Alignment.topLeft,
+                  child: Column(
+                    key: ValueKey(_state),
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title, style: Theme.of(context).textTheme.titleMedium),
+                      const SizedBox(height: 3),
+                      Text(
+                        t.routineDiffSummary(widget.diff, widget.nameOf),
+                        style: TextStyle(fontSize: 12.5, height: 1.35, color: c.text2),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: selected ? c.accentInk : c.text,
+          const SizedBox(height: 12),
+          if (_state == _SyncState.synced)
+            GymButton(
+              label: t.revertUpper,
+              height: 42,
+              tone: GymButtonTone.neutral,
+              onPressed: _busy ? null : () => _apply(false),
+            )
+          else
+            GymButton(
+              label: t.saveToRoutine,
+              height: 42,
+              tone: GymButtonTone.neutral,
+              icon: GymIcons.sync,
+              onPressed: _busy ? null : () => _apply(true),
             ),
-          ),
-        ),
+        ],
       ),
     );
   }

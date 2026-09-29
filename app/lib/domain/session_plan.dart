@@ -88,16 +88,22 @@ PlannedExercise planExercise(
         reps: i == 0 ? 8 : 5,
       ),
   ];
+  final last = lastEntryFor(history, cfg.exerciseId);
+  final lastWarm = last?.sets.where((s) => s.isWarmup).toList() ?? const <SetRow>[];
+  final lastWork = last?.sets.where((s) => s.isWork).toList() ?? const <SetRow>[];
+  final ramp = cfg.mode == LogMode.reps ? rampWeights(lastWork, p, setCount, inc) : null;
+
   final work = <SetRow>[
     for (var i = 0; i < setCount; i++)
-      SetRow(weight: weight, reps: cfg.mode == LogMode.time ? 0 : rowReps, seconds: cfg.mode == LogMode.time ? seconds : 0),
+      SetRow(
+        weight: ramp?[i] ?? weight,
+        reps: cfg.mode == LogMode.time ? 0 : rowReps,
+        seconds: cfg.mode == LogMode.time ? seconds : 0,
+      ),
   ];
 
   // PREV: warm-up dipasangkan dengan warm-up sesi lalu, set kerja dengan set
   // kerja — kalau tidak, warm-up sesi lalu tampil di baris set kerja pertama.
-  final last = lastEntryFor(history, cfg.exerciseId);
-  final lastWarm = last?.sets.where((s) => s.isWarmup).toList() ?? const <SetRow>[];
-  final lastWork = last?.sets.where((s) => s.isWork).toList() ?? const <SetRow>[];
   final previous = <String>[
     for (var i = 0; i < warmups.length; i++) i < lastWarm.length ? _prevText(lastWarm[i], cfg.mode) : '—',
     for (var i = 0; i < work.length; i++) i < lastWork.length ? _prevText(lastWork[i], cfg.mode) : '—',
@@ -112,4 +118,36 @@ PlannedExercise planExercise(
     previous: previous,
     prescription: p,
   );
+}
+
+/// Beban per set untuk sesi berikutnya kalau sesi lalu berbentuk tangga
+/// (30 → 50 → 55), atau null kalau semua setnya sama berat.
+///
+/// Mesin progresi berpikir dalam satu angka — beban puncak sesi lalu — dan
+/// dulu angka itu dipasang ke semua set. Tangga 30/50/55 lalu terbuka sebagai
+/// 55/55/55: set pertama melompat 25 kg tanpa alasan apa pun. Di sini bentuk
+/// tangganya dipertahankan dan seluruh tangga digeser mengikuti keputusan
+/// progresi: naik = tiap set naik selangkah yang sama, tahan = sama persis,
+/// deload = tiap set turun dengan faktor yang sama.
+///
+/// Set yang tidak dicentang, atau set tambahan di luar jumlah sesi lalu,
+/// memakai beban puncak yang diresepkan.
+List<double>? rampWeights(List<SetRow> lastWork, Prescription p, int setCount, double inc) {
+  final next = p.weight;
+  if (next == null || next <= 0) return null;
+  if (p.kind != PrescriptionKind.up && p.kind != PrescriptionKind.hold && p.kind != PrescriptionKind.deload) {
+    return null;
+  }
+  final done = [for (final s in lastWork) if (s.done && s.weight > 0) s.weight];
+  if (done.length < 2 || done.toSet().length < 2) return null;
+  final top = done.reduce(math.max);
+  double shift(double base) => switch (p.kind) {
+        PrescriptionKind.up => addStep(base, next - top, inc > 0 ? inc : 2.5),
+        PrescriptionKind.deload => math.max(inc > 0 ? inc : 0, snapWeight(base * next / top, inc)),
+        _ => base,
+      };
+  return [
+    for (var i = 0; i < setCount; i++)
+      i < lastWork.length && lastWork[i].done && lastWork[i].weight > 0 ? shift(lastWork[i].weight) : next,
+  ];
 }
