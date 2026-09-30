@@ -14,6 +14,7 @@ library;
 
 import 'package:flutter/material.dart';
 
+import 'decode_size.dart';
 import 'theme.dart';
 
 enum GymArt {
@@ -63,8 +64,8 @@ class GymIllustration extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.gym;
     // Dekode seukuran tampilan: 150 dp di HP 3× cukup 450 px, bukan seluruh
-    // berkas untuk setiap layar.
-    final px = (height * MediaQuery.devicePixelRatioOf(context)).ceil().clamp(1, GymArt.sourceHeight);
+    // berkas untuk setiap layar. Di web null — lihat [decodePx].
+    final px = decodePx(height, MediaQuery.devicePixelRatioOf(context), GymArt.sourceHeight);
     final picture = Image.asset(
       art.asset,
       height: height,
