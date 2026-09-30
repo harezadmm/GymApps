@@ -54,14 +54,19 @@ String _prevText(SetRow s, LogMode mode) {
 
 /// Susun satu gerakan untuk sesi baru.
 ///
-/// [history] urut terlama dulu.
+/// [history] urut terlama dulu. [routines] dipakai untuk mengenali rutinitas
+/// deload (FR-B10): target dihitung hanya dari sesi yang lolos
+/// [progressionHistory], sedangkan kolom PREV dan catatan tetap membaca
+/// [history] utuh — "sesi lalu" adalah fakta, bukan target.
 PlannedExercise planExercise(
   ExerciseConfig cfg,
   List<Workout> history, {
   ProgressionPolicy? routineDefault,
   String unit = 'kg',
+  List<Routine> routines = const [],
 }) {
-  final p = nextPrescription(workouts: history, cfg: cfg, routineDefault: routineDefault, unit: unit);
+  final eligible = progressionHistory(history, routines);
+  final p = nextPrescription(workouts: eligible, cfg: cfg, routineDefault: routineDefault, unit: unit);
   final policy = p.policy;
 
   final weight = p.weight ?? cfg.weight;
@@ -91,7 +96,12 @@ PlannedExercise planExercise(
   final last = lastEntryFor(history, cfg.exerciseId);
   final lastWarm = last?.sets.where((s) => s.isWarmup).toList() ?? const <SetRow>[];
   final lastWork = last?.sets.where((s) => s.isWork).toList() ?? const <SetRow>[];
-  final ramp = cfg.mode == LogMode.reps ? rampWeights(lastWork, p, setCount, inc) : null;
+  // Tangga beban mengikuti keputusan progresi, jadi bentuknya diambil dari
+  // sesi terakhir yang *dinilai* — bukan dari sesi deload yang lebih ringan,
+  // yang akan menggeser seluruh tangga dari titik yang salah.
+  final judged = identical(eligible, history) ? last : lastEntryFor(eligible, cfg.exerciseId);
+  final judgedWork = judged?.sets.where((s) => s.isWork).toList() ?? const <SetRow>[];
+  final ramp = cfg.mode == LogMode.reps ? rampWeights(judgedWork, p, setCount, inc) : null;
 
   final work = <SetRow>[
     for (var i = 0; i < setCount; i++)

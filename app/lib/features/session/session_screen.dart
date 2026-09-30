@@ -920,6 +920,9 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
     _history,
     routineDefault: _routineDefault,
     settings: _store?.settings,
+    // Aturan rutinitas deload (FR-B10) berlaku juga untuk gerakan yang
+    // ditambah di tengah sesi — targetnya dihitung lewat jalur yang sama.
+    routines: _store?.routines ?? const [],
     expanded: true,
   );
 

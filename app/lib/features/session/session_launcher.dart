@@ -24,12 +24,16 @@ import '../library/library_screen.dart';
 import 'session_screen.dart';
 
 /// Susun satu gerakan untuk dibuka di layar sesi.
+///
+/// [routines] dibawa ke [planExercise] supaya sesi dari rutinitas deload tidak
+/// jadi dasar target (FR-B10); kosong berarti tidak ada yang dikecualikan.
 SessionExercise buildSessionExercise(
   ExerciseCatalog catalog,
   ExerciseConfig cfg,
   List<Workout> history, {
   ProgressionPolicy? routineDefault,
   TrainingSettings? settings,
+  List<Routine> routines = const [],
   bool expanded = false,
 }) {
   final s = settings ?? const TrainingSettings();
@@ -38,7 +42,8 @@ SessionExercise buildSessionExercise(
   final withDefaults = cfg.deloadFactor == null ? cfg.copyWith(deloadFactor: s.deloadFactor) : cfg;
   // [cfg] dan [history] sudah dalam satuan tampilan (lihat units.dart), jadi
   // lompatan pelatnya juga dalam satuan itu.
-  final plan = planExercise(withDefaults, history, routineDefault: routineDefault, unit: s.unit.label);
+  final plan =
+      planExercise(withDefaults, history, routineDefault: routineDefault, unit: s.unit.label, routines: routines);
   final ex = catalog.byId(cfg.exerciseId);
   return SessionExercise(
     name: catalog.nameOf(cfg.exerciseId),
@@ -179,7 +184,7 @@ Future<void> openRoutineSession(BuildContext context, Routine routine) async {
   final exercises = [
     for (final (i, cfg) in routine.exercises.indexed)
       buildSessionExercise(catalog, configIn(cfg, unit), history,
-          routineDefault: routine.policy, settings: store.settings, expanded: i == 0),
+          routineDefault: routine.policy, settings: store.settings, routines: store.routines, expanded: i == 0),
   ];
   await navigator.push(MaterialPageRoute(
     builder: (_) => SessionScreen(
@@ -310,7 +315,7 @@ Future<void> reopenWorkoutSession(BuildContext context, Workout workout) async {
     final cfg = configIn(cfgKg, unit);
     // planExercise hanya diminta PREV dan alasannya; baris setnya dibuang,
     // karena set yang dipakai adalah yang sudah tercatat.
-    final plan = planExercise(cfg, history, unit: unit.label);
+    final plan = planExercise(cfg, history, unit: unit.label, routines: store.routines);
     final sets = shown.entries[i].sets;
     final previous = [
       for (var j = 0; j < sets.length; j++) j < plan.previous.length ? plan.previous[j] : '—',

@@ -1,8 +1,9 @@
 /// Editor rutinitas — artboard `06 Routine Editor`.
 ///
 /// Di sinilah target dibekukan: sets, rep range, beban awal, increment, rest,
-/// warm-up, dan policy progresi per gerakan. Nilai-nilai inilah yang nanti
-/// dibaca mesin progresi.
+/// warm-up, dan policy progresi per gerakan — plus tanda "minggu deload"
+/// untuk seluruh rutinitas (FR-B10). Nilai-nilai inilah yang nanti dibaca
+/// mesin progresi.
 ///
 /// Editor tidak menyimpan sendiri. Hasilnya dikembalikan lewat `pop`, dan
 /// pemanggil yang memutuskan ke mana perginya: tab Workout menulis ke store,
@@ -14,8 +15,10 @@ import '../../core/weights.dart';
 import '../../domain/units.dart';
 
 import '../../core/format.dart';
+import '../../core/gym_icons.dart';
 import '../../core/motion.dart';
 import '../../core/strings.dart';
+import '../../core/strings_routine.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
 import '../../data/exercise_catalog.dart';
@@ -67,6 +70,7 @@ class _RoutineEditorScreenState extends State<RoutineEditorScreen> {
   /// baris baru — dan memudar masuk lagi.
   late List<Key> _rowKeys = [for (final _ in _exercises) UniqueKey()];
   late ProgressionPolicy? _policy = widget.routine.policy;
+  late bool _excluded = widget.routine.excludedFromProgression;
   late final _nameController = TextEditingController(text: widget.routine.name);
   late final Future<ExerciseCatalog> _catalog = ExerciseCatalog.load();
   int _expanded = 0;
@@ -87,6 +91,7 @@ class _RoutineEditorScreenState extends State<RoutineEditorScreen> {
         name: _nameController.text.trim().isEmpty ? widget.routine.name : _nameController.text.trim(),
         exercises: _exercises,
         policy: _policy,
+        excludedFromProgression: _excluded,
       );
 
   void _save() => Navigator.of(context).pop(RoutineSaved(_result));
@@ -287,6 +292,37 @@ class _RoutineEditorScreenState extends State<RoutineEditorScreen> {
                           value: _policy ?? ProgressionPolicy.linear,
                           mode: LogMode.reps,
                           onChanged: (p) => _change(() => _policy = p),
+                        ),
+                        const SizedBox(height: 10),
+                        // Minggu deload terencana (FR-B10). Di tingkat rutinitas,
+                        // bukan per gerakan: deload adalah keputusan untuk satu
+                        // sesi utuh, dan dua belas saklar per gerakan hanya cara
+                        // menyisakan satu yang lupa dinyalakan. SwitchListTile
+                        // memberi tap target penuh dan semantik saklar berlabel
+                        // (NFR-11). Material-nya sendiri, bukan GymCard: ListTile
+                        // melukis ink di Material terdekat, dan kartu berwarna di
+                        // antaranya akan menutupinya.
+                        Material(
+                          color: c.surface,
+                          borderRadius: BorderRadius.circular(GymRadius.control),
+                          clipBehavior: Clip.antiAlias,
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(14, 4, 6, 4),
+                            child: SwitchListTile(
+                              contentPadding: EdgeInsets.zero,
+                              secondary: IconDisc(GymIcons.moon, size: 38, iconSize: 19),
+                              title: Text(t.excludeFromProgression, style: Theme.of(context).textTheme.bodyLarge),
+                              subtitle: Padding(
+                                padding: const EdgeInsets.only(top: 2),
+                                child: Text(
+                                  t.excludeFromProgressionHint,
+                                  style: TextStyle(fontSize: 12.5, height: 1.35, color: c.text2),
+                                ),
+                              ),
+                              value: _excluded,
+                              onChanged: (v) => _change(() => _excluded = v),
+                            ),
+                          ),
                         ),
                         const SizedBox(height: 20),
                         SectionLabel(t.exercisesCount(_exercises.length)),

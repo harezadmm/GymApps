@@ -70,6 +70,9 @@ class _FinishScreenState extends State<FinishScreen> {
   List<Workout> get _thisSession => [
     Workout(
       date: widget.dateLabel,
+      // Nama rutinitas ikut, sama seperti yang tersimpan di riwayat: dari
+      // sinilah sesi deload dikenali saat target berikutnya dihitung (FR-B10).
+      routine: widget.routineName,
       entries: [
         for (final ex in widget.exercises)
           WorkoutEntry(exerciseId: ex.config.exerciseId, target: ex.config, sets: ex.sets),
@@ -262,6 +265,9 @@ class _FinishScreenState extends State<FinishScreen> {
                       child: _NextTargetsCard(
                         exercises: widget.exercises,
                         history: [...widget.history, ..._thisSession],
+                        // Tanpa store (test yang memasang layar ini sendirian)
+                        // tidak ada rutinitas yang dikecualikan.
+                        routines: context.getInheritedWidgetOfExactType<WorkoutScope>()?.notifier?.routines ?? const [],
                       ),
                     ),
                     if (original != null && diff != null) ...[
@@ -424,10 +430,13 @@ class _SharePill extends StatelessWidget {
 }
 
 class _NextTargetsCard extends StatelessWidget {
-  const _NextTargetsCard({required this.exercises, required this.history});
+  const _NextTargetsCard({required this.exercises, required this.history, required this.routines});
 
   final List<SessionExercise> exercises;
   final List<Workout> history;
+
+  /// Untuk mengenali rutinitas deload (FR-B10) — lihat `progressionHistory`.
+  final List<Routine> routines;
 
   @override
   Widget build(BuildContext context) {
@@ -444,7 +453,7 @@ class _NextTargetsCard extends StatelessWidget {
               builder: (context) {
                 // Fungsi yang sama dengan yang menyusun sesi berikutnya, supaya
                 // angka di sini persis angka yang akan terbuka nanti.
-                final plan = planExercise(ex.config, history, unit: context.unitLabel);
+                final plan = planExercise(ex.config, history, unit: context.unitLabel, routines: routines);
                 final p = plan.prescription;
                 final work = plan.sets.firstWhere((s) => !s.isWarmup, orElse: () => const SetRow());
                 final weight = work.weight;

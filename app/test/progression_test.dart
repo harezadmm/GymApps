@@ -355,6 +355,85 @@ void main() {
     });
   });
 
+  group('set tambahan tidak menggeser rencana (openGym v1.3.8, #233)', () {
+    // Rencana 3 set. Set keempat adalah bonus: kerja sungguhan untuk volume
+    // dan PR (yang membaca workout-nya langsung), tapi bukan bagian dari
+    // penilaian target.
+    test('set bonus yang lebih berat tidak menaikkan beban — linear', () {
+      final p = nextPrescription(
+        workouts: [session('2026-09-01', [(60, 8), (60, 8), (60, 8), (70, 8)], target: cfg(sets: 3))],
+        cfg: cfg(policy: ProgressionPolicy.linear, sets: 3),
+      );
+      expect(p.kind, PrescriptionKind.up);
+      expect(p.weight, 62.5, reason: 'naik dari 60 (set yang direncanakan), bukan dari 70 (set bonus)');
+    });
+
+    test('set bonus yang lebih berat tidak menaikkan beban — double', () {
+      final t = cfg(sets: 3, reps: 12, repsMin: 8);
+      final p = nextPrescription(
+        workouts: [session('2026-09-01', [(60, 12), (60, 12), (60, 12), (70, 12)], target: t)],
+        cfg: cfg(policy: ProgressionPolicy.double_, sets: 3, reps: 12, repsMin: 8),
+      );
+      expect(p.kind, PrescriptionKind.up);
+      expect(p.weight, 62.5);
+      expect(p.reps, 8);
+    });
+
+    test('set bonus yang kurang rep tidak membuat sesi bersih jadi gagal', () {
+      final w = session('2026-09-01', [(60, 8), (60, 8), (60, 8), (60, 4)], target: cfg(sets: 3));
+      final r = readSession(w.entries.first, date: w.date, fallback: cfg(sets: 3));
+      expect(r.reps, [8, 8, 8], reason: 'hanya set sebanyak rencana yang dinilai');
+      expect(r.ok, isTrue);
+      final p = nextPrescription(workouts: [w], cfg: cfg(policy: ProgressionPolicy.linear, sets: 3));
+      expect(p.kind, PrescriptionKind.up);
+    });
+
+    test('set yang dicatat lebih sedikit dari rencana tetap belum cukup', () {
+      final w = session('2026-09-01', [(60, 8), (60, 8)], target: cfg(sets: 3));
+      final r = readSession(w.entries.first, date: w.date, fallback: cfg(sets: 3));
+      expect(r.ok, isFalse, reason: '`enough` membandingkan yang dicatat, bukan yang dinilai');
+      final p = nextPrescription(workouts: [w], cfg: cfg(policy: ProgressionPolicy.linear, sets: 3));
+      expect(p.kind, PrescriptionKind.hold);
+      expect(p.weight, 60);
+    });
+
+    test('AMRAP Greyskull adalah set terakhir yang direncanakan, bukan set bonus', () {
+      // Set ketiga (AMRAP) 16 rep = dua kali target → lompatan ganda. Set
+      // bonus keempat yang pendek tidak boleh menggantikannya sebagai AMRAP,
+      // apalagi menjatuhkan sesi ini ke deload.
+      final w = session('2026-09-01', [(60, 8), (60, 8), (60, 16), (60, 5)], target: cfg(sets: 3, reps: 8));
+      final r = readSession(w.entries.first, date: w.date, fallback: cfg(sets: 3));
+      expect(r.amrap, 16);
+      final p = nextPrescription(workouts: [w], cfg: cfg(policy: ProgressionPolicy.greyskull, sets: 3, reps: 8));
+      expect(p.kind, PrescriptionKind.up);
+      expect(p.weight, 65, reason: '2 × 2,5 kg');
+    });
+
+    test('rencana 0 set tetap menilai satu set, bukan kehampaan', () {
+      final w = session('2026-09-01', [(60, 8), (60, 8)], target: cfg(sets: 0));
+      final r = readSession(w.entries.first, date: w.date, fallback: cfg(sets: 0));
+      expect(r.reps, [8]);
+      expect(r.ok, isTrue);
+    });
+
+    test('mode waktu: set tahan bonus yang pendek tidak membatalkan sesi', () {
+      final t = cfg(mode: LogMode.time, seconds: 60, weight: 0, sets: 2);
+      final w = Workout(date: '2026-09-01', entries: [
+        WorkoutEntry(exerciseId: 'ex1', target: t, sets: const [
+          SetRow(seconds: 60, done: true),
+          SetRow(seconds: 60, done: true),
+          SetRow(seconds: 20, done: true),
+        ]),
+      ]);
+      final p = nextPrescription(
+        workouts: [w],
+        cfg: cfg(policy: ProgressionPolicy.time, mode: LogMode.time, seconds: 60, weight: 0, sets: 2),
+      );
+      expect(p.kind, PrescriptionKind.up);
+      expect(p.seconds, 65);
+    });
+  });
+
   group('kasus tepi', () {
     test('belum ada riwayat → first, tanpa angka yang dikarang', () {
       final p = nextPrescription(workouts: const [], cfg: cfg(policy: ProgressionPolicy.linear));

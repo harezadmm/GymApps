@@ -27,6 +27,7 @@ import '../../data/workout_store.dart';
 import '../../domain/models.dart';
 import '../../domain/onerm.dart';
 import '../../domain/program.dart';
+import '../../domain/progression.dart';
 import '../../domain/stats.dart';
 import '../../domain/units.dart';
 import '../session/exercise_history_sheet.dart';
@@ -182,7 +183,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final now = DateTime.now();
     final weeks = _weeksShown;
     final lifts = strengthByMovement(history, now, count: 10);
-    final stalled = stalledLifts(history, now);
+    // Minggu deload yang direncanakan bukan bukti stagnan (FR-B10): daftar ini
+    // menilai kemajuan, jadi ia membaca riwayat yang sama dengan mesin progresi.
+    // Grafik dan volume di bawah tetap memakai riwayat utuh.
+    final stalled = stalledLifts(progressionHistory(history, store.routines), now);
     final sessions = weeklySessions(history, now, weeks: weeks);
     final unit = context.unitLabel;
 

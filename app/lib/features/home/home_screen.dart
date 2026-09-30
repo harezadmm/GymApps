@@ -649,7 +649,7 @@ class _NextSessionCard extends StatelessWidget {
                           // di layar sesi — dihitung dengan fungsi yang sama.
                           final unit = context.unit;
                           final plan = planExercise(configIn(cfg, unit), historyIn(history, unit),
-                              routineDefault: routine.policy, unit: unit.label);
+                              routineDefault: routine.policy, unit: unit.label, routines: store.routines);
                           final work = plan.sets.firstWhere((s) => !s.isWarmup, orElse: () => const SetRow());
                           final target = work.weight > 0
                               ? '${formatWeight(work.weight)} ${context.unitLabel} × ${work.reps}'

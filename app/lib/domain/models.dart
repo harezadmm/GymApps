@@ -382,7 +382,13 @@ const policyName = <ProgressionPolicy, String>{
 /// `id` tetap selama rutinitas hidup, tidak ikut berubah saat dinamai ulang —
 /// urutan rotasi program menunjuk ke id, bukan ke nama.
 class Routine {
-  const Routine({required this.id, required this.name, this.exercises = const [], this.policy});
+  const Routine({
+    required this.id,
+    required this.name,
+    this.exercises = const [],
+    this.policy,
+    this.excludedFromProgression = false,
+  });
 
   final String id;
   final String name;
@@ -391,19 +397,34 @@ class Routine {
   /// Policy bawaan untuk gerakan yang tidak menentukan sendiri.
   final ProgressionPolicy? policy;
 
+  /// Minggu deload terencana (FR-B10). Sesi dari rutinitas ini tetap fakta —
+  /// masuk riwayat, volume, statistik, dan PR — tapi tidak pernah jadi dasar
+  /// target sesi reguler berikutnya; lihat `progressionHistory`. Dibaca
+  /// `false` untuk dokumen dari versi yang belum mengenal kuncinya.
+  final bool excludedFromProgression;
+
   int get setCount => exercises.fold(0, (a, e) => a + e.sets);
 
-  Routine copyWith({String? id, String? name, List<ExerciseConfig>? exercises, ProgressionPolicy? policy}) => Routine(
+  Routine copyWith({
+    String? id,
+    String? name,
+    List<ExerciseConfig>? exercises,
+    ProgressionPolicy? policy,
+    bool? excludedFromProgression,
+  }) =>
+      Routine(
         id: id ?? this.id,
         name: name ?? this.name,
         exercises: exercises ?? this.exercises,
         policy: policy ?? this.policy,
+        excludedFromProgression: excludedFromProgression ?? this.excludedFromProgression,
       );
 
   Map<String, dynamic> toJson() => {
         'id': id,
         'name': name,
         if (policy != null) 'pol': policy!.name,
+        if (excludedFromProgression) 'excluded': true,
         'ex': [for (final e in exercises) e.toJson()],
       };
 
@@ -411,6 +432,7 @@ class Routine {
         id: j['id'] as String? ?? '',
         name: j['name'] as String? ?? '',
         policy: _byName(ProgressionPolicy.values, j['pol']),
+        excludedFromProgression: j['excluded'] == true,
         exercises: [
           for (final e in (j['ex'] as List? ?? const []))
             ExerciseConfig.fromJson(Map<String, dynamic>.from(e as Map)),

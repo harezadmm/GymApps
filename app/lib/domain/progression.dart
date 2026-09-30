@@ -1,5 +1,6 @@
 /// Progressive overload otomatis — port Dart dari
-/// `reference/opengym/src/lib/progression.js`, plus policy `hit` yang baru.
+/// `reference/opengym/src/lib/progression.js` (v1.3.7, ditambah perbaikan
+/// issue #233 dari v1.3.8), plus policy `hit` yang baru.
 ///
 /// Prinsip yang ikut di-port, bukan cuma rumusnya (PRD §6):
 ///
@@ -10,6 +11,15 @@
 ///   tercentang dengan rep kurang = miss; set yang tidak dicentang dibaca nol.
 ///   Karena itu sesi gagal tidak pernah menaikkan beban (FR-E3) tanpa perlu
 ///   aturan khusus.
+/// * **Set tambahan tidak menggeser rencana** (openGym v1.3.8, issue #233).
+///   Hanya `max(1, planned)` set kerja pertama yang dinilai: set bonus yang
+///   lebih berat tidak menaikkan beban berikutnya, dan set bonus yang
+///   dihentikan sebelum target tidak membuat sesi bersih terbaca gagal. Set
+///   yang *kurang* dari rencana tetap belum cukup. Volume, PR, dan riwayat
+///   membaca workout-nya langsung, jadi set tambahan tetap dihitung di sana.
+/// * **Rutinitas deload tidak menggeser target** (FR-B10). Sesi dari rutinitas
+///   yang ditandai "excluded from progression" disaring lewat
+///   [progressionHistory] sebelum riwayat sampai ke policy mana pun.
 /// * **Setiap angka punya alasan.** [Prescription.why] selalu terisi supaya UI
 ///   bisa menjawab "kenapa angka ini?" (FR-E5).
 ///
@@ -142,13 +152,15 @@ class SessionRead {
   /// Rep (atau detik) yang diminta target sesi itu.
   final int goal;
 
-  /// Beban tertinggi yang benar-benar tercentang.
+  /// Beban tertinggi yang benar-benar tercentang di antara set yang dinilai.
   final double weight;
 
-  /// Rep per set kerja. Set yang tidak dicentang jadi 0.
+  /// Rep per set kerja yang dinilai — sebanyak rencana, set bonus di luar itu
+  /// tidak ikut (#233). Set yang tidak dicentang jadi 0.
   final List<int> reps;
 
-  /// Semua set kerja tercapai penuh, dan jumlah setnya tidak kurang dari rencana.
+  /// Semua set yang dinilai tercapai penuh, dan jumlah set yang *dicatat*
+  /// tidak kurang dari rencana.
   final bool ok;
 
   final ExerciseConfig? target;
@@ -156,7 +168,8 @@ class SessionRead {
   int get count => reps.length;
   int get low => reps.isEmpty ? 0 : reps.reduce(math.min);
 
-  /// Set terakhir — yang dibawa ke failure oleh Greyskull.
+  /// Set terakhir yang *direncanakan* — yang dibawa ke failure oleh Greyskull.
+  /// Set bonus sesudahnya bukan AMRAP-nya (#233).
   int get amrap => reps.isEmpty ? 0 : reps.last;
 
   /// Working set pertama — satu-satunya yang dibaca policy `hit`.
@@ -177,9 +190,16 @@ SessionRead readSession(WorkoutEntry entry, {required String date, ExerciseConfi
   // dicentang akan meracuni `ok` selamanya dan menyeret `low` ke bawah. Drop
   // set dan rest-pause juga: rep sedikit di sana adalah rancangannya, bukan
   // kegagalan.
-  final sets = entry.sets.where((s) => s.isWork).toList();
-  final planned = target?.sets ?? sets.length;
-  final enough = sets.length >= planned;
+  final logged = entry.sets.where((s) => s.isWork).toList();
+  final planned = target?.sets ?? logged.length;
+
+  // `enough` membandingkan yang DICATAT dengan rencana: dua dari tiga set
+  // tetap kurang. Tapi yang DINILAI hanya set sebanyak rencana (openGym
+  // v1.3.8, #233): set bonus keempat yang lebih berat, atau yang dihentikan
+  // lebih awal, adalah kerja ekstra — bukan bukti target naik atau gagal.
+  // Minimal satu, supaya rencana yang rusak (0 set) tidak menilai kehampaan.
+  final enough = logged.length >= planned;
+  final sets = logged.take(math.max(1, planned)).toList();
 
   if (mode == LogMode.time) {
     final goal = target?.seconds ?? 0;
@@ -206,6 +226,28 @@ SessionRead readSession(WorkoutEntry entry, {required String date, ExerciseConfi
     ok: goal > 0 && enough && reps.isNotEmpty && reps.every((r) => r >= goal),
     target: target,
   );
+}
+
+/// Riwayat yang boleh menjadi dasar target berikutnya (FR-B10).
+///
+/// Rutinitas yang ditandai [Routine.excludedFromProgression] adalah minggu
+/// deload yang direncanakan: sesinya fakta — tetap tampil di riwayat, volume,
+/// statistik, PR, dan kolom PREV — tapi bukan target. Tanpa saringan ini,
+/// sesi deload 50 kg yang "berhasil" akan meresepkan 52,5 kg untuk sesi
+/// reguler yang sebelumnya sudah di 60.
+///
+/// Dicocokkan lewat nama ([Workout.routine]), karena itulah satu-satunya
+/// jejak rutinitas yang dibawa setiap sesi — cara yang sama dipakai Home dan
+/// sesi yang dibuka ulang. Sesi bebas (tanpa nama rutinitas) selalu ikut.
+///
+/// Ini satu-satunya tempat aturan itu hidup: setiap pemanggil prescription
+/// (`planExercise`, pratinjau target di ringkasan dan Home, daftar stagnan)
+/// lewat sini, bukan menyaring sendiri-sendiri. Tanpa rutinitas yang
+/// dikecualikan, daftar yang sama dikembalikan apa adanya.
+List<Workout> progressionHistory(List<Workout> workouts, List<Routine> routines) {
+  final excluded = {for (final r in routines) if (r.excludedFromProgression) r.name};
+  if (excluded.isEmpty) return workouts;
+  return [for (final w in workouts) if (!excluded.contains(w.routine)) w];
 }
 
 /// Semua sesi lampau untuk satu gerakan, terlama dulu.
