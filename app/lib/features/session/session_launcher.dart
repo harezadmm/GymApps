@@ -21,12 +21,15 @@ import '../../domain/session_plan.dart';
 import '../../domain/settings.dart';
 import '../history/workout_edit_screen.dart';
 import '../library/library_screen.dart';
+import '../profile/gym_profiles.dart';
 import 'session_screen.dart';
 
 /// Susun satu gerakan untuk dibuka di layar sesi.
 ///
 /// [routines] dibawa ke [planExercise] supaya sesi dari rutinitas deload tidak
 /// jadi dasar target (FR-B10); kosong berarti tidak ada yang dikecualikan.
+/// [gymId] = gym tempat sesi ini dicatat (FR-C4): target, PREV, dan catatan
+/// terakhir membaca memori gym itu dulu.
 SessionExercise buildSessionExercise(
   ExerciseCatalog catalog,
   ExerciseConfig cfg,
@@ -34,6 +37,7 @@ SessionExercise buildSessionExercise(
   ProgressionPolicy? routineDefault,
   TrainingSettings? settings,
   List<Routine> routines = const [],
+  String? gymId,
   bool expanded = false,
 }) {
   final s = settings ?? const TrainingSettings();
@@ -45,8 +49,8 @@ SessionExercise buildSessionExercise(
       catalog.withAssisted(cfg.deloadFactor == null ? cfg.copyWith(deloadFactor: s.deloadFactor) : cfg);
   // [cfg] dan [history] sudah dalam satuan tampilan (lihat units.dart), jadi
   // lompatan pelatnya juga dalam satuan itu.
-  final plan =
-      planExercise(withDefaults, history, routineDefault: routineDefault, unit: s.unit.label, routines: routines);
+  final plan = planExercise(withDefaults, history,
+      routineDefault: routineDefault, unit: s.unit.label, routines: routines, gymId: gymId);
   final ex = catalog.byId(cfg.exerciseId);
   return SessionExercise(
     name: catalog.nameOf(cfg.exerciseId),
@@ -57,7 +61,8 @@ SessionExercise buildSessionExercise(
     prescription: plan.prescription,
     restDuration: Duration(seconds: s.restFor(cfg)),
     expanded: expanded,
-    lastNote: lastEntryFor(history, cfg.exerciseId)?.note,
+    // Dari sesi yang sama dengan kolom PREV: "kursi posisi 4" milik gym ini.
+    lastNote: plan.lastNote,
   );
 }
 
@@ -177,8 +182,15 @@ Future<bool> ensureNoDraft(BuildContext context) async {
 }
 
 /// Buka layar sesi untuk satu rutinitas.
+///
+/// Dengan lebih dari satu gym (FR-C3), sheet pemilih gym muncul lebih dulu:
+/// sesi dicatat di gym itu, dan target serta PREV-nya dihitung dari memori
+/// beban gym itu (FR-C4). Memilih di sana sekaligus mengganti gym aktif —
+/// library yang dibuka dari dalam sesi harus menyaring alat gym yang sama.
 Future<void> openRoutineSession(BuildContext context, Routine routine) async {
   if (!await ensureNoDraft(context) || !context.mounted) return;
+  final gym = await gymForNewSession(context);
+  if (gym == null || !context.mounted) return;
   final store = WorkoutScope.read(context);
   final navigator = Navigator.of(context);
   final catalog = await ExerciseCatalog.load();
@@ -187,12 +199,17 @@ Future<void> openRoutineSession(BuildContext context, Routine routine) async {
   final exercises = [
     for (final (i, cfg) in routine.exercises.indexed)
       buildSessionExercise(catalog, configIn(cfg, unit), history,
-          routineDefault: routine.policy, settings: store.settings, routines: store.routines, expanded: i == 0),
+          routineDefault: routine.policy,
+          settings: store.settings,
+          routines: store.routines,
+          gymId: gym.id,
+          expanded: i == 0),
   ];
   await navigator.push(MaterialPageRoute(
     builder: (_) => SessionScreen(
       routineName: routine.name,
       routineId: routine.id,
+      gymId: gym.id,
       exercises: exercises,
       history: history,
     ),
@@ -202,10 +219,16 @@ Future<void> openRoutineSession(BuildContext context, Routine routine) async {
 /// Buka sesi bebas yang kosong. Gerakan ditambah sambil jalan.
 Future<void> openFreestyleSession(BuildContext context, String name) async {
   if (!await ensureNoDraft(context) || !context.mounted) return;
+  final gym = await gymForNewSession(context);
+  if (gym == null || !context.mounted) return;
   final store = WorkoutScope.read(context);
   await Navigator.of(context).push(MaterialPageRoute(
     builder: (_) => SessionScreen(
-        routineName: name, exercises: const [], history: historyIn(store.chronological, store.settings.unit)),
+      routineName: name,
+      gymId: gym.id,
+      exercises: const [],
+      history: historyIn(store.chronological, store.settings.unit),
+    ),
   ));
 }
 
@@ -267,6 +290,9 @@ Future<void> resumeDraftSession(BuildContext context, {bool restored = false}) a
     builder: (_) => SessionScreen(
       routineName: draft['name'] as String? ?? '',
       routineId: draft['rid'] as String?,
+      // Draft sebelum profil gym ada tidak menulis gym; sesinya lalu tersimpan
+      // tanpa gym dan dibaca sebagai milik gym bawaan.
+      gymId: draft['gym'] as String?,
       exercises: exercises,
       history: historyIn(kgHistory, unit),
       initialElapsed: draftElapsed(draft),
@@ -319,8 +345,9 @@ Future<void> reopenWorkoutSession(BuildContext context, Workout workout) async {
     // dengan arah katalog, seperti sesi baru.
     final cfg = catalog.withAssisted(configIn(cfgKg, unit));
     // planExercise hanya diminta PREV dan alasannya; baris setnya dibuang,
-    // karena set yang dipakai adalah yang sudah tercatat.
-    final plan = planExercise(cfg, history, unit: unit.label, routines: store.routines);
+    // karena set yang dipakai adalah yang sudah tercatat. PREV mengikuti gym
+    // tempat sesi ini dulu dicatat, bukan gym yang sedang aktif (FR-C4).
+    final plan = planExercise(cfg, history, unit: unit.label, routines: store.routines, gymId: workout.gymId);
     final sets = shown.entries[i].sets;
     final previous = [
       for (var j = 0; j < sets.length; j++) j < plan.previous.length ? plan.previous[j] : '—',
@@ -335,13 +362,15 @@ Future<void> reopenWorkoutSession(BuildContext context, Workout workout) async {
       restDuration: Duration(seconds: store.settings.restFor(cfgKg)),
       expanded: i == 0,
       note: entry.note,
-      lastNote: lastEntryFor(history, id)?.note,
+      lastNote: plan.lastNote,
     ));
   }
   await navigator.push(MaterialPageRoute(
     builder: (_) => SessionScreen(
       routineName: workout.routine ?? t.freestyleSession,
       routineId: routine?.id,
+      // Sesi yang dibuka ulang tetap milik gym asalnya, apa pun gym aktifnya.
+      gymId: workout.gymId,
       exercises: exercises,
       history: history,
       initialElapsed: Duration(seconds: workout.durationSeconds ?? 0),
@@ -367,7 +396,9 @@ Future<void> openManualEntry(BuildContext context) async {
   final catalog = await ExerciseCatalog.load();
   final result = await navigator.push<Workout>(MaterialPageRoute(
     builder: (_) => WorkoutEditScreen(
-      workout: Workout(date: isoDate(DateTime.now()), entries: const []),
+      // Sesi lampau dicatat di gym aktif (FR-C4) — yang mencatat kemarin
+      // hampir pasti sedang menuliskan gym yang biasa.
+      workout: Workout(date: isoDate(DateTime.now()), entries: const [], gymId: store.settings.activeGymId),
       catalog: catalog,
       isNew: true,
     ),

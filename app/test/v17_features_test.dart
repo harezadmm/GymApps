@@ -113,7 +113,8 @@ void main() {
 
   group('setelan', () {
     test('kelompok alat menyaring katalog, bodyweight selalu ada', () {
-      const s = TrainingSettings(equipment: ['dumbbell']);
+      // Daftar alat hidup di profil gym (FR-C3); yang aktif yang menyaring.
+      const s = TrainingSettings(gyms: [GymProfile(id: 'g', name: 'Gym', equipment: ['dumbbell'])], activeGymId: 'g');
       expect(s.hasEquipment('dumbbell'), isTrue);
       expect(s.hasEquipment('barbell'), isFalse);
       expect(s.hasEquipment('body weight'), isTrue);
@@ -149,7 +150,9 @@ void main() {
     test('setelan, favorit, dan berat badan tersimpan dan terbaca lagi', () async {
       final a = WorkoutStore();
       await a.load('a@x.com');
-      await a.updateSettings(a.settings.copyWith(defaultRestSeconds: 150, logRir: true, equipment: ['barbell']));
+      await a.updateSettings(a.settings
+          .copyWith(defaultRestSeconds: 150, logRir: true)
+          .withGymEquipment(a.settings.activeGymId, ['barbell']));
       await a.toggleFavorite('0025');
       await a.logBodyweight('2026-09-20', 80.5);
       await a.logBodyweight('2026-09-25', 79.8);

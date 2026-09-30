@@ -24,7 +24,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 import '../../domain/program.dart';
-import 'equipment_picker.dart';
+import 'gym_profiles.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({
@@ -529,20 +529,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   label: t.weekStartsOn,
                   value: t.weekdayLong(settings.weekStartsOn),
                   onTap: _pickWeekStart),
-              SettingsTile(
-                icon: GymIcons.dumbbell, hue: c.hues.cyan,
-                label: t.myEquipment,
-                value: settings.equipment == null ? t.equipmentAll : t.equipmentCount(settings.equipment!.length),
-                onTap: () => editEquipment(context),
-              ),
             ],
           ),
         ),
         const SizedBox(height: 18),
+        // Profil gym (FR-C3): daftar alat dan memori beban per gym. Dulu satu
+        // baris "Alat di gym-ku" di grup Training; sekarang tiap gym punya
+        // barisnya sendiri, dan alatnya dibuka dari situ.
+        SectionLabel(t.gyms),
+        const SizedBox(height: 8),
+        const Reveal(index: 2, child: GymSection()),
+        const SizedBox(height: 18),
         SectionLabel(t.data),
         const SizedBox(height: 8),
         Reveal(
-          index: 2,
+          index: 3,
           child: SettingsGroup(
             children: [
               SettingsTile(icon: GymIcons.download, hue: c.hues.orange, label: t.exportBackup, onTap: _export),
@@ -559,7 +560,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         SectionLabel(t.app),
         const SizedBox(height: 8),
         Reveal(
-          index: 3,
+          index: 4,
           child: SettingsGroup(
             children: [
               if (widget.onThemeModeChanged != null)
@@ -615,7 +616,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
         const SizedBox(height: 20),
         Reveal(
-          index: 4,
+          index: 5,
           child: PressScale(
             child: Material(
               color: c.danger.withValues(alpha: 0.10),

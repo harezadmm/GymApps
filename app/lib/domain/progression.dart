@@ -28,6 +28,10 @@
 ///   di nol tidak ada lagi yang bisa dikurangi. Arahnya datang dari
 ///   [ExerciseConfig.assisted] yang diresolusi pemanggil — engine ini tidak
 ///   mengenal katalog (lihat `domain/assisted.dart`).
+/// * **Memori beban per gym** (FR-C4). Chest press 60 kg di gym A dan 50 kg
+///   di gym B adalah dua memori; [gymHistory] mempersempit riwayat ke gym
+///   tempat sesi akan dicatat sebelum policy mana pun membacanya, dan jatuh
+///   ke seluruh riwayat kalau gerakan itu belum pernah dicatat di sana.
 ///
 /// **Yang belum ikut di-port** dan sengaja disederhanakan: `selectDeloadCandidate`
 /// milik openGym — pencarian grid Epley leksikografis untuk memilih pasangan
@@ -299,6 +303,39 @@ List<Workout> progressionHistory(List<Workout> workouts, List<Routine> routines)
   final excluded = {for (final r in routines) if (r.excludedFromProgression) r.name};
   if (excluded.isEmpty) return workouts;
   return [for (final w in workouts) if (!excluded.contains(w.routine)) w];
+}
+
+/// Sesi yang diutamakan untuk satu gerakan di satu gym — memori beban per
+/// gym (FR-C4). Pasangan [progressionHistory]: dipanggil lebih dulu oleh
+/// `planExercise`, dan hasilnya yang dilewatkan ke saringan deload, supaya
+/// target dan kolom PREV membaca sesi yang sama.
+///
+/// Chest press 60 kg di Gym A dan 50 kg di Gym B adalah dua memori yang
+/// berbeda: mesin yang "sama" tidak sama beratnya, dan target di B tidak
+/// boleh dihitung dari sesi di A. Sesi dari gym lain dikeluarkan **hanya
+/// kalau** gerakan ini sudah pernah dicatat di [gymId]; kalau belum, seluruh
+/// riwayat dipakai — kunjungan pertama ke gym baru lebih baik mulai dari
+/// beban yang biasa daripada dari nol, lalu orangnya menyesuaikan.
+///
+/// Gym tiap sesi dibaca lewat [Workout.gymOrDefault]: riwayat dari sebelum
+/// profil gym ada milik gym bawaan, bukan dibuang. Tanpa [gymId], atau kalau
+/// tidak ada yang perlu dikeluarkan, daftar yang sama dikembalikan apa adanya
+/// — pemanggil membandingkannya lewat identitas.
+List<Workout> gymHistory(List<Workout> workouts, String exerciseId, String? gymId) {
+  if (gymId == null) return workouts;
+  var loggedHere = false;
+  for (final w in workouts) {
+    if (w.gymOrDefault != gymId) continue;
+    // Kriteria "pernah dicatat" sama dengan `lastEntryFor`: ada set kerja
+    // yang tercentang, bukan sekadar baris kosong yang ikut tersimpan.
+    if (w.entries.any((e) => e.exerciseId == exerciseId && e.sets.any((s) => s.done && !s.isWarmup))) {
+      loggedHere = true;
+      break;
+    }
+  }
+  if (!loggedHere) return workouts;
+  final scoped = [for (final w in workouts) if (w.gymOrDefault == gymId) w];
+  return scoped.length == workouts.length ? workouts : scoped;
 }
 
 /// Semua sesi lampau untuk satu gerakan, terlama dulu. [assisted] diteruskan

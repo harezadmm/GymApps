@@ -33,6 +33,7 @@ import '../../domain/program.dart';
 import '../../domain/progression.dart';
 import '../../domain/routine_sync.dart';
 import '../../domain/session_plan.dart';
+import '../profile/gym_profiles.dart';
 import 'exercise_history_sheet.dart';
 import 'finish_screen.dart';
 import 'rest_screen.dart';
@@ -201,9 +202,16 @@ class SessionScreen extends StatefulWidget {
     this.replacesKey,
     this.initialRest,
     this.restored = false,
+    this.gymId,
   });
 
   final String routineName;
+
+  /// Id profil gym tempat sesi ini dicatat (FR-C3, FR-C4). Ditetapkan saat
+  /// sesi dibuka — bukan saat selesai — supaya gym yang diganti di Home selagi
+  /// sesi diminimalkan tidak memindahkan sesi yang sedang berjalan. null untuk
+  /// draft dan sesi lama yang belum mengenal gym.
+  final String? gymId;
 
   /// Tanggal sesi (`YYYY-MM-DD`). null = hari ini. Diisi untuk sesi yang
   /// dilanjutkan dari draft atau dibuka ulang dari Riwayat: sesi yang dimulai
@@ -402,6 +410,7 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
     'v': 1,
     'name': widget.routineName,
     if (widget.routineId != null) 'rid': widget.routineId,
+    if (widget.gymId != null) 'gym': widget.gymId,
     'date': _date,
     if (widget.replacesKey != null) 'replaces': widget.replacesKey,
     'unit': _unit.name,
@@ -694,6 +703,7 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
         routine: widget.routineName,
         durationSeconds: _elapsedTotal.inSeconds,
         notes: notes.isEmpty ? null : notes,
+        gymId: widget.gymId,
         entries: [
           for (final ex in _exercises)
             WorkoutEntry(
@@ -737,6 +747,7 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
       MaterialPageRoute(
         builder: (_) => FinishScreen(
           routineName: widget.routineName,
+          gymId: widget.gymId,
           exercises: _exercises,
           history: _history,
           elapsed: _elapsedTotal,
@@ -922,8 +933,10 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
     routineDefault: _routineDefault,
     settings: _store?.settings,
     // Aturan rutinitas deload (FR-B10) berlaku juga untuk gerakan yang
-    // ditambah di tengah sesi — targetnya dihitung lewat jalur yang sama.
+    // ditambah di tengah sesi — targetnya dihitung lewat jalur yang sama,
+    // termasuk memori beban gym sesi ini (FR-C4).
     routines: _store?.routines ?? const [],
+    gymId: widget.gymId,
     expanded: true,
   );
 
@@ -1114,6 +1127,7 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
             children: [
               _TopBar(
                 routineName: widget.routineName,
+                gymId: widget.gymId,
                 // Termasuk waktu sebelum draft dipulihkan; stopwatch sendiri
                 // mulai dari nol setiap layar ini dibuka.
                 elapsed: () => _elapsedTotal,
@@ -1223,9 +1237,14 @@ class _TopBar extends StatelessWidget {
     required this.rest,
     required this.onLeave,
     required this.onFinish,
+    this.gymId,
   });
 
   final String routineName;
+
+  /// Gym sesi ini (FR-C3); chip-nya hanya tampil kalau gym-nya lebih dari satu.
+  final String? gymId;
+
   final Duration Function() elapsed;
   final RestTimer rest;
   final VoidCallback onLeave;
@@ -1258,14 +1277,26 @@ class _TopBar extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
-                  // Waktu berjalan berdetak sendiri tiap detik. Dulu angkanya
-                  // hanya berubah saat layar kebetulan digambar ulang.
-                  StreamBuilder<int>(
-                    stream: _secondTicks,
-                    builder: (context, _) => Text(
-                      context.t.elapsedOf(_formatElapsed(elapsed())),
-                      style: TextStyle(fontSize: 12, color: c.text2),
-                    ),
+                  // Waktu berjalan dan chip gym berdampingan. Wrap, bukan Row:
+                  // di HP sempit dengan huruf besar dan kapsul istirahat yang
+                  // sedang tampil, chip-nya turun ke baris berikutnya alih-alih
+                  // meluber keluar bilah.
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 2,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      // Waktu berjalan berdetak sendiri tiap detik. Dulu angkanya
+                      // hanya berubah saat layar kebetulan digambar ulang.
+                      StreamBuilder<int>(
+                        stream: _secondTicks,
+                        builder: (context, _) => Text(
+                          context.t.elapsedOf(_formatElapsed(elapsed())),
+                          style: TextStyle(fontSize: 12, color: c.text2),
+                        ),
+                      ),
+                      if (gymId != null) GymChip(gymId: gymId, dense: true),
+                    ],
                   ),
                 ],
               ),

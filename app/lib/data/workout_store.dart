@@ -508,6 +508,12 @@ class WorkoutStore extends ChangeNotifier {
   static String newRoutineId() =>
       'r${DateTime.now().microsecondsSinceEpoch.toRadixString(36)}${(_idSeq++).toRadixString(36)}';
 
+  /// Id profil gym baru (FR-C3), dengan resep yang sama seperti
+  /// [newRoutineId]. Awalannya beda supaya id gym dan id rutinitas tidak
+  /// pernah tertukar saat dibaca di dokumen.
+  static String newGymId() =>
+      'g${DateTime.now().microsecondsSinceEpoch.toRadixString(36)}${(_idSeq++).toRadixString(36)}';
+
   Future<void> _commit() async {
     await _markDoc();
     await _persist();
@@ -798,6 +804,12 @@ class WorkoutStore extends ChangeNotifier {
     return s is Map ? TrainingSettings.fromJson(Map<String, dynamic>.from(s)) : const TrainingSettings();
   }
 
+  /// Peta setelan persis seperti tertulis di dokumen, tanpa dinormalkan.
+  static Map<String, dynamic> _rawSettingsIn(Map doc) {
+    final s = doc['settings'];
+    return s is Map ? Map<String, dynamic>.from(s) : const {};
+  }
+
   static List<BodyweightEntry> _bodyweightIn(Map doc) => [
         for (final e in (doc['bw'] as List? ?? const []))
           BodyweightEntry.fromJson(Map<String, dynamic>.from(e as Map)),
@@ -1004,7 +1016,14 @@ class WorkoutStore extends ChangeNotifier {
     final base = preferServerPlan ? null : _settingsBase;
     final serverSettings = _settingsIn(theirs).toJson();
     if (base != null) {
-      _settings = TrainingSettings.fromJson(mergeSettings(base: base, mine: _settings.toJson(), theirs: serverSettings));
+      // Sisi server diberikan mentah, bukan hasil baca-tulis ulang: build lama
+      // di HP lain tidak menulis penanda `activeGymId`, dan justru ketiadaan
+      // penanda itulah yang memberi tahu [mergeGymSettings] bahwa daftar gym
+      // di sana tidak dikenal — bukan dihapus. Menormalkannya dulu akan
+      // menempelkan penanda itu dan menghapus setiap gym pada sinkron
+      // berikutnya. Kolom lain tetap dinormalkan oleh fromJson di ujung.
+      _settings = TrainingSettings.fromJson(
+          mergeSettings(base: base, mine: _settings.toJson(), theirs: _rawSettingsIn(theirs)));
     }
     _settingsBase = serverSettings;
     _removed = _capRemoved([..._removed, ..._removedIn(theirs)]);
@@ -1041,17 +1060,35 @@ class WorkoutStore extends ChangeNotifier {
 
   /// Gabung setelan tiga arah per kolom: kolom yang diubah di perangkat ini
   /// sejak [base] memakai nilai perangkat ini, sisanya nilai server.
+  ///
+  /// Profil gym (FR-C3) adalah pengecualiannya: daftarnya digabung per id
+  /// lewat [mergeGymSettings], bukan sebagai satu kolom. Sebagai satu kolom,
+  /// gym yang ditambah di tablet hilang begitu HP mengganti nama gymnya
+  /// sendiri — dua perangkat yang sama-sama menyunting gym harus sama-sama
+  /// dipertahankan. Kolom `eq` lama ikut ke sana: ia cermin gym aktif, dan
+  /// ditulis ulang dari hasil gabungan supaya build lama di HP lain tetap
+  /// membaca daftar alat yang benar.
   @visibleForTesting
   static Map<String, dynamic> mergeSettings({
     required Map<String, dynamic> base,
     required Map<String, dynamic> mine,
     required Map<String, dynamic> theirs,
   }) {
+    const gymKeys = ['eq', 'gyms', 'activeGymId'];
     final out = <String, dynamic>{};
     for (final k in {...base.keys, ...mine.keys, ...theirs.keys}) {
+      if (gymKeys.contains(k)) continue;
       final changedHere = jsonEncode(mine[k]) != jsonEncode(base[k]);
       final v = changedHere ? mine[k] : theirs[k];
       if (v != null) out[k] = v;
+    }
+    // Ditulis lewat toJson supaya bentuknya persis dokumen biasa: akun satu
+    // gym bawaan tetap tanpa kolom `gyms`, dan `eq` hanya ada kalau gym
+    // aktifnya memang membatasi alat.
+    final gym = mergeGymSettings(base: base, mine: mine, theirs: theirs);
+    final gymJson = TrainingSettings(gyms: gym.gyms, activeGymId: gym.activeGymId).toJson();
+    for (final k in gymKeys) {
+      if (gymJson[k] != null) out[k] = gymJson[k];
     }
     return out;
   }

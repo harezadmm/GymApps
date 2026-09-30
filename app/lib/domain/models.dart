@@ -322,6 +322,13 @@ class WorkoutEntry {
       );
 }
 
+/// Id profil gym bawaan (FR-C3): gym hasil migrasi dari dokumen yang hanya
+/// mengenal satu daftar alat, dan gym pertama akun baru. Tetap, bukan acak,
+/// supaya dua HP yang memigrasi dokumen yang sama menghasilkan gym yang sama
+/// — bukan dua "Gym saya" yang saling menggandakan begitu keduanya sinkron.
+/// Riwayat tanpa gym ([Workout.gymId] null) juga dibaca sebagai milik gym ini.
+const defaultGymId = 'default';
+
 class Workout {
   const Workout({
     required this.date,
@@ -329,6 +336,7 @@ class Workout {
     this.routine,
     this.durationSeconds,
     this.notes,
+    this.gymId,
   });
 
   /// `YYYY-MM-DD`.
@@ -347,12 +355,32 @@ class Workout {
   /// Catatan sesi dari kotak "Session notes".
   final String? notes;
 
-  Workout copyWith({String? date, List<WorkoutEntry>? entries, String? notes, bool clearNotes = false}) => Workout(
+  /// Id profil gym tempat sesi ini dicatat (FR-C4) — dasar memori beban per
+  /// gym. null untuk riwayat dari sebelum profil gym ada, atau yang ditulis
+  /// build lama di HP lain; lihat [gymOrDefault].
+  final String? gymId;
+
+  /// Gym tempat sesi ini dicatat. Riwayat tanpa gym dibaca sebagai milik gym
+  /// bawaan: waktu itu memang cuma ada satu gym, dan itulah gym yang lahir
+  /// dari migrasi. Tanpa aturan ini, orang yang menambah gym kedua sesudah
+  /// bertahun-tahun mencatat akan kehilangan seluruh memori beban gym
+  /// pertamanya begitu kembali ke sana (lihat `gymHistory`).
+  String get gymOrDefault => gymId ?? defaultGymId;
+
+  Workout copyWith({
+    String? date,
+    List<WorkoutEntry>? entries,
+    String? notes,
+    bool clearNotes = false,
+    String? gymId,
+  }) =>
+      Workout(
         date: date ?? this.date,
         entries: entries ?? this.entries,
         routine: routine,
         durationSeconds: durationSeconds,
         notes: clearNotes ? null : (notes ?? this.notes),
+        gymId: gymId ?? this.gymId,
       );
 
   Map<String, dynamic> toJson() => {
@@ -360,6 +388,7 @@ class Workout {
         if (routine != null) 'routine': routine,
         if (durationSeconds != null) 'dur': durationSeconds,
         if (notes != null && notes!.isNotEmpty) 'note': notes,
+        if (gymId != null) 'gym': gymId,
         'entries': [for (final e in entries) e.toJson()],
       };
 
@@ -368,6 +397,9 @@ class Workout {
         routine: j['routine'] as String?,
         durationSeconds: (j['dur'] as num?)?.toInt(),
         notes: j['note'] as String?,
+        // Bukan string (dokumen rusak, atau versi lain) dibaca sebagai "tidak
+        // tahu", bukan melempar — satu sesi aneh tidak boleh mengunci riwayat.
+        gymId: j['gym'] is String && (j['gym'] as String).isNotEmpty ? j['gym'] as String : null,
         entries: [
           for (final e in (j['entries'] as List? ?? const []))
             WorkoutEntry.fromJson(Map<String, dynamic>.from(e as Map)),

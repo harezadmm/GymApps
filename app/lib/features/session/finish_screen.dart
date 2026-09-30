@@ -41,9 +41,15 @@ class FinishScreen extends StatefulWidget {
     this.originalRoutine,
     this.diff,
     this.routineUpdated = false,
+    this.gymId,
   });
 
   final String routineName;
+
+  /// Gym tempat sesi ini dicatat (FR-C4): target berikutnya dihitung dari
+  /// memori gym yang sama, seperti sesi berikutnya nanti.
+  final String? gymId;
+
   final List<SessionExercise> exercises;
   final List<Workout> history;
   final Duration elapsed;
@@ -74,7 +80,9 @@ class _FinishScreenState extends State<FinishScreen> {
       date: widget.dateLabel,
       // Nama rutinitas ikut, sama seperti yang tersimpan di riwayat: dari
       // sinilah sesi deload dikenali saat target berikutnya dihitung (FR-B10).
+      // Gym-nya juga, supaya sesi ini terbaca sebagai memori gym itu (FR-C4).
       routine: widget.routineName,
+      gymId: widget.gymId,
       entries: [
         for (final ex in widget.exercises)
           WorkoutEntry(exerciseId: ex.config.exerciseId, target: ex.config, sets: ex.sets),
@@ -276,6 +284,7 @@ class _FinishScreenState extends State<FinishScreen> {
                       child: _NextTargetsCard(
                         exercises: widget.exercises,
                         history: [...widget.history, ..._thisSession],
+                        gymId: widget.gymId,
                         // Tanpa store (test yang memasang layar ini sendirian)
                         // tidak ada rutinitas yang dikecualikan.
                         routines: context.getInheritedWidgetOfExactType<WorkoutScope>()?.notifier?.routines ?? const [],
@@ -456,13 +465,16 @@ class _SharePill extends StatelessWidget {
 }
 
 class _NextTargetsCard extends StatelessWidget {
-  const _NextTargetsCard({required this.exercises, required this.history, required this.routines});
+  const _NextTargetsCard({required this.exercises, required this.history, required this.routines, this.gymId});
 
   final List<SessionExercise> exercises;
   final List<Workout> history;
 
   /// Untuk mengenali rutinitas deload (FR-B10) — lihat `progressionHistory`.
   final List<Routine> routines;
+
+  /// Memori beban gym sesi ini (FR-C4) — lihat `gymHistory`.
+  final String? gymId;
 
   @override
   Widget build(BuildContext context) {
@@ -479,7 +491,8 @@ class _NextTargetsCard extends StatelessWidget {
               builder: (context) {
                 // Fungsi yang sama dengan yang menyusun sesi berikutnya, supaya
                 // angka di sini persis angka yang akan terbuka nanti.
-                final plan = planExercise(ex.config, history, unit: context.unitLabel, routines: routines);
+                final plan =
+                    planExercise(ex.config, history, unit: context.unitLabel, routines: routines, gymId: gymId);
                 final p = plan.prescription;
                 final work = plan.sets.firstWhere((s) => !s.isWarmup, orElse: () => const SetRow());
                 final weight = work.weight;

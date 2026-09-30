@@ -19,6 +19,7 @@ class PlannedExercise {
     required this.sets,
     required this.previous,
     required this.prescription,
+    this.lastNote,
   });
 
   /// Target yang dibekukan ke dalam sesi dan disimpan bersama entri-nya.
@@ -31,6 +32,10 @@ class PlannedExercise {
   final List<String> previous;
 
   final Prescription prescription;
+
+  /// Catatan dari sesi yang sama dengan sumber kolom PREV — "kursi posisi 4"
+  /// milik gym tempat sesi itu dicatat (FR-C4), bukan gym lain.
+  final String? lastNote;
 }
 
 /// Entri terbaru untuk satu gerakan yang punya set kerja tercentang.
@@ -57,15 +62,22 @@ String _prevText(SetRow s, LogMode mode) {
 /// [history] urut terlama dulu. [routines] dipakai untuk mengenali rutinitas
 /// deload (FR-B10): target dihitung hanya dari sesi yang lolos
 /// [progressionHistory], sedangkan kolom PREV dan catatan tetap membaca
-/// [history] utuh — "sesi lalu" adalah fakta, bukan target.
+/// riwayat utuh — "sesi lalu" adalah fakta, bukan target.
+///
+/// [gymId] = gym tempat sesi ini akan dicatat (FR-C4). Target **dan** PREV
+/// lebih dulu dipersempit ke memori gym itu lewat [gymHistory]; keduanya
+/// harus membaca sesi yang sama, kalau tidak PREV menunjukkan 60 kg di gym A
+/// sementara targetnya dihitung dari 50 kg di gym B. null = tidak dipersempit.
 PlannedExercise planExercise(
   ExerciseConfig cfg,
   List<Workout> history, {
   ProgressionPolicy? routineDefault,
   String unit = 'kg',
   List<Routine> routines = const [],
+  String? gymId,
 }) {
-  final eligible = progressionHistory(history, routines);
+  final scoped = gymHistory(history, cfg.exerciseId, gymId);
+  final eligible = progressionHistory(scoped, routines);
   final p = nextPrescription(workouts: eligible, cfg: cfg, routineDefault: routineDefault, unit: unit);
   final policy = p.policy;
 
@@ -83,13 +95,13 @@ PlannedExercise planExercise(
   final seconds = p.seconds ?? cfg.seconds;
 
   final inc = cfg.mode == LogMode.time ? 0.0 : weightIncrement(cfg, unit);
-  final last = lastEntryFor(history, cfg.exerciseId);
+  final last = lastEntryFor(scoped, cfg.exerciseId);
   final lastWarm = last?.sets.where((s) => s.isWarmup).toList() ?? const <SetRow>[];
   final lastWork = last?.sets.where((s) => s.isWork).toList() ?? const <SetRow>[];
   // Tangga beban mengikuti keputusan progresi, jadi bentuknya diambil dari
   // sesi terakhir yang *dinilai* — bukan dari sesi deload yang lebih ringan,
   // yang akan menggeser seluruh tangga dari titik yang salah.
-  final judged = identical(eligible, history) ? last : lastEntryFor(eligible, cfg.exerciseId);
+  final judged = identical(eligible, scoped) ? last : lastEntryFor(eligible, cfg.exerciseId);
   final judgedWork = judged?.sets.where((s) => s.isWork).toList() ?? const <SetRow>[];
   // Arah beban (#232): konfigurasi yang sudah diresolusi menang, lalu target
   // yang dibekukan di sesi terakhir yang dinilai — urutan yang sama dengan
@@ -133,6 +145,7 @@ PlannedExercise planExercise(
     sets: [...warmups, ...work],
     previous: previous,
     prescription: p,
+    lastNote: last?.note,
   );
 }
 

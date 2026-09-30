@@ -241,7 +241,8 @@ void main() {
 
       expect(store.settings.logRir, isTrue);
       expect(store.settings.unit, WeightUnit.lb);
-      expect(server.state['settings'], {'rir': true, 'unit': 'lb'});
+      // `activeGymId` selalu ikut: penanda build yang mengenal profil gym (FR-C3).
+      expect(server.state['settings'], {'rir': true, 'unit': 'lb', 'activeGymId': 'default'});
     });
 
     test('mergeSettings: kolom yang tidak diubah di sini ikut server', () {
@@ -251,7 +252,8 @@ void main() {
           mine: {'rest': 120, 'unit': 'lb', 'rir': true},
           theirs: {'rest': 90},
         ),
-        {'rest': 90, 'rir': true},
+        // Kolom gym (FR-C3) selalu ditulis ulang dari hasil gabungannya.
+        {'rest': 90, 'rir': true, 'activeGymId': 'default'},
       );
     });
   });

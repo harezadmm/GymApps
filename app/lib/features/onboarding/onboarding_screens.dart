@@ -243,7 +243,9 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
 
   Future<void> _continue() async {
     final store = WorkoutScope.read(context);
-    await store.updateSettings(store.settings.copyWith(equipment: _selected.toList()));
+    // Ditulis ke gym aktif — akun baru hanya punya gym bawaan (FR-C3).
+    final s = store.settings;
+    await store.updateSettings(s.withGymEquipment(s.activeGymId, _selected.toList()));
     widget.onContinue();
   }
 

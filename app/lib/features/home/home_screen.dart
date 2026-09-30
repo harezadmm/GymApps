@@ -31,6 +31,7 @@ import '../../domain/onerm.dart';
 import '../../domain/program.dart';
 import '../../domain/session_plan.dart';
 import '../onboarding/program_flow.dart';
+import '../profile/gym_profiles.dart';
 import '../session/session_launcher.dart';
 import '../workout/routine_editor_screen.dart';
 
@@ -224,6 +225,9 @@ class HomeScreen extends StatelessWidget {
               subtitle: '${t.weekdayLong(now.weekday)} · ${now.day} ${t.monthShort(now.month)}',
               title: t.nextUp,
               actions: [
+                // Gym aktif (FR-C3), hanya kalau ada yang perlu dibedakan:
+                // akun satu gym tidak melihat chip ini sama sekali.
+                if (store.settings.gyms.length > 1) GymChip(onTap: () => pickGym(context)),
                 if (email != null)
                   AvatarCircle(text: initialsOf(email!), tooltip: t.openProfile, onTap: onOpenProfile),
               ],
@@ -653,8 +657,13 @@ class _NextSessionCard extends StatelessWidget {
                           // saat sesi dibuka; sebelum katalog termuat namanya
                           // pun masih "…", jadi angkanya boleh menyusul.
                           final shownCfg = configIn(cfg, unit);
+                          // Memori beban gym aktif (FR-C4) — gym yang
+                          // terpilih lebih dulu di pemilih saat sesi dibuka.
                           final plan = planExercise(catalog?.withAssisted(shownCfg) ?? shownCfg, historyIn(history, unit),
-                              routineDefault: routine.policy, unit: unit.label, routines: store.routines);
+                              routineDefault: routine.policy,
+                              unit: unit.label,
+                              routines: store.routines,
+                              gymId: store.settings.activeGymId);
                           final work = plan.sets.firstWhere((s) => !s.isWarmup, orElse: () => const SetRow());
                           final target = work.weight > 0
                               ? '${formatWeight(work.weight)} ${context.unitLabel} × ${work.reps}'

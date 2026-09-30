@@ -2,14 +2,15 @@
 ///
 /// Dulu onboarding menanyakan alat lalu membuang jawabannya, dan Profil
 /// menampilkan "Gym A · aktif / Gym B" yang tidak pernah ada. Sekarang satu
-/// daftar kelompok yang dipetakan ke alat di katalog, disimpan di setelan
-/// akun, dan dipakai library.
+/// daftar kelompok yang dipetakan ke alat di katalog, disimpan per profil
+/// gym di setelan akun, dan dipakai library lewat gym yang sedang aktif.
 library;
 
 import 'package:flutter/material.dart';
 import '../../core/gym_icons.dart';
 
 import '../../core/strings.dart';
+import '../../core/strings_gym.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
 import '../../data/workout_store.dart';
@@ -45,10 +46,18 @@ class EquipmentGroupsList extends StatelessWidget {
   }
 }
 
-/// Buka lembar pemilih alat dari Profil. Perubahan langsung disimpan.
-Future<void> editEquipment(BuildContext context) {
+/// Buka lembar pemilih alat untuk satu profil gym. [gymId] null = gym aktif;
+/// id yang sudah tidak ada (dihapus di HP lain) juga jatuh ke gym aktif.
+/// Perubahan langsung disimpan.
+///
+/// Judulnya menyebut nama gym hanya kalau gym-nya lebih dari satu — dengan
+/// satu gym, "Alat di Gym saya" cuma menambah kata.
+Future<void> editEquipment(BuildContext context, {String? gymId}) {
   final store = WorkoutScope.read(context);
-  var selected = {...(store.settings.equipment ?? equipmentGroups.keys)};
+  final gym = (gymId == null ? null : store.settings.gymById(gymId)) ?? store.settings.activeGym;
+  final title =
+      store.settings.gyms.length > 1 ? context.t.equipmentAt(context.t.gymName(gym)) : context.t.myEquipment;
+  var selected = {...(gym.equipment ?? equipmentGroups.keys)};
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
@@ -68,7 +77,7 @@ Future<void> editEquipment(BuildContext context) {
               controller: scroll,
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
               children: [
-                Text(t.myEquipment, style: Theme.of(sheet).textTheme.titleLarge),
+                Text(title, style: Theme.of(sheet).textTheme.titleLarge),
                 const SizedBox(height: 4),
                 Text(t.equipmentNote, style: TextStyle(fontSize: 13, color: c.text2)),
                 const SizedBox(height: 12),
@@ -76,7 +85,7 @@ Future<void> editEquipment(BuildContext context) {
                   selected: selected,
                   onChanged: (next) {
                     setState(() => selected = next);
-                    store.updateSettings(store.settings.copyWith(equipment: next.toList()));
+                    store.updateSettings(store.settings.withGymEquipment(gym.id, next.toList()));
                   },
                 ),
                 const SizedBox(height: 12),
@@ -86,7 +95,7 @@ Future<void> editEquipment(BuildContext context) {
                   height: 44,
                   onPressed: () {
                     setState(() => selected = {...equipmentGroups.keys});
-                    store.updateSettings(store.settings.copyWith(clearEquipment: true));
+                    store.updateSettings(store.settings.withGymEquipment(gym.id, null));
                   },
                 ),
               ],

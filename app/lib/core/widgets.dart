@@ -636,6 +636,7 @@ class SelectRow extends StatelessWidget {
     this.square = false,
     this.dimWhenOff = false,
     this.icon,
+    this.trailing,
   });
 
   final String title;
@@ -646,6 +647,10 @@ class SelectRow extends StatelessWidget {
 
   /// Ikon di kiri judul, misalnya gambar alat di pemilih alat gym.
   final IconData? icon;
+
+  /// Widget di kanan judul, sebelum tanda pilih — tombol ⋯ di daftar profil
+  /// gym, yang punya aksi lain selain "pilih".
+  final Widget? trailing;
 
   /// Kotak untuk pilihan ganda, lingkaran untuk pilihan tunggal — bedanya
   /// memberi tahu "boleh pilih banyak" tanpa satu kata pun.
@@ -704,6 +709,7 @@ class SelectRow extends StatelessWidget {
                 ],
               ),
             ),
+            if (trailing != null) ...[const SizedBox(width: 4), trailing!],
             const SizedBox(width: 12),
             _Tick(selected: selected, square: square),
           ],

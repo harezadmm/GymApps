@@ -146,6 +146,9 @@ class _WorkoutEditScreenState extends State<WorkoutEditScreen> {
       routine: _routine,
       durationSeconds: widget.workout.durationSeconds,
       notes: notes.isEmpty ? null : notes,
+      // Gym tidak diedit di sini; sesi yang disunting tetap milik gym asalnya,
+      // dan sesi lampau yang baru dicatat membawa gym aktif dari pemanggilnya.
+      gymId: widget.workout.gymId,
       entries: [for (final e in _entries) e.toEntry()],
     );
   }
