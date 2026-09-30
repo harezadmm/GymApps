@@ -1,8 +1,27 @@
+import java.io.File
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
+
+// Kunci rilis dibaca dari android/key.properties (gitignored; cara membuatnya
+// ada di docs/RELEASE.md). Tanpa berkas itu build rilis tetap jalan dengan
+// debug key — supaya `flutter run --release` dan CI tanpa rahasia tidak
+// gagal — tapi APK-nya tidak bisa memperbarui APK yang ditandatangani kunci
+// asli, dan sebaliknya. Karena itu ada peringatan di bawah: jangan sampai
+// APK debug-key terbagikan tanpa disadari.
+val keyPropertiesFile = rootProject.file("key.properties")
+val hasReleaseKey = keyPropertiesFile.exists()
+val keyProperties = Properties().apply {
+    if (hasReleaseKey) keyPropertiesFile.inputStream().use { load(it) }
+}
+
+fun releaseKey(name: String): String =
+    keyProperties.getProperty(name)?.takeIf { it.isNotBlank() }
+        ?: error("key.properties: '$name' kosong, lihat docs/RELEASE.md")
 
 android {
     namespace = "dev.hariz.gymapps"
@@ -39,6 +58,21 @@ android {
         resValue("string", "app_name", "GymApps")
     }
 
+    signingConfigs {
+        if (hasReleaseKey) {
+            create("release") {
+                val storePath = releaseKey("storeFile")
+                // Path relatif dihitung dari folder key.properties (android/),
+                // bukan dari android/app/ — tempat orang menaruh berkasnya
+                // adalah tempat ia menulis path-nya.
+                storeFile = File(storePath).let { if (it.isAbsolute) it else File(keyPropertiesFile.parentFile, storePath) }
+                storePassword = releaseKey("storePassword")
+                keyAlias = releaseKey("keyAlias")
+                keyPassword = releaseKey("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         // Build debug terpasang berdampingan dengan build rilis: id dan nama
         // berbeda, jadi menguji di HP atau emulator tidak pernah memaksa
@@ -50,9 +84,19 @@ android {
             resValue("string", "app_name", "GymApps Debug")
         }
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // Kunci asli kalau key.properties ada; debug key kalau tidak
+            // (lihat komentar di atas dan peringatan di bawah).
+            signingConfig = if (hasReleaseKey) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
+        }
+    }
+}
+
+if (!hasReleaseKey) {
+    // Hanya saat memang ada tugas rilis di antrean: build debug tidak perlu
+    // diganggu peringatan tentang APK rilis.
+    gradle.taskGraph.whenReady {
+        if (allTasks.any { it.name.contains("Release") }) {
+            logger.warn("PERINGATAN: APK rilis ditandatangani debug key, lihat docs/RELEASE.md")
         }
     }
 }

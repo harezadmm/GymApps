@@ -45,13 +45,30 @@ jobs:
         run: |
           [ -n "$SUPABASE_URL" ] && [ -n "$SUPABASE_ANON_KEY" ] || { echo '::error::SUPABASE_URL / SUPABASE_ANON_KEY kosong'; exit 1; }
           case "$SUPABASE_ANON_KEY" in sb_secret_*) echo '::error::itu secret key, bukan publishable key'; exit 1;; esac
+      # --no-web-resources-cdn: CanvasKit ikut dilayani dari origin aplikasi,
+      # bukan dari CDN Google, supaya masuk precache dan aplikasi bisa dibuka
+      # tanpa sinyal. Tanpa itu sw.js tidak boleh menyentuh permintaan lintas
+      # origin, dan CanvasKit hilang begitu jaringan hilang.
       - name: Build web
         working-directory: app
         run: >
-          flutter build web --release
+          flutter build web --release --no-web-resources-cdn
           --dart-define=SUPABASE_URL="$SUPABASE_URL"
           --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
           --dart-define=VAPID_PUBLIC_KEY="$VAPID_PUBLIC_KEY"
+      # Daftar berkas yang disimpan sw.js untuk mode offline (NFR-4). Sama
+      # seperti scripts/deploy-web.ps1: harus dibuat dari hasil build yang
+      # persis akan diunggah.
+      - name: Manifest precache
+        run: node scripts/gen-precache-manifest.mjs
+      # Buka hasil build di Chromium, putus jaringan, muat ulang: halaman harus
+      # tetap tampil dari cache (scripts/check-web-offline.mjs, ±3 detik).
+      # Playwright tidak ada di package.json; dipasang global di sini. Kalau
+      # pemasangan browsernya gagal, skripnya melewati uji, bukan gagal.
+      - name: Uji buka offline
+        run: |
+          npm i -g playwright@1.56.1 && npx playwright install --with-deps chromium || echo '::warning::Chromium Playwright tidak terpasang, uji offline dilewati'
+          NODE_PATH="$(npm root -g)" node scripts/check-web-offline.mjs
       - name: Deploy ke Vercel
         if: github.ref == 'refs/heads/main' && env.VERCEL_TOKEN != '' && env.SUPABASE_URL != '' && env.SUPABASE_ANON_KEY != ''
         env:

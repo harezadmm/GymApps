@@ -48,13 +48,28 @@ if (Test-Path $vapidFile) {
   Write-Host 'Tanpa .secrets/vapid.json: notifikasi istirahat web dimatikan di build ini.'
 }
 
+# --no-web-resources-cdn: CanvasKit ikut dilayani dari origin aplikasi, bukan
+# dari CDN Google, supaya masuk precache dan aplikasi bisa dibuka tanpa
+# sinyal. sw.js tidak menyentuh permintaan lintas origin, jadi CanvasKit dari
+# CDN akan hilang begitu jaringan hilang.
 Push-Location (Join-Path $root 'app')
 try {
-  flutter build web --release @defines
+  flutter build web --release --no-web-resources-cdn @defines
   if ($LASTEXITCODE -ne 0) { throw "flutter build web gagal ($LASTEXITCODE)" }
 } finally {
   Pop-Location
 }
+
+# Daftar berkas yang disimpan sw.js untuk mode offline (NFR-4). Sama seperti
+# di CI (.github/workflows/web.yml): dibuat dari hasil build yang persis akan
+# diunggah, sebelum fungsi server disalin ke sampingnya. Tanpa manifest,
+# build yang diunggah jalan tapi tidak bisa dibuka offline — jadi node yang
+# hilang dianggap gagal, bukan dilewati.
+if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
+  throw 'node tidak ditemukan; dibutuhkan untuk scripts/gen-precache-manifest.mjs.'
+}
+node (Join-Path $root 'scripts\gen-precache-manifest.mjs')
+if ($LASTEXITCODE -ne 0) { throw "gen-precache-manifest gagal ($LASTEXITCODE)" }
 
 if ($BuildOnly) { exit 0 }
 

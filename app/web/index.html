@@ -141,6 +141,20 @@
       b.classList.add('done');
       setTimeout(function () { b.remove(); }, 300);
     });
+
+    // sw.js menyimpan seluruh aplikasi supaya bisa dibuka tanpa sinyal
+    // (NFR-4). Didaftarkan di sini, bukan hanya dari Dart saat orang
+    // menyalakan notifikasi, supaya kunjungan pertama pun sudah tersimpan.
+    // lib/core/web_push_web.dart mendaftarkan URL yang sama, jadi keduanya
+    // berbagi satu pendaftaran. Menunggu 'load' supaya unduhannya tidak
+    // berebut jalur dengan CanvasKit dan main.dart.js.
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('sw.js').catch(function (e) {
+          console.warn('sw.js gagal didaftarkan:', e);
+        });
+      });
+    }
   </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>

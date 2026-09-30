@@ -13,6 +13,9 @@
 
          This Theme is only used starting with V2 of Flutter's Android embedding. -->
     <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
-        <item name="android:windowBackground">?android:colorBackground</item>
+        <!-- Bukan ?android:colorBackground: di tema terang itu putih, dan
+             warnanya sempat terlihat saat splash dilepas sebelum Flutter
+             menutupi seluruh jendela (PRD FR-I5). -->
+        <item name="android:windowBackground">@color/launch_background</item>
     </style>
 </resources>

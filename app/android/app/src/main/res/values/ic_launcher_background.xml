@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Dibuat tools/make_app_icon.py — jangan diubah dengan tangan.
+     Lapisan belakang ikon adaptif (mipmap-anydpi-v26/ic_launcher.xml):
+     warna polos karena launcher menggesernya saat ikon disentuh. -->
+<resources>
+    <color name="ic_launcher_background">#0C0C0F</color>
+</resources>

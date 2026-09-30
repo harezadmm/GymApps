@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Warna latar aplikasi, sama dengan GymColors.bg di lib/core/theme.dart.
+     Dipakai splash dan latar jendela (styles.xml) supaya tidak ada kilatan
+     putih di antara splash dan Home (PRD FR-I5): template Flutter memakai
+     putih untuk mode terang, sedangkan aplikasi ini selalu gelap. -->
+<resources>
+    <color name="launch_background">#FF0C0C0F</color>
+</resources>
