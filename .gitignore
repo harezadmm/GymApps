@@ -29,6 +29,12 @@ REFRENSI/
 # Kredensial lokal — jangan pernah di-commit
 .secrets/
 
+# Kunci rilis Android (docs/RELEASE.md). Keystore yang bocor = orang lain
+# bisa menerbitkan pembaruan atas nama aplikasi ini.
+app/android/key.properties
+*.jks
+*.keystore
+
 # Sisa jalannya skrip Python di tools/
 __pycache__/
 *.pyc
