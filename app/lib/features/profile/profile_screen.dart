@@ -7,17 +7,20 @@ library;
 
 import 'dart:async';
 
+import 'package:clock/clock.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../core/gym_icons.dart';
 import '../../domain/units.dart';
 
+import '../../core/auto_backup.dart';
 import '../../core/format.dart';
 import '../../core/keep_awake.dart';
 import '../../core/rest_alert.dart';
 import '../../core/motion.dart';
 import '../../core/strings.dart';
+import '../../core/strings_backup.dart';
 import '../../core/strings_media.dart';
 import '../../core/strings_plates.dart';
 import '../../core/theme.dart';
@@ -27,7 +30,6 @@ import '../../data/workout_store.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
-import '../../domain/program.dart';
 import 'gym_profiles.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -66,6 +68,7 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   bool _keepAwake = true;
+  bool _autoBackup = true;
   WebRestPush _restPush = WebRestPush.unavailable;
 
   @override
@@ -73,6 +76,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.initState();
     KeepAwake.enabled.then((v) {
       if (mounted) setState(() => _keepAwake = v);
+    });
+    // Sekaligus memuat tanggal cadangan terakhir ke AutoBackup.lastBackupDate.
+    AutoBackup.enabled.then((v) {
+      if (mounted) setState(() => _autoBackup = v);
     });
     if (kIsWeb) {
       RestAlert.webState().then((v) {
@@ -105,6 +112,43 @@ class _ProfileScreenState extends State<ProfileScreen> {
         });
       case WebRestPush.unavailable:
         break;
+    }
+  }
+
+  /// Saklar cadangan harian (FR-A5). Baru dinyalakan dan hari ini belum ada
+  /// cadangan: langsung dibuat, bukan menunggu perubahan berikutnya —
+  /// orangnya menyalakannya karena ingin datanya aman sekarang.
+  void _setAutoBackup(bool v) {
+    setState(() => _autoBackup = v);
+    final store = WorkoutScope.read(context);
+    AutoBackup.setEnabled(v).then((_) {
+      if (v) AutoBackup.maybeBackup(store.backupDocument);
+    });
+  }
+
+  bool _backingUp = false;
+
+  /// "Simpan sekarang": satu snackbar untuk hasilnya, apa pun itu. Gagal
+  /// tidak membuka dialog — Ekspor cadangan di grup Data masih ada.
+  Future<void> _backupNow() async {
+    // Satu saja sekaligus: ketukan kedua selagi menulis hanya menambah
+    // snackbar untuk berkas yang sama.
+    if (_backingUp) return;
+    _backingUp = true;
+    final store = WorkoutScope.read(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final t = context.t;
+    try {
+      final outcome = await AutoBackup.backupNow(store.backupDocument);
+      messenger.showSnackBar(SnackBar(
+        content: Text(switch (outcome) {
+          BackupOutcome.saved => t.backupSavedTo(AutoBackup.fileName(clock.now())),
+          BackupOutcome.unsupported => t.backupUnsupported,
+          BackupOutcome.failed => t.downloadBackupFailed,
+        }),
+      ));
+    } finally {
+      _backingUp = false;
     }
   }
 
@@ -311,9 +355,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final store = WorkoutScope.read(context);
     final messenger = ScaffoldMessenger.of(context);
     final t = context.t;
-    final doc = {...store.toDocument(), 'exportedAt': DateTime.now().toIso8601String()};
-    final bytes = utf8.encode(const JsonEncoder.withIndent(' ').convert(doc));
-    final name = 'gymapps-backup-${isoDate(DateTime.now())}.json';
+    // Bentuk dan nama berkasnya dibagi dengan cadangan otomatis (FR-A5):
+    // satu definisi, supaya impor membaca keduanya dengan cara yang sama.
+    final now = DateTime.now();
+    final bytes = exportBytes(store.toDocument(), now);
+    final name = AutoBackup.fileName(now);
     // Dialog "simpan ke" milik sistem, bukan lembar bagikan: bagikan butuh
     // aplikasi lain yang mau menerima JSON, dan di HP tanpa aplikasi itu
     // ekspornya buntu. Di web ini jadi unduhan biasa.
@@ -695,18 +741,60 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ],
           ),
         ),
+        if (AutoBackup.supported) ...[
+          const SizedBox(height: 18),
+          // Cadangan harian ke Download (FR-A5/FR-A6), hanya Android — web
+          // punya sinkron. Setelan perangkat, bukan `settings` akun: HP dan
+          // tablet boleh berbeda. Grupnya sendiri dengan catatan di bawahnya,
+          // seperti "Barbel & pelat", di atas Gym.
+          SectionLabel(t.autoBackupTitle),
+          const SizedBox(height: 8),
+          Reveal(
+            index: 4,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SettingsGroup(
+                  children: [
+                    SettingsTile(
+                      icon: GymIcons.calendar, hue: c.hues.green,
+                      label: t.dailyBackup,
+                      trailing: Switch(value: _autoBackup, onChanged: _setAutoBackup),
+                    ),
+                    // Tanggalnya dari notifier: cadangan otomatis yang jalan
+                    // selagi layar ini terbuka langsung terlihat.
+                    ValueListenableBuilder<String?>(
+                      valueListenable: AutoBackup.lastBackupDate,
+                      builder: (context, last, _) => SettingsTile(
+                        icon: GymIcons.download, hue: c.hues.cyan,
+                        label: t.backUpNow,
+                        value: last == null ? t.neverBackedUp : t.lastBackup(t.backupDateLabel(last, clock.now())),
+                        onTap: _backupNow,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Text(t.autoBackupNote, style: TextStyle(fontSize: 12.5, height: 1.4, color: c.text2)),
+                ),
+              ],
+            ),
+          ),
+        ],
         const SizedBox(height: 18),
         // Profil gym (FR-C3): daftar alat dan memori beban per gym. Dulu satu
         // baris "Alat di gym-ku" di grup Training; sekarang tiap gym punya
         // barisnya sendiri, dan alatnya dibuka dari situ.
         SectionLabel(t.gyms),
         const SizedBox(height: 8),
-        const Reveal(index: 4, child: GymSection()),
+        const Reveal(index: 5, child: GymSection()),
         const SizedBox(height: 18),
         SectionLabel(t.data),
         const SizedBox(height: 8),
         Reveal(
-          index: 5,
+          index: 6,
           child: SettingsGroup(
             children: [
               SettingsTile(icon: GymIcons.download, hue: c.hues.orange, label: t.exportBackup, onTap: _export),
@@ -723,7 +811,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         SectionLabel(t.app),
         const SizedBox(height: 8),
         Reveal(
-          index: 6,
+          index: 7,
           child: SettingsGroup(
             children: [
               if (widget.onThemeModeChanged != null)
@@ -779,7 +867,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
         const SizedBox(height: 20),
         Reveal(
-          index: 7,
+          index: 8,
           child: PressScale(
             child: Material(
               color: c.danger.withValues(alpha: 0.10),

@@ -24,6 +24,7 @@ import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/auto_backup.dart';
 import '../domain/models.dart';
 import '../domain/program.dart';
 import '../domain/settings.dart';
@@ -294,6 +295,10 @@ class WorkoutStore extends ChangeNotifier {
     notifyListeners();
     _initialSync = syncNow();
     unawaited(_initialSync);
+    // Akun dibuka = aplikasi dibuka: kalau hari ini belum ada cadangan ke
+    // Download, buat sekarang — riwayat kemarin tidak perlu menunggu
+    // perubahan pertama hari ini (FR-A5). Tidak ditunggu, seperti sinkron.
+    unawaited(AutoBackup.maybeBackup(backupDocument));
   }
 
   /// Tutup dokumen akun yang sedang terbuka tanpa menghapusnya dari disk.
@@ -790,7 +795,17 @@ class WorkoutStore extends ChangeNotifier {
         await prefs.setString(_kSettingsBase(account), jsonEncode(base));
       }
     }
+    // Dokumen sudah aman di disk; giliran salinan yang bertahan setelah
+    // aplikasi dihapus (FR-A5). Sekali sehari, setelah perubahan pertama —
+    // AutoBackup yang menghitung harinya. Tidak ditunggu: mencatat set tidak
+    // boleh menunggu MediaStore.
+    unawaited(AutoBackup.maybeBackup(backupDocument));
   }
+
+  /// Dokumen untuk cadangan ([AutoBackup]): isi [toDocument] kalau ada akun
+  /// yang terbuka, null kalau tidak — store kosong bukan hal yang perlu
+  /// dicadangkan. Dipanggil malas, hanya saat cadangan memang akan ditulis.
+  Map<String, dynamic>? backupDocument() => _account == null ? null : toDocument();
 
   /// Bentuk dokumen yang dikirim ke server dan ditulis ke disk.
   Map<String, dynamic> toDocument() => {

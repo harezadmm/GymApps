@@ -8,6 +8,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'core/auto_backup.dart';
 import 'core/layout.dart';
 import 'core/motion.dart';
 import 'core/rest_alert.dart';
@@ -168,9 +169,17 @@ class _GymAppState extends State<GymApp> with WidgetsBindingObserver {
   /// Kembali ke aplikasi = sinkron. Sesi yang dicatat di HP lain sementara
   /// aplikasi ini di belakang ikut tertarik, dan dorongan yang gagal karena
   /// sinyal hilang dicoba lagi tanpa menunggu latihan berikutnya.
+  ///
+  /// Sekaligus cadangan harian ke Download (FR-A5): Android jarang mematikan
+  /// proses aplikasi yang sering dipakai, jadi "dibuka lagi besok" biasanya
+  /// bukan start baru melainkan kembali dari latar — dan set-set terakhir
+  /// kemarin tidak boleh menunggu perubahan berikutnya untuk punya salinan.
+  /// Murah: AutoBackup sendiri yang menolak kalau hari ini sudah ada.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) _store.syncNow();
+    if (state != AppLifecycleState.resumed) return;
+    _store.syncNow();
+    unawaited(AutoBackup.maybeBackup(_store.backupDocument));
   }
 
   @override
