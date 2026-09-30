@@ -2,8 +2,11 @@ project_id = "mqmerxygzddikgsvhbcx"
 
 [auth]
 enabled = true
-# Dipakai hanya untuk tautan di email; aplikasinya native, jadi tidak ada situs.
-site_url = "https://gymapps.local"
+# Tujuan tautan di email. Link reset kata sandi dibuka di versi web
+# (app/lib/data/password_reset.dart), jadi alamat itu harus diizinkan di sini;
+# redirect yang tidak terdaftar dijatuhkan Supabase ke site_url.
+site_url = "https://gymapps-hariz.vercel.app/"
+additional_redirect_urls = ["https://gymapps-hariz.vercel.app/", "https://gymapps-hariz.vercel.app/**"]
 
 [auth.email]
 enable_signup = true

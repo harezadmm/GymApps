@@ -94,6 +94,11 @@ class WorkoutStore extends ChangeNotifier {
   /// riwayat setiap kali layar dibuka.
   static String _kDocDirty(String account) => 'state.$account.docDirty';
 
+  /// Setelan seperti terakhir disepakati dengan server. Dasar penggabungan
+  /// tiga arah: saat dua perangkat mengubah setelan berbeda (unit di HP,
+  /// RIR di tablet), keduanya dipertahankan, bukan satu menimpa yang lain.
+  static String _kSettingsBase(String account) => 'state.$account.settingsBase';
+
   /// Sesi yang sedang berjalan, disimpan terus selama sesi dibuka. Hanya di
   /// HP ini: sesi setengah jalan bukan fakta yang perlu dikirim ke server.
   static String _kDraft(String account) => account.isEmpty ? 'state.draft' : 'state.$account.draft';
@@ -114,6 +119,10 @@ class WorkoutStore extends ChangeNotifier {
   List<Exercise> _customEx = const [];
 
   TrainingSettings _settings = const TrainingSettings();
+
+  /// Lihat [_kSettingsBase]. null = belum tahu (instalasi lama atau belum
+  /// pernah sinkron), dan penggabungan jatuh ke aturan rencana yang lama.
+  Map<String, dynamic>? _settingsBase;
 
   /// Berat badan, terlama dulu.
   List<BodyweightEntry> _bodyweight = const [];
@@ -243,6 +252,14 @@ class WorkoutStore extends ChangeNotifier {
     _planDirty = prefs.getBool(_kPlanDirty(account)) ?? true;
     _cursorDirty = prefs.getBool(_kCursorDirty(account)) ?? true;
     _docDirty = prefs.getBool(_kDocDirty(account)) ?? true;
+    final rawBase = account.isEmpty ? null : prefs.getString(_kSettingsBase(account));
+    if (rawBase != null) {
+      try {
+        _settingsBase = Map<String, dynamic>.from(jsonDecode(rawBase) as Map);
+      } catch (_) {
+        _settingsBase = null;
+      }
+    }
     final rawDraft = prefs.getString(_kDraft(account));
     if (rawDraft != null) {
       try {
@@ -304,6 +321,7 @@ class WorkoutStore extends ChangeNotifier {
     _customEx = const [];
     _removed = const [];
     _settings = const TrainingSettings();
+    _settingsBase = null;
     _bodyweight = const [];
     _draft = null;
     ExerciseCatalog.registerCustom(const []);
@@ -597,7 +615,10 @@ class WorkoutStore extends ChangeNotifier {
 
   Future<void> updateSettings(TrainingSettings next) async {
     _settings = next;
-    await _markPlan();
+    // Dengan dasar yang diketahui, setelan digabung per kolom dan tidak perlu
+    // ikut membuat rencana perangkat ini "menang" — yang dulu ikut menimpa
+    // rutinitas yang diubah di HP lain.
+    if (_settingsBase == null) await _markPlan();
     await _commit();
   }
 
@@ -744,9 +765,17 @@ class WorkoutStore extends ChangeNotifier {
     if (account == null) return;
     final gen = _generation;
     final doc = jsonEncode(toDocument());
+    final base = _settingsBase;
     final prefs = await SharedPreferences.getInstance();
     if (gen != _generation) return;
     await prefs.setString(_kDoc(account), doc);
+    if (account.isNotEmpty) {
+      if (base == null) {
+        await prefs.remove(_kSettingsBase(account));
+      } else {
+        await prefs.setString(_kSettingsBase(account), jsonEncode(base));
+      }
+    }
   }
 
   /// Bentuk dokumen yang dikirim ke server dan ditulis ke disk.
@@ -907,6 +936,7 @@ class WorkoutStore extends ChangeNotifier {
 
       if (wrongSession()) throw const NotSignedIn();
       var snap = (_planEdits, _cursorEdits, _docEdits);
+      var sentSettings = _settings.toJson();
       final result = await backend.push(baseRev: baseRev, state: toDocument());
       if (stale()) return;
 
@@ -914,7 +944,9 @@ class WorkoutStore extends ChangeNotifier {
       switch (result) {
         case PushAccepted(rev: final rev):
           await prefs.setInt(_kRev(account), rev);
+          _settingsBase = sentSettings;
           await _sent(snap);
+          await _persist();
           accepted = true;
 
         // Perangkat lain menulis lebih dulu. Riwayat lokal digabung dengan
@@ -928,11 +960,14 @@ class WorkoutStore extends ChangeNotifier {
           notifyListeners();
           if (wrongSession()) throw const NotSignedIn();
           snap = (_planEdits, _cursorEdits, _docEdits);
+          sentSettings = _settings.toJson();
           final retry = await backend.push(baseRev: rev, state: toDocument());
           if (stale()) return;
           if (retry case PushAccepted(rev: final newRev)) {
             await prefs.setInt(_kRev(account), newRev);
+            _settingsBase = sentSettings;
             await _sent(snap);
+            await _persist();
             accepted = true;
           } else {
             // Ditolak lagi: perangkat lain menulis di antara dua dorongan.
@@ -963,6 +998,12 @@ class WorkoutStore extends ChangeNotifier {
 
   /// Gabungkan dokumen dari server ke keadaan lokal.
   void _absorb(Map theirs, {bool preferServerPlan = false}) {
+    final base = preferServerPlan ? null : _settingsBase;
+    final serverSettings = _settingsIn(theirs).toJson();
+    if (base != null) {
+      _settings = TrainingSettings.fromJson(mergeSettings(base: base, mine: _settings.toJson(), theirs: serverSettings));
+    }
+    _settingsBase = serverSettings;
     _removed = _capRemoved([..._removed, ..._removedIn(theirs)]);
     _workouts = _merge(_workouts, _workoutsIn(theirs), _removed.toSet());
     // Rencana tidak digabung per baris; satu sisi yang dipakai utuh. Milik
@@ -975,9 +1016,9 @@ class WorkoutStore extends ChangeNotifier {
       final server = _programIn(theirs);
       _program = server;
       _routines = _routinesIn(theirs);
-      // Setelan ikut aturan rencana: diubah di HP ini sejak sinkron terakhir
-      // = milik HP ini, selain itu milik server.
-      if (theirs['settings'] is Map) _settings = _settingsIn(theirs);
+      // Tanpa dasar, setelan ikut aturan rencana: diubah di HP ini sejak
+      // sinkron terakhir = milik HP ini, selain itu milik server.
+      if (base == null && theirs['settings'] is Map) _settings = _settingsIn(theirs);
       // Struktur rencana diambil dari server, tapi sesi yang dicatat di HP ini
       // menggeser cursor-nya. Selama urutan rutinitasnya masih sama, posisi
       // rotasi dari HP ini yang dipakai; kalau urutannya diganti di HP lain,
@@ -993,6 +1034,23 @@ class WorkoutStore extends ChangeNotifier {
     _customEx = [..._customEx, for (final e in _customIn(theirs)) if (!ids.contains(e.id)) e];
     ExerciseCatalog.registerCustom(_customEx);
     _bodyweight = _mergeBodyweight(_bodyweight, _bodyweightIn(theirs), _removed.toSet());
+  }
+
+  /// Gabung setelan tiga arah per kolom: kolom yang diubah di perangkat ini
+  /// sejak [base] memakai nilai perangkat ini, sisanya nilai server.
+  @visibleForTesting
+  static Map<String, dynamic> mergeSettings({
+    required Map<String, dynamic> base,
+    required Map<String, dynamic> mine,
+    required Map<String, dynamic> theirs,
+  }) {
+    final out = <String, dynamic>{};
+    for (final k in {...base.keys, ...mine.keys, ...theirs.keys}) {
+      final changedHere = jsonEncode(mine[k]) != jsonEncode(base[k]);
+      final v = changedHere ? mine[k] : theirs[k];
+      if (v != null) out[k] = v;
+    }
+    return out;
   }
 
   /// Gabung dua riwayat: semua sesi dari keduanya, sesi yang sama persis

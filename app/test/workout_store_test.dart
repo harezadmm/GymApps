@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:gymapps/data/backend.dart';
 import 'package:gymapps/data/workout_store.dart';
 import 'package:gymapps/domain/models.dart';
+import 'package:gymapps/domain/units.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Server palsu di memori. Yang diuji perilaku store saat push diterima atau
@@ -219,6 +220,39 @@ void main() {
 
       expect(store.workouts.length, 2);
       expect(store.workouts.map((w) => w.entries.length).toSet(), {1, 4});
+    });
+
+    test('setelan yang diubah di dua perangkat sama-sama dipertahankan', () async {
+      // HP mengganti unit ke lb; tablet (offline) menyalakan RIR. Dulu satu
+      // perangkat menimpa seluruh setelan, dan unit balik ke kg diam-diam.
+      final server = _FakeBackend();
+      final store = WorkoutStore(server);
+      await store.load();
+      await store.syncNow();
+      expect(store.syncStatus, SyncStatus.synced);
+
+      server
+        ..state = {...server.state, 'settings': {'unit': 'lb'}}
+        ..rev = server.rev! + 1
+        ..conflictOnce = true;
+
+      await store.updateSettings(store.settings.copyWith(logRir: true));
+      await store.syncNow();
+
+      expect(store.settings.logRir, isTrue);
+      expect(store.settings.unit, WeightUnit.lb);
+      expect(server.state['settings'], {'rir': true, 'unit': 'lb'});
+    });
+
+    test('mergeSettings: kolom yang tidak diubah di sini ikut server', () {
+      expect(
+        WorkoutStore.mergeSettings(
+          base: {'rest': 120, 'unit': 'lb'},
+          mine: {'rest': 120, 'unit': 'lb', 'rir': true},
+          theirs: {'rest': 90},
+        ),
+        {'rest': 90, 'rir': true},
+      );
     });
   });
   group('program dan rutinitas', () {

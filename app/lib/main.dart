@@ -65,7 +65,18 @@ Future<void> main() async {
       ),
     );
     // Server alarm istirahat (web) hanya melayani akun yang sedang masuk.
-    RestAlert.webAccessToken = () => Supabase.instance.client.auth.currentSession?.accessToken;
+    RestAlert.webAccessToken = () async {
+      final auth = Supabase.instance.client.auth;
+      final session = auth.currentSession;
+      if (session == null) return null;
+      if (!session.isExpired) return session.accessToken;
+      try {
+        return (await auth.refreshSession()).session?.accessToken;
+      } catch (e) {
+        debugPrint('refresh sesi untuk alarm: $e');
+        return null;
+      }
+    };
   }
 
   // Setelan perangkat dibaca sebelum bingkai pertama, supaya aplikasi tidak

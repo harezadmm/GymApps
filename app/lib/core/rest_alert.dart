@@ -57,8 +57,22 @@ class RestAlert {
 
   static const _vapidKey = String.fromEnvironment('VAPID_PUBLIC_KEY');
 
-  /// Token sesi Supabase untuk memanggil server alarm. Diisi `main.dart`.
-  static String? Function()? webAccessToken;
+  /// Token sesi Supabase untuk memanggil server alarm. Diisi `main.dart`;
+  /// asinkron supaya token yang kedaluwarsa (halaman iOS yang baru bangun)
+  /// sempat di-refresh, bukan ditolak 401 diam-diam.
+  static Future<String?> Function()? webAccessToken;
+
+  /// Jadwal dan batal dijalankan berurutan. Tanpa antrean ini, batal yang
+  /// diketuk sebelum permintaan jadwal selesai (lewati istirahat, selesai
+  /// sesi) tidak mengirim apa-apa, dan tanda "istirahat selesai" yang basi
+  /// tetap datang.
+  static Future<void> _queue = Future.value();
+
+  static Future<void> _serial(Future<void> Function() op) {
+    final next = _queue.then((_) => op()).catchError((Object e) => debugPrint('alarm istirahat: $e'));
+    _queue = next;
+    return next;
+  }
 
   static bool _webScheduled = false;
 
@@ -98,7 +112,7 @@ class RestAlert {
   }
 
   static Future<bool> _postAlarm(Map<String, dynamic> body) async {
-    final token = webAccessToken?.call();
+    final token = await webAccessToken?.call();
     if (token == null) return false;
     try {
       final r = await http.post(
@@ -161,7 +175,10 @@ class RestAlert {
 
   /// Jadwalkan tanda istirahat selesai [after] dari sekarang. Jadwal yang
   /// lama diganti.
-  static Future<void> schedule(Duration after, {required String title, required String body}) async {
+  static Future<void> schedule(Duration after, {required String title, required String body}) =>
+      _serial(() => _schedule(after, title, body));
+
+  static Future<void> _schedule(Duration after, String title, String body) async {
     if (kIsWeb) return _scheduleWeb(after, title, body);
     if (!_supported) return;
     await init();
@@ -208,7 +225,9 @@ class RestAlert {
     }
   }
 
-  static Future<void> cancel() async {
+  static Future<void> cancel() => _serial(_cancel);
+
+  static Future<void> _cancel() async {
     if (kIsWeb) return _cancelWeb();
     if (!_supported || !_ready) return;
     try {

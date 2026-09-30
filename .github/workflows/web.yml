@@ -6,6 +6,9 @@
 # Secret yang dibutuhkan (Settings → Secrets and variables → Actions):
 #   SUPABASE_URL, SUPABASE_ANON_KEY  — publishable key, bukan secret key
 #   VERCEL_TOKEN                     — dari vercel.com/account/tokens
+#   VAPID_PUBLIC_KEY                 — kunci publik notifikasi istirahat
+#                                      (.secrets/vapid.json); boleh kosong,
+#                                      tapi tanpa itu notifikasi web mati
 # Variabel (bukan secret): VERCEL_ORG_ID, VERCEL_PROJECT_ID.
 name: web
 
@@ -21,6 +24,7 @@ jobs:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+      VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -47,9 +51,15 @@ jobs:
           flutter build web --release
           --dart-define=SUPABASE_URL="$SUPABASE_URL"
           --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
+          --dart-define=VAPID_PUBLIC_KEY="$VAPID_PUBLIC_KEY"
       - name: Deploy ke Vercel
         if: github.ref == 'refs/heads/main' && env.VERCEL_TOKEN != '' && env.SUPABASE_URL != '' && env.SUPABASE_ANON_KEY != ''
         env:
           VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
-        run: npx vercel@latest deploy app/build/web --prod --yes --token="$VERCEL_TOKEN"
+        # Sama seperti scripts/deploy-web.ps1: fungsi server (alarm istirahat)
+        # dan vercel.json (header keamanan, header sw.js) ikut diunggah.
+        # Tanpa ini deploy CI menghapus /api/rest-alarm dari produksi.
+        run: |
+          cp -r web-api/api web-api/package.json web-api/vercel.json app/build/web/
+          npx vercel@latest deploy app/build/web --prod --yes --token="$VERCEL_TOKEN"

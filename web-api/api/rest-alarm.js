@@ -70,7 +70,7 @@ async function userIdFrom(request) {
 const sign = (payload) => createHmac('sha256', env('REST_ALARM_SECRET')).update(payload).digest('hex');
 
 function verified(payload, sig) {
-  if (typeof sig !== 'string') return false;
+  if (typeof payload !== 'string' || typeof sig !== 'string') return false;
   const a = Buffer.from(sign(payload));
   const b = Buffer.from(sig);
   return a.length === b.length && timingSafeEqual(a, b);
@@ -78,14 +78,24 @@ function verified(payload, sig) {
 
 const keyFor = (uid) => `rest:${uid}`;
 
+const CHECK_SECONDS = 15;
+
 /// Tunggu sampai `remaining` detik atau satu langkah, lalu kirim atau teruskan.
+/// Penantian dicek per 15 detik: alarm yang diganti (+15s, set berikutnya)
+/// atau dibatalkan berhenti saat itu juga, bukan tetap tidur sampai 270 detik
+/// dan menumpuk waktu fungsi setiap kali tombol diketuk.
 async function run(origin, alarm) {
   const cache = getCache();
   const hop = Math.min(alarm.remaining, HOP_SECONDS);
-  await sleep(hop * 1000);
-  if ((await cache.get(keyFor(alarm.uid))) !== alarm.id) {
-    console.log('alarm dilewati: diganti atau dibatalkan');
-    return;
+  const current = async () => (await cache.get(keyFor(alarm.uid))) === alarm.id;
+  for (let waited = 0; waited < hop; ) {
+    const step = Math.min(CHECK_SECONDS, hop - waited);
+    await sleep(step * 1000);
+    waited += step;
+    if (!(await current())) {
+      console.log('alarm dilewati: diganti atau dibatalkan');
+      return;
+    }
   }
   const rest = alarm.remaining - hop;
   if (rest > 0) {
@@ -106,7 +116,9 @@ async function run(origin, alarm) {
     );
     console.log('push terkirim', res.statusCode, new URL(alarm.sub.endpoint).host);
   } catch (e) {
-    console.warn('push gagal', e?.statusCode, e?.body);
+    // 404/410: langganan sudah dicabut di HP (izin dimatikan, PWA dihapus).
+    // Tidak ada yang bisa diulang; klien berlangganan lagi saat izin diberikan.
+    console.warn(e?.statusCode === 404 || e?.statusCode === 410 ? 'langganan kedaluwarsa' : 'push gagal', e?.statusCode, e?.body);
   }
   await cache.delete(keyFor(alarm.uid));
 }
@@ -118,6 +130,7 @@ export async function POST(request) {
   } catch {
     return json(400, { error: 'bad json' });
   }
+  if (!body || typeof body !== 'object') return json(400, { error: 'bad json' });
   const origin = new URL(request.url).origin;
   const cache = getCache();
 
