@@ -1,12 +1,18 @@
-/// Tanda bahwa istirahat selesai.
+/// Tanda bahwa istirahat selesai (FR-H3).
 ///
 /// Dulu timer istirahat habis dalam diam: kartunya hilang begitu saja. Di gym
 /// HP biasanya tertelungkup di bangku atau di saku, layar terkunci, musik
-/// berjalan — jadi tandanya dua lapis:
+/// berjalan — jadi tandanya tiga lapis:
 ///
+/// * **Hitung mundur yang menempel** (Android) selama istirahat berjalan:
+///   baris senyap di layar terkunci yang angkanya dihitung sistem
+///   (chronometer), jadi sisa waktunya terlihat tanpa membuka HP dan tetap
+///   berjalan walau aplikasi dimatikan.
 /// * **Notifikasi terjadwal** (Android) di tenggat istirahat. Berbunyi dan
 ///   bergetar walau aplikasi di latar belakang atau layar terkunci, karena
-///   yang membunyikannya sistem, bukan aplikasi ini.
+///   yang membunyikannya sistem, bukan aplikasi ini. Id-nya sama dengan
+///   hitung mundur, jadi ia menggantikan baris itu, bukan menumpuk di
+///   bawahnya.
 /// * **Getar dan bunyi langsung** kalau aplikasi sedang terbuka saat waktunya
 ///   habis. Notifikasinya dibatalkan supaya tidak berbunyi dua kali.
 ///
@@ -20,6 +26,7 @@ library;
 
 import 'dart:convert';
 
+import 'package:clock/clock.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -43,15 +50,169 @@ enum WebRestPush {
   on,
 }
 
+/// Id bersama hitung mundur dan tanda selesai. Satu id berarti satu baris di
+/// tray: alarm yang menyala menimpa hitung mundur, dan satu `cancel` menghapus
+/// keduanya. Kalau id-nya beda, hitung mundur yang basi tetap nongkrong di
+/// layar terkunci setelah istirahat selesai.
+const _restId = 4201;
+
+/// Satu notifikasi yang siap dikirim ke plugin: id, teks, dan detail
+/// Android-nya. Dibangun fungsi murni ([countdownNotification] dan
+/// [endAlertNotification]) supaya isinya bisa diperiksa di uji tanpa plugin.
+@immutable
+class RestNotification {
+  const RestNotification({required this.id, required this.title, required this.body, required this.details});
+
+  final int id;
+  final String title;
+  final String body;
+  final NotificationDetails details;
+}
+
+/// Baris hitung mundur yang menempel selama istirahat.
+///
+/// Sistem yang menghitung dari [endsAt] lewat chronometer, jadi angkanya
+/// tetap berjalan walau aplikasi dimatikan atau layar terkunci — aplikasi
+/// tidak perlu bangun tiap detik untuk memperbaruinya. Senyap: yang berbunyi
+/// tanda selesainya. [body] berisi gerakan dan set berikutnya supaya dari
+/// layar terkunci orang tahu mau angkat apa.
+RestNotification countdownNotification(DateTime endsAt, {required String title, required String body}) =>
+    RestNotification(
+      id: _restId,
+      title: title,
+      body: body,
+      details: NotificationDetails(
+        android: AndroidNotificationDetails(
+          'rest_countdown',
+          'Rest countdown',
+          channelDescription: 'Sisa waktu istirahat di layar terkunci, tanpa bunyi',
+          // Kanal sendiri dengan penting rendah: tidak pernah melayang
+          // (heads-up), tidak berbunyi, dan bisa dimatikan di setelan sistem
+          // tanpa ikut mematikan tanda selesai di kanal `rest_timer`.
+          importance: Importance.low,
+          priority: Priority.low,
+          playSound: false,
+          enableVibration: false,
+          silent: true,
+          channelShowBadge: false,
+          category: AndroidNotificationCategory.stopwatch,
+          icon: 'ic_stat_rest',
+          visibility: NotificationVisibility.public,
+          // Menempel dan tidak bisa digeser hilang: barisnya hanya pergi saat
+          // istirahat selesai atau dibatalkan. Jadwal ulang (+15 s, set
+          // berikutnya) menimpa baris yang sama tanpa berkedip atau bersuara.
+          ongoing: true,
+          autoCancel: false,
+          onlyAlertOnce: true,
+          showWhen: true,
+          when: endsAt.millisecondsSinceEpoch,
+          usesChronometer: true,
+          chronometerCountDown: true,
+        ),
+      ),
+    );
+
+/// Tanda istirahat selesai yang dijadwalkan di tenggat. Berbunyi dan bergetar
+/// lewat kanal `rest_timer`, dan boleh digeser hilang.
+RestNotification endAlertNotification({required String title, required String body}) => RestNotification(
+      id: _restId,
+      title: title,
+      body: body,
+      details: const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'rest_timer',
+          'Rest timer',
+          channelDescription: 'Tanda saat istirahat antar set selesai',
+          importance: Importance.high,
+          priority: Priority.high,
+          category: AndroidNotificationCategory.alarm,
+          icon: 'ic_stat_rest',
+          visibility: NotificationVisibility.public,
+        ),
+      ),
+    );
+
+/// Bagian plugin notifikasi yang dipakai [RestAlert]: cukup untuk
+/// menampilkan, menjadwalkan, dan membatalkan satu notifikasi. Di uji diganti
+/// tiruan yang mencatat panggilan, supaya urutan hitung mundur → alarm →
+/// batal bisa diperiksa tanpa Android.
+abstract interface class RestNotifier {
+  /// Siapkan plugin. `false` berarti notifikasi tidak tersedia di sini.
+  Future<bool> init();
+
+  Future<void> requestPermission();
+
+  /// Tampilkan sekarang. Id yang sama menimpa baris yang sedang tampil.
+  Future<void> show(RestNotification n);
+
+  /// Jadwalkan [n] di [at]. Id yang sama menggantikan jadwal yang lama.
+  Future<void> schedule(RestNotification n, {required tz.TZDateTime at, required AndroidScheduleMode mode});
+
+  /// Hapus yang tampil dan yang terjadwal dengan id ini, dua-duanya.
+  Future<void> cancel(int id);
+}
+
+/// Plugin sungguhan: `flutter_local_notifications`.
+class _PluginNotifier implements RestNotifier {
+  final _plugin = FlutterLocalNotificationsPlugin();
+
+  @override
+  Future<bool> init() async {
+    // Tanpa callback ketukan: mengetuk baris mana pun cukup membuka aplikasi.
+    // Plugin hanya menyimpan "diluncurkan dari notifikasi" untuk ditanya lewat
+    // getNotificationAppLaunchDetails, yang tidak dipanggil siapa pun — jadi
+    // mulai dingin dari ketukan itu sama saja dengan mulai dari ikon peluncur,
+    // tidak ada jalur yang bisa jatuh ke isolate yang belum siap.
+    final ok = await _plugin.initialize(
+      settings: const InitializationSettings(android: AndroidInitializationSettings('ic_stat_rest')),
+    );
+    // null hanya kalau tidak ada implementasi platform, dan itu sudah
+    // disaring `_supported`; yang dianggap gagal hanya `false` yang tegas.
+    return ok ?? true;
+  }
+
+  @override
+  Future<void> requestPermission() async {
+    final android = _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    await android?.requestNotificationsPermission();
+  }
+
+  @override
+  Future<void> show(RestNotification n) =>
+      _plugin.show(id: n.id, title: n.title, body: n.body, notificationDetails: n.details);
+
+  @override
+  Future<void> schedule(RestNotification n, {required tz.TZDateTime at, required AndroidScheduleMode mode}) =>
+      _plugin.zonedSchedule(
+        id: n.id,
+        scheduledDate: at,
+        notificationDetails: n.details,
+        androidScheduleMode: mode,
+        title: n.title,
+        body: n.body,
+      );
+
+  @override
+  Future<void> cancel(int id) => _plugin.cancel(id: id);
+}
+
 class RestAlert {
   RestAlert._();
 
-  static final _plugin = FlutterLocalNotificationsPlugin();
+  static RestNotifier _notifier = _PluginNotifier();
   static bool _ready = false;
   static bool _asked = false;
-  static const _id = 4201;
 
   static bool get _supported => !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+
+  /// Pasang tiruan plugin dan kosongkan keadaan — hanya untuk uji.
+  @visibleForTesting
+  static void debugUseNotifier(RestNotifier notifier) {
+    _notifier = notifier;
+    _ready = false;
+    _asked = false;
+    _queue = Future.value();
+  }
 
   // ── Web Push ────────────────────────────────────────────────────────────
 
@@ -65,7 +226,8 @@ class RestAlert {
   /// Jadwal dan batal dijalankan berurutan. Tanpa antrean ini, batal yang
   /// diketuk sebelum permintaan jadwal selesai (lewati istirahat, selesai
   /// sesi) tidak mengirim apa-apa, dan tanda "istirahat selesai" yang basi
-  /// tetap datang.
+  /// tetap datang. Di Android antrean ini juga yang menjamin hitung mundur
+  /// dan alarmnya tidak pernah saling mendahului.
   static Future<void> _queue = Future.value();
 
   static Future<void> _serial(Future<void> Function() op) {
@@ -151,10 +313,7 @@ class RestAlert {
   static Future<void> init() async {
     if (!_supported || _ready) return;
     try {
-      await _plugin.initialize(
-        settings: const InitializationSettings(android: AndroidInitializationSettings('ic_stat_rest')),
-      );
-      _ready = true;
+      _ready = await _notifier.init();
     } catch (e) {
       debugPrint('notifikasi tidak tersedia: $e');
     }
@@ -165,73 +324,75 @@ class RestAlert {
   static Future<void> _ensurePermission() async {
     if (_asked) return;
     _asked = true;
-    final android = _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
     try {
-      await android?.requestNotificationsPermission();
+      await _notifier.requestPermission();
     } catch (e) {
       debugPrint('izin notifikasi: $e');
     }
   }
 
-  /// Jadwalkan tanda istirahat selesai [after] dari sekarang. Jadwal yang
-  /// lama diganti.
-  static Future<void> schedule(Duration after, {required String title, required String body}) =>
-      _serial(() => _schedule(after, title, body));
+  /// Jadwalkan tanda istirahat selesai [after] dari sekarang dan, di Android,
+  /// tampilkan hitung mundurnya. Jadwal yang lama diganti, bukan ditumpuk.
+  ///
+  /// [title] dan [body] untuk tanda selesai; [countdownTitle] dan
+  /// [countdownBody] untuk baris hitung mundur yang menempel selagi menunggu.
+  static Future<void> schedule(
+    Duration after, {
+    required String title,
+    required String body,
+    required String countdownTitle,
+    required String countdownBody,
+  }) =>
+      _serial(() => _schedule(after, title, body, countdownTitle, countdownBody));
 
-  static Future<void> _schedule(Duration after, String title, String body) async {
+  static Future<void> _schedule(
+    Duration after,
+    String title,
+    String body,
+    String countdownTitle,
+    String countdownBody,
+  ) async {
     if (kIsWeb) return _scheduleWeb(after, title, body);
     if (!_supported) return;
     await init();
     if (!_ready) return;
     await _ensurePermission();
-    const details = NotificationDetails(
-      android: AndroidNotificationDetails(
-        'rest_timer',
-        'Rest timer',
-        channelDescription: 'Tanda saat istirahat antar set selesai',
-        importance: Importance.high,
-        priority: Priority.high,
-        category: AndroidNotificationCategory.alarm,
-        icon: 'ic_stat_rest',
-        visibility: NotificationVisibility.public,
-      ),
-    );
-    final at = tz.TZDateTime.now(tz.UTC).add(after);
+    // Satu tenggat untuk keduanya, dari jam yang sama, supaya angka hitung
+    // mundur tepat menyentuh 0:00 saat alarmnya menyala.
+    final endsAt = clock.now().add(after);
+    // Hitung mundur dulu, baru alarmnya. Kalau dibalik dan sisanya cuma
+    // sedetik, alarm bisa menyala sebelum hitung mundur tampil — dan hitung
+    // mundur yang datang belakangan menimpa tanda selesainya.
     try {
-      await _plugin.zonedSchedule(
-        id: _id,
-        scheduledDate: at,
-        notificationDetails: details,
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        title: title,
-        body: body,
-      );
+      await _notifier.show(countdownNotification(endsAt, title: countdownTitle, body: countdownBody));
+    } catch (e) {
+      debugPrint('hitung mundur istirahat gagal tampil: $e');
+    }
+    final alert = endAlertNotification(title: title, body: body);
+    final at = tz.TZDateTime.from(endsAt, tz.UTC);
+    try {
+      await _notifier.schedule(alert, at: at, mode: AndroidScheduleMode.exactAllowWhileIdle);
     } catch (e) {
       // Izin alarm tepat waktu ditolak: tetap jadwalkan, sistem boleh telat
       // sedikit — lebih baik daripada tidak ada tanda sama sekali.
       debugPrint('alarm tepat ditolak, pakai jadwal longgar: $e');
       try {
-        await _plugin.zonedSchedule(
-          id: _id,
-          scheduledDate: at,
-          notificationDetails: details,
-          androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-          title: title,
-          body: body,
-        );
+        await _notifier.schedule(alert, at: at, mode: AndroidScheduleMode.inexactAllowWhileIdle);
       } catch (e) {
         debugPrint('notifikasi istirahat gagal dijadwalkan: $e');
       }
     }
   }
 
+  /// Batalkan tanda selesai yang terjadwal sekaligus hitung mundur yang
+  /// sedang tampil: keduanya satu id, jadi satu panggilan ke plugin cukup.
   static Future<void> cancel() => _serial(_cancel);
 
   static Future<void> _cancel() async {
     if (kIsWeb) return _cancelWeb();
     if (!_supported || !_ready) return;
     try {
-      await _plugin.cancel(id: _id);
+      await _notifier.cancel(_restId);
     } catch (e) {
       debugPrint('batal notifikasi: $e');
     }

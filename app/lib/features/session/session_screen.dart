@@ -24,6 +24,7 @@ import '../../core/rest_alert.dart';
 import '../../core/strings.dart';
 import '../../core/strings_a11y.dart';
 import '../../core/strings_assisted.dart';
+import '../../core/strings_rest.dart';
 import '../../core/strings_session.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
@@ -482,7 +483,16 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
       return;
     }
     final t = context.t;
-    RestAlert.schedule(remaining, title: t.restOverTitle, body: t.restOverBody(_nextLabel ?? ''));
+    final next = _nextLabel ?? '';
+    // Hitung mundur di layar terkunci menyebut gerakan dan set berikutnya
+    // (FR-H3), supaya orang tahu mau angkat apa tanpa membuka HP.
+    RestAlert.schedule(
+      remaining,
+      title: t.restOverTitle,
+      body: t.restOverBody(next),
+      countdownTitle: t.restCountdownTitle,
+      countdownBody: t.restCountdownBody(_restingExercise?.name ?? '', next),
+    );
   }
 
   String _rowLabel(SessionExercise ex, int index, Strings t) {
