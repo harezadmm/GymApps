@@ -119,10 +119,39 @@ class TrainingSettings {
     this.favorites = const [],
     this.restByExercise = const {},
     this.unit = WeightUnit.kg,
+    this.barWeight,
+    this.plates,
   });
 
   /// Satuan tampilan beban. Data tetap disimpan dalam kg (lihat units.dart).
   final WeightUnit unit;
+
+  /// Berat bar kosong untuk hitung pelat (FR-D16), dalam **kg** seperti
+  /// beban lain. null = bawaan satuan tampilan ([defaultBarWeight]); 0 =
+  /// tanpa bar (semua beban dihitung dari nol). Disimpan hanya kalau diatur,
+  /// supaya pemakai yang tidak pernah menyentuhnya mendapat 20 kg di kg dan
+  /// 45 lb di lb — bukan 44,09 lb hasil konversi.
+  final double? barWeight;
+
+  /// Ukuran pelat yang ada di rak, dalam kg. null = bawaan satuan
+  /// ([defaultPlates]). Urutannya tidak penting; [platesIn] mengurutkannya.
+  final List<double>? plates;
+
+  /// Bar dalam satuan tampilan: yang diatur, atau bawaan satuan itu.
+  double barWeightIn(WeightUnit u) {
+    final bar = barWeight;
+    return bar == null ? defaultBarWeight(u) : plateShown(bar, u);
+  }
+
+  /// Pelat yang ada dalam satuan tampilan, terberat dulu, tanpa duplikat.
+  List<double> platesIn(WeightUnit u) {
+    final stored = plates;
+    if (stored == null) return defaultPlates(u);
+    return [
+      for (final p in {for (final kg in stored) plateShown(kg, u)})
+        if (p > 0) p,
+    ]..sort((a, b) => b.compareTo(a));
+  }
 
   /// Istirahat untuk gerakan yang tidak punya istirahat sendiri di rutinitas.
   final int defaultRestSeconds;
@@ -209,6 +238,10 @@ class TrainingSettings {
     List<String>? favorites,
     Map<String, int>? restByExercise,
     WeightUnit? unit,
+    double? barWeight,
+    bool clearBarWeight = false,
+    List<double>? plates,
+    bool clearPlates = false,
   }) =>
       TrainingSettings(
         defaultRestSeconds: defaultRestSeconds ?? this.defaultRestSeconds,
@@ -220,6 +253,10 @@ class TrainingSettings {
         favorites: favorites ?? this.favorites,
         restByExercise: restByExercise ?? this.restByExercise,
         unit: unit ?? this.unit,
+        // null lewat parameter biasa berarti "jangan ubah"; kembali ke bawaan
+        // satuan lewat `clear…`, seperti tri-state assisted di ExerciseConfig.
+        barWeight: clearBarWeight ? null : (barWeight ?? this.barWeight),
+        plates: clearPlates ? null : (plates ?? this.plates),
       );
 
   /// Istirahat untuk satu gerakan: rutinitas, lalu yang disimpan dari sesi
@@ -254,6 +291,11 @@ class TrainingSettings {
         if (favorites.isNotEmpty) 'fav': favorites,
         if (restByExercise.isNotEmpty) 'restEx': restByExercise,
         if (unit != WeightUnit.kg) 'unit': unit.name,
+        // Bar dan pelat (FR-D16) dalam kg. Hanya yang diatur yang ditulis:
+        // dokumen tanpa keduanya berarti "bawaan satuan", dan kolomnya
+        // digabung per kolom seperti `rest` atau `unit` di mergeSettings.
+        if (barWeight != null) 'bar': barWeight,
+        if (plates != null) 'plates': plates,
       };
 
   /// Dokumen dari build yang belum mengenal profil gym — atau akun yang belum
@@ -266,7 +308,13 @@ class TrainingSettings {
       gyms = [GymProfile(id: GymProfile.defaultId, name: '', equipment: (j['eq'] as List?)?.cast<String>())];
     }
     final active = j['activeGymId'];
+    // Bar negatif atau bukan angka, dan daftar pelat yang bukan daftar,
+    // dibaca sebagai "belum diatur" — bukan melempar, bukan bar minus.
+    final rawBar = j['bar'];
+    final rawPlates = j['plates'];
     return TrainingSettings(
+      barWeight: rawBar is num && rawBar >= 0 ? rawBar.toDouble() : null,
+      plates: rawPlates is List ? [for (final p in rawPlates) if (p is num && p > 0) p.toDouble()] : null,
       defaultRestSeconds: (j['rest'] as num?)?.toInt() ?? 90,
       deloadFactor: (j['dl'] as num?)?.toDouble() ?? 0.9,
       weekStartsOn: ((j['week'] as num?)?.toInt() ?? DateTime.monday).clamp(1, 7),

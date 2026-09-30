@@ -120,9 +120,16 @@ class ExerciseConfig {
     this.warmupSets = 0,
     this.superset = false,
     this.assisted,
+    this.barWeight,
   });
 
   final String exerciseId;
+
+  /// Bar untuk hitung pelat gerakan ini (FR-D16), dalam kg seperti [weight].
+  /// null = ikuti setelan global (atau "tanpa bar" untuk Smith machine dan
+  /// sled — lihat `plates.dart`); 0 = tanpa bar. Untuk EZ bar 10 kg, trap
+  /// bar 25 kg, atau Smith machine yang bar-nya berbobot.
+  final double? barWeight;
 
   /// null = pakai default rutinitas, lalu default mode (lihat [policyFor]).
   final ProgressionPolicy? policy;
@@ -188,6 +195,8 @@ class ExerciseConfig {
     String? exerciseId,
     bool? assisted,
     bool clearAssisted = false,
+    double? barWeight,
+    bool clearBarWeight = false,
   }) {
     return ExerciseConfig(
       exerciseId: exerciseId ?? this.exerciseId,
@@ -209,6 +218,9 @@ class ExerciseConfig {
       // Tri-state: `clearAssisted` mengembalikan ke otomatis, karena null
       // lewat parameter biasa berarti "jangan ubah".
       assisted: clearAssisted ? null : (assisted ?? this.assisted),
+      // Sama seperti assisted: null = "jangan ubah", kembali ke global lewat
+      // clearBarWeight.
+      barWeight: clearBarWeight ? null : (barWeight ?? this.barWeight),
     );
   }
 
@@ -236,6 +248,8 @@ class ExerciseConfig {
         // (#232) supaya ekspor/impor tetap saling terbaca (NFR-10). Hanya
         // override eksplisit yang ditulis; "otomatis" tidak diangkut.
         if (assisted != null) 'assisted': assisted,
+        // Override bar (FR-D16), kg. Hanya yang diatur yang diangkut.
+        if (barWeight != null) 'bar': barWeight,
       };
 
   factory ExerciseConfig.fromJson(Map<String, dynamic> j) => ExerciseConfig(
@@ -261,6 +275,8 @@ class ExerciseConfig {
         // Bukan boolean (dokumen lama, atau nilai rusak) dibaca sebagai
         // "otomatis", bukan sebagai salah satu arah.
         assisted: j['assisted'] is bool ? j['assisted'] as bool : null,
+        // Bar negatif atau bukan angka = ikuti global, bukan bar minus.
+        barWeight: j['bar'] is num && (j['bar'] as num) >= 0 ? (j['bar'] as num).toDouble() : null,
       );
 }
 

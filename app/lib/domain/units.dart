@@ -40,6 +40,31 @@ double _round(double v, int per) => (v * per).roundToDouble() / per;
 /// jadi tepat 135.
 double shown(double kg, WeightUnit u) => u == WeightUnit.kg ? _round(kg, 100) : _round(kg / kgPerLb, 10);
 
+// ── Bar dan pelat (FR-D16) ──
+//
+// Berat bar dan daftar pelat disimpan dalam kg seperti beban lain, jadi
+// ganti satuan tidak menulis ulang apa pun — yang berganti hanya angka yang
+// ditampilkan. Yang belum pernah diatur (null di setelan) memakai bawaan
+// satuan di bawah, supaya pemakai lb tidak melihat bar "44,09 lb".
+
+/// kg → angka bar atau pelat dalam satuan [u], dibulatkan 0,01 di kedua
+/// satuan. [shown] membulatkan lb ke 0,1 — cukup untuk beban yang dicatat,
+/// tapi pelat 1,25 lb akan tertulis 1,3.
+double plateShown(double kg, WeightUnit u) => _round(kgTo(kg, u), 100);
+
+/// Bar kosong bawaan: 20 kg olimpiade, atau 45 lb.
+double defaultBarWeight(WeightUnit u) => u == WeightUnit.kg ? 20 : 45;
+
+/// Pelat yang lazim ada di rak, terberat dulu. Dipakai kalau setelan belum
+/// menyebut daftarnya sendiri.
+List<double> defaultPlates(WeightUnit u) =>
+    u == WeightUnit.kg ? const [25, 20, 15, 10, 5, 2.5, 1.25] : const [45, 35, 25, 10, 5, 2.5];
+
+/// Semua ukuran pelat yang bisa dinyalakan di Profil, terberat dulu.
+List<double> plateChoices(WeightUnit u) => u == WeightUnit.kg
+    ? const [25, 20, 15, 10, 5, 2.5, 2, 1.25, 1, 0.5]
+    : const [55, 45, 35, 25, 15, 10, 5, 2.5, 1.25];
+
 /// Pengubah beban satu arah untuk seluruh struktur data.
 typedef _Scale = double Function(double);
 
@@ -48,6 +73,9 @@ SetRow _set(SetRow s, _Scale f) => s.weight == 0 ? s : s.copyWith(weight: f(s.we
 ExerciseConfig _config(ExerciseConfig c, _Scale f) => c.copyWith(
       weight: c.weight == 0 ? 0 : f(c.weight),
       increment: c.increment == null ? null : f(c.increment!),
+      // Override bar per gerakan (FR-D16) ikut satuan; nol ("tanpa bar")
+      // tetap nol. null lewat copyWith berarti "biarkan", jadi null aman.
+      barWeight: c.barWeight == null || c.barWeight == 0 ? null : f(c.barWeight!),
     );
 
 WorkoutEntry _entry(WorkoutEntry e, _Scale f) => WorkoutEntry(

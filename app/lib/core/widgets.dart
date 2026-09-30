@@ -889,6 +889,90 @@ class SquareIconButton extends StatelessWidget {
   }
 }
 
+/// Ikon pelat (FR-D16). Font GymIcons tidak punya glyph pelat; `toll` (dua
+/// cakram bertumpuk) varian outlined adalah yang paling mirip — aturan yang
+/// sama dengan ikon lain di luar font.
+const plateIcon = Icons.toll_outlined;
+
+/// Deretan pelat satu sisi bar (FR-D16), terberat dulu: cakram yang
+/// ukurannya mengikuti berat pelat — 25 kg paling besar, 1,25 paling kecil —
+/// dan warnanya dari giliran hue referensi, bukan warna kalibrasi IWF
+/// (merah 25, biru 20) yang tidak semua gym pakai. Angkanya tertulis di
+/// dalam cakram, jadi warna hanya pembeda, bukan makna.
+///
+/// Dekoratif: bentuk teksnya ("per sisi: 20 + 5 + 2,5") selalu ada di
+/// sebelahnya, jadi pembaca layar tidak diberi deretan angka dua kali.
+class PlateDiscs extends StatelessWidget {
+  const PlateDiscs({super.key, required this.perSide, required this.available, required this.label});
+
+  /// Pelat satu sisi, terberat dulu (boleh berulang).
+  final List<double> perSide;
+
+  /// Semua ukuran yang ada di rak, terberat dulu — peringkat di daftar ini
+  /// yang menentukan besar cakram, supaya 25 kg selalu lebih besar dari 20
+  /// walau set hari ini hanya memuat pelat 20.
+  final List<double> available;
+
+  /// Angka di dalam cakram, mengikuti format bahasa ("2,5" / "2.5").
+  final String Function(double) label;
+
+  static const _largest = 44.0;
+  static const _smallest = 28.0;
+
+  double _size(double plate) {
+    final n = available.length;
+    if (n <= 1) return _largest;
+    var rank = available.indexWhere((p) => (p - plate).abs() < 0.005);
+    if (rank < 0) {
+      // Ukuran yang tidak ada di rak (tidak seharusnya terjadi): duduk di
+      // peringkat pelat pertama yang lebih ringan darinya.
+      final smaller = available.indexWhere((p) => p < plate);
+      rank = smaller < 0 ? n - 1 : smaller;
+    }
+    return _largest - rank * ((_largest - _smallest) / (n - 1));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gym;
+    return ExcludeSemantics(
+      child: Wrap(
+        spacing: 4,
+        runSpacing: 4,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          for (final p in perSide)
+            Builder(builder: (context) {
+              final size = _size(p);
+              final rank = available.indexWhere((a) => (a - p).abs() < 0.005);
+              final hue = c.hues.at(rank < 0 ? 0 : rank);
+              return Container(
+                width: size,
+                height: size,
+                alignment: Alignment.center,
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  color: c.block(hue),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: hue, width: 2),
+                ),
+                // FittedBox: "1.25" tetap muat di cakram 28 dp dan di huruf
+                // sistem 1,3× (NFR-11) tanpa meluber keluar lingkaran.
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    label(p),
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: c.text),
+                  ),
+                ),
+              );
+            }),
+        ],
+      ),
+    );
+  }
+}
+
 /// Baris info bernada — oranye untuk peringatan lembut, aksen untuk keterangan.
 class NoteBanner extends StatelessWidget {
   const NoteBanner({super.key, required this.text, required this.icon, required this.tone});

@@ -55,6 +55,8 @@ SessionExercise buildSessionExercise(
   return SessionExercise(
     name: catalog.nameOf(cfg.exerciseId),
     icon: ex?.icon ?? Icons.fitness_center,
+    // Alat katalog untuk baris pelat (FR-D16); kosong kalau id tidak dikenal.
+    equipment: ex?.equipment ?? '',
     config: plan.target,
     sets: plan.sets,
     previous: plan.previous,
@@ -249,7 +251,8 @@ Future<void> resumeDraftSession(BuildContext context, {bool restored = false}) a
       () {
         final j = Map<String, dynamic>.from(raw as Map);
         final id = ((j['cfg'] as Map?)?['id'] as String?) ?? '';
-        final ex = SessionExercise.fromDraft(j, catalog.byId(id)?.icon ?? Icons.fitness_center);
+        final entry = catalog.byId(id);
+        final ex = SessionExercise.fromDraft(j, entry?.icon ?? Icons.fitness_center, equipment: entry?.equipment ?? '');
         if (draftUnit != unit) {
           // Satuan diganti di Profil sebelum sesi dilanjutkan.
           ex.config = configBetween(ex.config, draftUnit, unit);
@@ -355,6 +358,7 @@ Future<void> reopenWorkoutSession(BuildContext context, Workout workout) async {
     exercises.add(SessionExercise(
       name: catalog.nameOf(id),
       icon: catalog.byId(id)?.icon ?? Icons.fitness_center,
+      equipment: catalog.byId(id)?.equipment ?? '',
       config: cfg,
       sets: sets,
       previous: previous,

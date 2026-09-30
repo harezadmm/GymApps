@@ -9,13 +9,16 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../core/gym_icons.dart';
 import '../../domain/units.dart';
 
+import '../../core/format.dart';
 import '../../core/keep_awake.dart';
 import '../../core/rest_alert.dart';
 import '../../core/motion.dart';
 import '../../core/strings.dart';
+import '../../core/strings_plates.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
 import '../../data/synced_account_store.dart';
@@ -180,6 +183,96 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (v == null || v == s.unit) return;
     await store.updateSettings(s.copyWith(unit: v));
     messenger.showSnackBar(SnackBar(content: Text(t.unitsNote)));
+  }
+
+  /// Berat bar untuk hitung pelat (FR-D16): dialog angka dalam satuan
+  /// tampilan, dengan preset "tanpa bar" untuk Smith machine dan mesin
+  /// berpelat. Disimpan dalam kg seperti beban lain; "bawaan" menghapus
+  /// nilainya supaya satuan lain mendapat bar bawaannya sendiri.
+  Future<void> _pickBarWeight() async {
+    final store = WorkoutScope.read(context);
+    final unit = store.settings.unit;
+    final r = await showDialog<_BarWeightResult>(
+      context: context,
+      builder: (_) => _BarWeightDialog(initial: store.settings.barWeightIn(unit), unit: unit),
+    );
+    if (r == null) return;
+    // Dibaca ulang dari store: sinkron bisa mengganti setelan selagi dialog
+    // terbuka, dan bar baru tidak boleh menimpa pelat yang baru datang.
+    final s = store.settings;
+    final v = r.value;
+    await store.updateSettings(v == null ? s.copyWith(clearBarWeight: true) : s.copyWith(barWeight: toKg(v, unit)));
+  }
+
+  /// Pelat yang ada di rak (FR-D16): chip nyala-mati per ukuran, dalam
+  /// satuan tampilan, disimpan seketika seperti pemilih alat gym. Ukuran
+  /// yang sedang aktif tapi tidak ada di daftar pilihan (pelat kg yang
+  /// dilihat dalam lb) ikut tampil supaya tetap bisa dimatikan.
+  Future<void> _editPlates() async {
+    final store = WorkoutScope.read(context);
+    final unit = store.settings.unit;
+    var selected = {...store.settings.platesIn(unit)};
+    final choices = [
+      ...plateChoices(unit),
+      for (final p in selected)
+        if (!plateChoices(unit).any((c) => (c - p).abs() < 0.005)) p,
+    ]..sort((a, b) => b.compareTo(a));
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: context.gym.surface,
+      showDragHandle: true,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(GymRadius.sheet)),
+      ),
+      builder: (sheet) => StatefulBuilder(
+        builder: (sheet, setState) {
+          final c = sheet.gym;
+          final t = sheet.t;
+          Future<void> save(Set<double> next) async {
+            setState(() => selected = next);
+            await store.updateSettings(store.settings.copyWith(plates: [for (final p in next) toKg(p, unit)]));
+          }
+
+          return SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(t.platesAvailable, style: Theme.of(sheet).textTheme.titleLarge),
+                  const SizedBox(height: 4),
+                  Text(t.platesNote, style: TextStyle(fontSize: 13, height: 1.4, color: c.text2)),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      for (final p in choices)
+                        _ToggleChip(
+                          label: t.weightUnit(p, unit.label),
+                          selected: selected.contains(p),
+                          onTap: () => save(selected.contains(p) ? ({...selected}..remove(p)) : {...selected, p}),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  GymButton(
+                    label: t.useDefaultPlates,
+                    tone: GymButtonTone.neutral,
+                    height: 44,
+                    onPressed: () async {
+                      setState(() => selected = {...defaultPlates(unit)});
+                      await store.updateSettings(store.settings.copyWith(clearPlates: true));
+                    },
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
 
   Future<void> _pickTheme() async {
@@ -533,17 +626,54 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ),
         const SizedBox(height: 18),
+        // Bar dan pelat untuk hitung pelat di sesi (FR-D16). Grupnya sendiri,
+        // bukan dua baris lagi di Training: keduanya bicara soal rak, bukan
+        // soal mesin progresi.
+        SectionLabel(t.plateSettingsTitle),
+        const SizedBox(height: 8),
+        Reveal(
+          index: 2,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SettingsGroup(
+                children: [
+                  SettingsTile(
+                    icon: GymIcons.barbell, hue: c.hues.cyan,
+                    label: t.barWeight,
+                    value: settings.barWeight == 0
+                        ? t.noBar
+                        : t.weightUnit(settings.barWeightIn(settings.unit), settings.unit.label),
+                    onTap: _pickBarWeight,
+                  ),
+                  SettingsTile(
+                    icon: plateIcon, hue: c.hues.orange,
+                    label: t.platesAvailable,
+                    value: t.plateSizes(settings.platesIn(settings.unit).length),
+                    onTap: _editPlates,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Text(t.plateSettingsNote, style: TextStyle(fontSize: 12.5, height: 1.4, color: c.text2)),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 18),
         // Profil gym (FR-C3): daftar alat dan memori beban per gym. Dulu satu
         // baris "Alat di gym-ku" di grup Training; sekarang tiap gym punya
         // barisnya sendiri, dan alatnya dibuka dari situ.
         SectionLabel(t.gyms),
         const SizedBox(height: 8),
-        const Reveal(index: 2, child: GymSection()),
+        const Reveal(index: 3, child: GymSection()),
         const SizedBox(height: 18),
         SectionLabel(t.data),
         const SizedBox(height: 8),
         Reveal(
-          index: 3,
+          index: 4,
           child: SettingsGroup(
             children: [
               SettingsTile(icon: GymIcons.download, hue: c.hues.orange, label: t.exportBackup, onTap: _export),
@@ -560,7 +690,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         SectionLabel(t.app),
         const SizedBox(height: 8),
         Reveal(
-          index: 4,
+          index: 5,
           child: SettingsGroup(
             children: [
               if (widget.onThemeModeChanged != null)
@@ -616,7 +746,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
         const SizedBox(height: 20),
         Reveal(
-          index: 5,
+          index: 6,
           child: PressScale(
             child: Material(
               color: c.danger.withValues(alpha: 0.10),
@@ -708,6 +838,164 @@ class _PasswordDialogState extends State<_PasswordDialog> {
         ),
         GymButton(label: t.connect, height: 44, expand: false, onPressed: _submit),
       ],
+    );
+  }
+}
+
+/// Hasil dialog berat bar: [value] dalam satuan tampilan; null = kembali ke
+/// bawaan satuan. Dialog yang ditutup begitu saja mengembalikan null tanpa
+/// pembungkus ini, jadi "batal" dan "bawaan" tidak tertukar.
+class _BarWeightResult {
+  const _BarWeightResult(this.value);
+
+  final double? value;
+}
+
+/// Dialog berat bar (FR-D16): angka dalam satuan tampilan plus preset yang
+/// langsung dipilih — bar yang lazim, "tanpa bar" untuk Smith machine, dan
+/// "bawaan". Widget sendiri karena controller-nya harus hidup sampai dialog
+/// benar-benar hilang (lihat [_PasswordDialog]).
+class _BarWeightDialog extends StatefulWidget {
+  const _BarWeightDialog({required this.initial, required this.unit});
+
+  final double initial;
+  final WeightUnit unit;
+
+  @override
+  State<_BarWeightDialog> createState() => _BarWeightDialogState();
+}
+
+class _BarWeightDialogState extends State<_BarWeightDialog> {
+  late final _controller = TextEditingController(text: formatDelta(widget.initial));
+
+  /// Bar yang lazim ada di gym: olimpiade 20 kg, bar 15 kg, bar teknik
+  /// 10 kg — atau 45 / 35 / 15 lb.
+  List<double> get _presets => widget.unit == WeightUnit.kg ? const [20, 15, 10] : const [45, 35, 15];
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  double? _typed() {
+    final v = double.tryParse(_controller.text.trim().replaceAll(',', '.'));
+    return v == null || v < 0 ? null : v;
+  }
+
+  void _submit() {
+    final v = _typed();
+    if (v != null) Navigator.of(context).pop(_BarWeightResult(v));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gym;
+    final t = context.t;
+    final u = widget.unit.label;
+    return AlertDialog(
+      backgroundColor: c.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(GymRadius.large)),
+      title: Text(t.barWeight, style: Theme.of(context).textTheme.titleLarge),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(t.barWeightHint, style: TextStyle(fontSize: 13.5, height: 1.45, color: c.text2)),
+          const SizedBox(height: 14),
+          TextField(
+            controller: _controller,
+            autofocus: true,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
+            decoration: InputDecoration(suffixText: u),
+            onSubmitted: (_) => _submit(),
+          ),
+          const SizedBox(height: 12),
+          // Preset menutup dialog seketika: satu ketukan untuk kasus yang
+          // paling sering, tanpa mengetik lalu menyimpan.
+          Wrap(
+            spacing: 8,
+            children: [
+              for (final p in _presets)
+                _ToggleChip(
+                  label: t.weightUnit(p, u),
+                  onTap: () => Navigator.of(context).pop(_BarWeightResult(p)),
+                ),
+              _ToggleChip(label: t.noBar, onTap: () => Navigator.of(context).pop(const _BarWeightResult(0))),
+              _ToggleChip(label: t.useDefault, onTap: () => Navigator.of(context).pop(const _BarWeightResult(null))),
+            ],
+          ),
+        ],
+      ),
+      actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(t.cancel, style: TextStyle(fontWeight: FontWeight.w700, color: c.text2)),
+        ),
+        // Mati selagi isinya bukan angka: tombol simpan yang tidak melakukan
+        // apa-apa adalah tombol mati.
+        ValueListenableBuilder<TextEditingValue>(
+          valueListenable: _controller,
+          builder: (context, _, _) =>
+              GymButton(label: t.save, height: 44, expand: false, onPressed: _typed() == null ? null : _submit),
+        ),
+      ],
+    );
+  }
+}
+
+/// Chip yang bisa dinyalakan: pil 36 dp di dalam kotak sentuh 44 dp
+/// (NFR-11), rupa yang sama dengan [FilterChips] tapi berdiri sendiri supaya
+/// bisa dipakai banyak-pilih (pelat) dan sebagai preset di dialog.
+class _ToggleChip extends StatelessWidget {
+  const _ToggleChip({required this.label, required this.onTap, this.selected});
+
+  final String label;
+  final VoidCallback onTap;
+
+  /// Nyala/mati untuk chip pilihan ganda; null untuk preset yang sekadar
+  /// tombol, supaya pembaca layar tidak membacakan "tidak dipilih" di sana.
+  final bool? selected;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gym;
+    final on = selected == true;
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          onTap: () {
+            GymHaptics.tap();
+            onTap();
+          },
+          borderRadius: BorderRadius.circular(GymRadius.pill),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 44),
+            child: Center(
+              widthFactor: 1,
+              child: Ink(
+                height: FilterChips.pillHeight,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                decoration: BoxDecoration(
+                  color: on ? c.accentFill : c.surface2,
+                  borderRadius: BorderRadius.circular(GymRadius.pill),
+                ),
+                child: Center(
+                  child: Text(
+                    label,
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: on ? c.accentInk : c.text),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

@@ -30,6 +30,7 @@ import '../../core/widgets.dart';
 import '../../data/exercise_catalog.dart';
 import '../../data/workout_store.dart';
 import '../../domain/models.dart';
+import '../../domain/plates.dart';
 import '../../domain/program.dart';
 import '../../domain/progression.dart';
 import '../../domain/routine_sync.dart';
@@ -37,6 +38,7 @@ import '../../domain/session_plan.dart';
 import '../profile/gym_profiles.dart';
 import 'exercise_history_sheet.dart';
 import 'finish_screen.dart';
+import 'plates_sheet.dart';
 import 'rest_screen.dart';
 import 'rest_timer.dart';
 import 'session_launcher.dart';
@@ -55,6 +57,7 @@ class SessionExercise {
     this.expanded = false,
     this.note,
     this.lastNote,
+    this.equipment = '',
   }) : sets = List.of(sets),
        previous = List.of(previous),
        rowKeys = [for (var i = 0; i < sets.length; i++) UniqueKey()],
@@ -62,6 +65,16 @@ class SessionExercise {
        restDuration = restDuration ?? const Duration(seconds: 90);
 
   final String name;
+
+  /// Nilai `eq` katalog gerakan ini ("barbell", "smith machine", …), untuk
+  /// memutuskan apakah baris pelat (FR-D16) tampil dan apakah bawaannya
+  /// tanpa bar. Kosong = tidak dikenal (test, id yang hilang dari katalog):
+  /// tidak ada baris pelat. Tidak disimpan ke draft — katalog dibaca ulang
+  /// saat draft dipulihkan, dan alat sebuah gerakan tidak berubah.
+  final String equipment;
+
+  /// Alat berpelat: bar-bar dan mesin yang dimuat pelat (lihat `plates.dart`).
+  bool get plateLoaded => isPlateLoaded(equipment);
 
   /// Target yang dibekukan ke sesi. Bisa berubah di tengah sesi hanya untuk
   /// hal yang bukan penilaian — superset dinyalakan atau dimatikan.
@@ -119,7 +132,7 @@ class SessionExercise {
     if (prescription != null) 'pol': prescription!.policy.name,
   };
 
-  static SessionExercise fromDraft(Map<String, dynamic> j, IconData icon) {
+  static SessionExercise fromDraft(Map<String, dynamic> j, IconData icon, {String equipment = ''}) {
     Prescription? p;
     if (j['why'] is String) {
       p = Prescription(
@@ -140,6 +153,7 @@ class SessionExercise {
       expanded: j['open'] == true,
       note: j['note'] as String?,
       lastNote: j['lastNote'] as String?,
+      equipment: equipment,
     );
   }
 
@@ -1889,6 +1903,13 @@ class _ExerciseCard extends StatelessWidget {
                         if (ex.config.assisted == true) ...[
                           const SizedBox(height: 10),
                           NoteBanner(text: t.assistedNote, icon: GymIcons.info, tone: c.text2),
+                        ],
+                        // Pelat per sisi (FR-D16), hanya untuk alat berpelat.
+                        // Gerakan berwaktu tidak punya beban untuk dipecah,
+                        // jadi mode waktu dilewati.
+                        if (ex.plateLoaded && ex.config.mode == LogMode.reps) ...[
+                          const SizedBox(height: 10),
+                          PlatesRow(exercise: ex),
                         ],
                         const SizedBox(height: 12),
                         _SetTable(

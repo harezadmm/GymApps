@@ -19,12 +19,16 @@ import '../../core/gym_icons.dart';
 import '../../core/motion.dart';
 import '../../core/strings.dart';
 import '../../core/strings_assisted.dart';
+import '../../core/strings_plates.dart';
 import '../../core/strings_routine.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
 import '../../data/exercise_catalog.dart';
+import '../../data/workout_store.dart';
 import '../../domain/models.dart';
+import '../../domain/plates.dart';
 import '../../domain/progression.dart';
+import '../../domain/settings.dart';
 import '../session/session_launcher.dart';
 
 /// Apa yang terjadi di editor, dikembalikan ke pemanggil.
@@ -125,8 +129,11 @@ class _RoutineEditorScreenState extends State<RoutineEditorScreen> {
       bodyweight: bw,
       heavyBodyPart: _heavyBodyParts.contains(e.bodyPart),
       // Override mesin assisted (#232) ikut dipertahankan saat gerakan
-      // diganti; gerakan baru mulai dari "otomatis".
+      // diganti; gerakan baru mulai dari "otomatis". Bar per gerakan
+      // (FR-D16) sama: hanya berarti untuk alat berpelat, dan tidak
+      // ditampilkan untuk yang lain.
       assisted: keep?.assisted,
+      barWeight: keep?.barWeight,
     );
   }
 
@@ -352,6 +359,7 @@ class _RoutineEditorScreenState extends State<RoutineEditorScreen> {
                             child: _ExerciseEditor(
                               name: catalog?.nameOf(cfg.exerciseId) ?? '…',
                               subtitle: catalog?.byId(cfg.exerciseId)?.subtitle ?? '',
+                              equipment: catalog?.byId(cfg.exerciseId)?.equipment ?? '',
                               config: cfg,
                               routinePolicy: _policy,
                               expanded: i == _expanded,
@@ -392,6 +400,7 @@ class _ExerciseEditor extends StatelessWidget {
   const _ExerciseEditor({
     required this.name,
     required this.subtitle,
+    required this.equipment,
     required this.config,
     required this.routinePolicy,
     required this.expanded,
@@ -404,6 +413,10 @@ class _ExerciseEditor extends StatelessWidget {
 
   final String name;
   final String subtitle;
+
+  /// Nilai `eq` katalog: bar per gerakan (FR-D16) hanya ditawarkan untuk
+  /// alat berpelat. Kosong selagi katalog belum terbaca.
+  final String equipment;
   final ExerciseConfig config;
   final ProgressionPolicy? routinePolicy;
   final bool expanded;
@@ -450,7 +463,42 @@ class _ExerciseEditor extends StatelessWidget {
       warmupSets: config.warmupSets,
       superset: config.superset,
       assisted: config.assisted,
+      barWeight: config.barWeight,
     );
+  }
+
+  /// Langkah bar: 2,5 kg / 5 lb — bar sungguhan ada di kelipatan itu (10,
+  /// 15, 20, 25 kg; 15, 35, 45 lb). Plafon 30 kg / 65 lb.
+  static const _barStepKg = 2.5;
+  static const _barMaxKg = 30.0;
+  static const _barStepLb = 5.0;
+  static const _barMaxLb = 65.0;
+
+  /// Nilai kolom bar. Tanpa override, sebut nilai global yang sedang berlaku
+  /// ("Global · 20 kg") supaya orang tahu apa yang ditimpa kalau menekan +.
+  String _barText(BuildContext context, WeightUnit unit) {
+    final t = context.t;
+    final bar = config.barWeight;
+    if (bar != null) return bar == 0 ? t.noBar : t.weightUnit(plateShown(bar, unit), unit.label);
+    final s = context.dependOnInheritedWidgetOfExactType<WorkoutScope>()?.notifier?.settings ??
+        const TrainingSettings();
+    final global = effectiveBar(equipment: equipment, globalBar: s.barWeightIn(unit));
+    return t.barGlobal(global == 0 ? t.noBar : t.weightUnit(global, unit.label));
+  }
+
+  /// Urutannya global → tanpa bar → 2,5 → 5 → … ; − dari "tanpa bar"
+  /// kembali ke global, dan − dari global tidak ke mana-mana. Disimpan dalam
+  /// kg lewat satuan tampilan, seperti beban awal.
+  ExerciseConfig _barStepped(int dir, WeightUnit unit) {
+    final lb = unit == WeightUnit.lb;
+    final step = lb ? _barStepLb : _barStepKg;
+    final cap = lb ? _barMaxLb : _barMaxKg;
+    final bar = config.barWeight;
+    if (bar == null) return dir > 0 ? config.copyWith(barWeight: 0) : config;
+    final shownBar = plateShown(bar, unit);
+    if (dir < 0 && shownBar <= 0) return config.copyWith(clearBarWeight: true);
+    final next = (shownBar + dir * step).clamp(0.0, cap).toDouble();
+    return config.copyWith(barWeight: toKg(next, unit));
   }
 
   @override
@@ -645,6 +693,20 @@ class _ExerciseEditor extends StatelessWidget {
                     onMinus: () => onChanged(config.copyWith(restSeconds: (rest - 15).clamp(15, 600))),
                     onPlus: () => onChanged(config.copyWith(restSeconds: (rest + 15).clamp(15, 600))),
                   ),
+                  // Bar untuk hitung pelat (FR-D16), hanya untuk alat
+                  // berpelat dan mode rep: EZ bar 10 kg, trap bar 25 kg, atau
+                  // Smith machine yang bar-nya berbobot. null = ikut Profil.
+                  if (isPlateLoaded(equipment) && config.mode == LogMode.reps) ...[
+                    const SizedBox(height: 10),
+                    _StepperField(
+                      label: t.barWeightLabel,
+                      value: _barText(context, unit),
+                      onMinus: () => onChanged(_barStepped(-1, unit)),
+                      onPlus: () => onChanged(_barStepped(1, unit)),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(t.barOverrideHint, style: TextStyle(fontSize: 12, height: 1.35, color: c.text2)),
+                  ],
                   const SizedBox(height: 12),
                   SectionLabel(t.progressionPolicy),
                   const SizedBox(height: 6),
