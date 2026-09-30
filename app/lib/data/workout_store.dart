@@ -392,15 +392,20 @@ class WorkoutStore extends ChangeNotifier {
   }
 
   /// Simpan rutinitas: ganti yang id-nya sama, atau tambahkan. Rutinitas baru
-  /// ikut masuk ke urutan program supaya muncul di rotasi.
-  Future<void> saveRoutine(Routine routine) async {
+  /// ikut masuk ke urutan program supaya muncul di rotasi — kecuali
+  /// [addToProgram] dimatikan: "jadikan rutinitas" dari riwayat boleh
+  /// menyimpan rutinitas di luar rotasi, yang lalu hanya muncul di lembar
+  /// "sesi lain" di Home (`pickOtherRoutine`).
+  Future<void> saveRoutine(Routine routine, {bool addToProgram = true}) async {
     final i = _routines.indexWhere((r) => r.id == routine.id);
     if (i >= 0) {
       _routines = [..._routines]..[i] = routine;
     } else {
       _routines = [..._routines, routine];
-      final p = _program ?? const Program(name: 'My split');
-      _program = p.copyWith(order: [...p.order, routine.id]);
+      if (addToProgram) {
+        final p = _program ?? const Program(name: 'My split');
+        _program = p.copyWith(order: [...p.order, routine.id]);
+      }
     }
     await _markPlan();
     await _commit();

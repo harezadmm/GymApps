@@ -12,26 +12,45 @@
 library;
 
 import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
 
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../../core/charts.dart';
+import '../../core/csv.dart';
 import '../../core/gym_icons.dart';
 import '../../core/illustration.dart';
 import '../../core/motion.dart';
 import '../../core/strings.dart';
+import '../../core/strings_gym.dart';
 import '../../core/strings_history.dart';
+import '../../core/strings_history_extras.dart';
 import '../../core/theme.dart';
 import '../../core/weights.dart';
 import '../../core/widgets.dart';
 import '../../data/exercise_catalog.dart';
 import '../../data/workout_store.dart';
 import '../../domain/models.dart';
+import '../../domain/program.dart';
 import '../session/session_launcher.dart';
+import 'save_as_routine.dart';
 import 'workout_edit_screen.dart';
 
+/// Penyimpan berkas ekspor: nama berkas, isi, dan MIME → lokasi yang dipilih,
+/// atau null kalau dialognya dibatalkan (bentuk yang sama dengan
+/// `FilePicker.saveFile`). Dibuka sebagai parameter supaya test bisa menangkap
+/// byte-nya tanpa dialog "simpan ke" milik sistem.
+typedef ExportSaver = Future<Uri?> Function(String fileName, Uint8List bytes, String mimeType);
+
 class HistoryScreen extends StatefulWidget {
-  const HistoryScreen({super.key});
+  const HistoryScreen({super.key, this.saveFile});
+
+  /// null = dialog "simpan ke" milik sistem lewat file_picker (unduhan biasa
+  /// di web), jalur yang sama dengan cadangan JSON di Profil.
+  final ExportSaver? saveFile;
 
   @override
   State<HistoryScreen> createState() => _HistoryScreenState();
@@ -61,12 +80,18 @@ class _HistoryScreenState extends State<HistoryScreen> {
     return seen.take(6).toList();
   }
 
+  /// Riwayat yang tampil: milik store, tanpa yang sedang menunggu URUNGKAN.
+  List<Workout> _shown(WorkoutStore store) => [for (final w in store.workouts) if (!_hidden.contains(w)) w];
+
+  /// [all] yang lolos chip rutinitas.
+  List<Workout> _filtered(List<Workout> all) => [for (final w in all) if (_routine == null || w.routine == _routine) w];
+
   @override
   Widget build(BuildContext context) {
     final c = context.gym;
     final t = context.t;
     final store = context.workouts;
-    final all = [for (final w in store.workouts) if (!_hidden.contains(w)) w];
+    final all = _shown(store);
     final routines = _routinesIn(all);
     final selected = _routine;
     // Chip yang sedang dipilih tetap ada walau sesinya habis (sesi terakhir
@@ -74,10 +99,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     // menulis "belum ada sesi", bukan melompat ke filter lain.
     if (selected != null && !routines.contains(selected)) routines.add(selected);
 
-    final sessions = [
-      for (final w in all)
-        if (selected == null || w.routine == selected) w,
-    ];
+    final sessions = _filtered(all);
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
@@ -86,6 +108,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
           child: ScreenHeader(
             title: t.history,
             actions: [
+              // Ekspor CSV riwayat yang sedang tampil (FR-G6). Ikon-saja
+              // dengan tooltip, seperti tombol + di sebelahnya (NFR-11).
+              SquareIconButton(
+                icon: GymIcons.download,
+                tooltip: t.exportCsv,
+                onPressed: _exportCsv,
+              ),
               // Kalender bulanan belum ada — kotak aktivitas di bawah sudah
               // menjawab "kapan saja aku latihan". Tombol + menawarkan sesi
               // baru: dijalankan sekarang, atau dicatat dari yang sudah lewat.
@@ -475,21 +504,50 @@ class _HistoryScreenState extends State<HistoryScreen> {
               Text(t.resumeSessionHint,
                   textAlign: TextAlign.center, style: TextStyle(fontSize: 11.5, height: 1.35, color: c.text2)),
               const SizedBox(height: 14),
-              GymButton(
-                label: t.edit,
-                icon: GymIcons.edit,
-                tone: GymButtonTone.neutral,
-                height: 44,
-                onPressed: () async {
-                  final updated = await Navigator.of(sheetContext).push<Workout>(
-                    MaterialPageRoute(builder: (_) => WorkoutEditScreen(workout: workout, catalog: catalog)),
-                  );
-                  if (updated == null) return;
-                  await store.replaceWorkout(workout, updated);
-                  if (!sheetContext.mounted) return;
-                  Navigator.of(sheetContext).pop();
-                  messenger?.showSnackBar(SnackBar(content: Text(t.sessionUpdated)));
-                },
+              // Dua aksi sekunder berdampingan, setengah lebar: EDIT dan
+              // JADIKAN RUTINITAS (FR-B8). Berjajar, bukan bertumpuk, supaya
+              // HAPUS tetap terjangkau tanpa menggulir untuk sesi pendek;
+              // labelnya mengecil sendiri di tombol yang melebar (GymButton).
+              Row(
+                children: [
+                  Expanded(
+                    child: GymButton(
+                      label: t.edit,
+                      icon: GymIcons.edit,
+                      tone: GymButtonTone.neutral,
+                      height: 44,
+                      onPressed: () async {
+                        final updated = await Navigator.of(sheetContext).push<Workout>(
+                          MaterialPageRoute(builder: (_) => WorkoutEditScreen(workout: workout, catalog: catalog)),
+                        );
+                        if (updated == null) return;
+                        await store.replaceWorkout(workout, updated);
+                        if (!sheetContext.mounted) return;
+                        Navigator.of(sheetContext).pop();
+                        messenger?.showSnackBar(SnackBar(content: Text(t.sessionUpdated)));
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    // Sesi ini sebagai rutinitas baru: sesi bebas yang ternyata
+                    // enak tidak perlu diketik ulang di editor rutinitas. Sheet
+                    // ditutup dulu, baru SnackBar-nya — SnackBar yang tampil di
+                    // bawah sheet tidak terlihat.
+                    child: GymButton(
+                      label: t.saveAsRoutineUpper,
+                      icon: GymIcons.copy,
+                      tone: GymButtonTone.neutral,
+                      height: 44,
+                      onPressed: () async {
+                        final routine = await saveWorkoutAsRoutine(sheetContext, workout);
+                        if (routine == null || !sheetContext.mounted) return;
+                        Navigator.of(sheetContext).pop();
+                        messenger?.showSnackBar(SnackBar(content: Text(t.routineSaved(routine.name))));
+                      },
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 10),
               GymButton(
@@ -511,6 +569,50 @@ class _HistoryScreenState extends State<HistoryScreen> {
       },
     );
   }
+
+  /// Ekspor CSV riwayat yang sedang tampil (FR-G6): mengikuti chip rutinitas,
+  /// tanpa sesi yang sedang menunggu URUNGKAN. Disimpan lewat dialog "simpan
+  /// ke" milik sistem, jalur yang sama dengan cadangan JSON di Profil — di web
+  /// jadi unduhan biasa; [HistoryScreen.saveFile] menggantinya di test.
+  Future<void> _exportCsv() async {
+    final store = WorkoutScope.read(context);
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    final t = context.t;
+    // Terlama dulu, seperti urutan baris di berkasnya; dua sesi sehari
+    // mengikuti urutan pencatatannya.
+    final sessions = _filtered(_shown(store)).reversed.toList();
+    if (sessions.isEmpty) {
+      messenger?.showSnackBar(SnackBar(content: Text(t.nothingToExport)));
+      return;
+    }
+    final catalog = await ExerciseCatalog.load();
+    if (!mounted) return;
+    final settings = store.settings;
+    final csv = historyCsv(
+      sessions,
+      unit: settings.unit,
+      exerciseName: catalog.nameOf,
+      // Gym tanpa nama memakai nama bawaan dua bahasa, seperti di layar; id
+      // yang tidak dikenal (gym yang sudah dihapus) jadi kosong.
+      gymName: (id) {
+        final gym = settings.gymById(id ?? defaultGymId);
+        return gym == null ? '' : t.gymName(gym);
+      },
+    );
+    final bytes = utf8.encode(csv);
+    final name = 'gymapps-history-${isoDate(DateTime.now())}.csv';
+    try {
+      final saved = await (widget.saveFile ?? _systemSave)(name, bytes, 'text/csv');
+      // null = dialognya dibatalkan, bukan gagal — tidak perlu pesan. Di web
+      // tidak ada jawaban; unduhannya jalan sendiri.
+      if (saved != null || kIsWeb) messenger?.showSnackBar(SnackBar(content: Text(t.csvSaved(name))));
+    } catch (_) {
+      messenger?.showSnackBar(SnackBar(content: Text(t.csvExportFailed)));
+    }
+  }
+
+  static Future<Uri?> _systemSave(String name, Uint8List bytes, String mime) =>
+      FilePicker.saveFile(fileName: name, bytes: bytes, mimeType: mime);
 
   static int _thisYear(List<Workout> all) {
     final year = DateTime.now().year.toString();

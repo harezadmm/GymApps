@@ -16,6 +16,7 @@ import '../../core/gym_icons.dart';
 import '../../core/motion.dart';
 import '../../core/strings.dart';
 import '../../core/strings_assisted.dart';
+import '../../core/strings_history_extras.dart';
 import '../../core/strings_session.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
@@ -28,6 +29,7 @@ import '../../domain/onerm.dart';
 import '../../domain/progression.dart';
 import '../../domain/routine_sync.dart';
 import '../../domain/session_plan.dart';
+import '../history/save_as_routine.dart';
 import 'session_screen.dart';
 
 class FinishScreen extends StatefulWidget {
@@ -124,6 +126,10 @@ class _FinishScreenState extends State<FinishScreen> {
     final setsDone = _workingSets.length;
     final original = widget.originalRoutine;
     final diff = widget.diff;
+    // Tanpa store (test yang memasang layar ini sendirian) tidak ada
+    // rutinitas yang dikecualikan, dan tidak ada tempat menyimpan rutinitas
+    // baru — tombolnya pun tidak dipasang, bukan dipasang lalu gagal.
+    final store = context.getInheritedWidgetOfExactType<WorkoutScope>()?.notifier;
 
     return Scaffold(
       backgroundColor: c.bg,
@@ -285,9 +291,7 @@ class _FinishScreenState extends State<FinishScreen> {
                         exercises: widget.exercises,
                         history: [...widget.history, ..._thisSession],
                         gymId: widget.gymId,
-                        // Tanpa store (test yang memasang layar ini sendirian)
-                        // tidak ada rutinitas yang dikecualikan.
-                        routines: context.getInheritedWidgetOfExactType<WorkoutScope>()?.notifier?.routines ?? const [],
+                        routines: store?.routines ?? const [],
                       ),
                     ),
                     if (original != null && diff != null) ...[
@@ -309,6 +313,17 @@ class _FinishScreenState extends State<FinishScreen> {
                             },
                           ),
                         ),
+                      ),
+                    ],
+                    if (store != null) ...[
+                      const SizedBox(height: 14),
+                      // Sesi ini sebagai rutinitas baru (FR-B8): sesi bebas
+                      // yang ternyata enak, atau variasi yang layak disimpan
+                      // terpisah dari rutinitas asalnya. Beban sesi masih
+                      // dalam satuan tampilan; rutinitas menyimpan kg.
+                      Reveal(
+                        index: 7,
+                        child: _SaveAsRoutineRow(workout: workoutToKg(_thisSession.first, context.unit)),
                       ),
                     ],
                   ],
@@ -660,6 +675,66 @@ class _RoutineSyncCardState extends State<_RoutineSyncCard> {
             ),
         ],
       ),
+    );
+  }
+}
+
+/// Tombol "jadikan rutinitas" di bawah ringkasan (FR-B8). Setelah tersimpan
+/// berubah jadi keterangan, bukan tombol yang tetap hidup dan membuat
+/// rutinitas kedua dengan nama yang sama di ketukan berikutnya.
+class _SaveAsRoutineRow extends StatefulWidget {
+  const _SaveAsRoutineRow({required this.workout});
+
+  /// Sesi yang baru selesai, dalam kg.
+  final Workout workout;
+
+  @override
+  State<_SaveAsRoutineRow> createState() => _SaveAsRoutineRowState();
+}
+
+class _SaveAsRoutineRowState extends State<_SaveAsRoutineRow> {
+  Routine? _saved;
+  bool _busy = false;
+
+  Future<void> _save() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    final routine = await saveWorkoutAsRoutine(context, widget.workout);
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      _saved = routine;
+    });
+    if (routine != null) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text(context.t.routineSaved(routine.name))));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gym;
+    final t = context.t;
+    final saved = _saved;
+    return FadeSwap(
+      child: saved == null
+          ? KeyedSubtree(
+              key: const ValueKey('save-as-routine'),
+              child: GymButton(
+                label: t.saveAsRoutineUpper,
+                icon: GymIcons.copy,
+                tone: GymButtonTone.neutral,
+                height: 48,
+                onPressed: _busy ? null : _save,
+              ),
+            )
+          : Row(
+              key: const ValueKey('saved-as-routine'),
+              children: [
+                Icon(Icons.check_circle_outline, size: 18, color: c.doneInk),
+                const SizedBox(width: 8),
+                Expanded(child: Text(t.routineSaved(saved.name), style: TextStyle(fontSize: 13, color: c.text2))),
+              ],
+            ),
     );
   }
 }
