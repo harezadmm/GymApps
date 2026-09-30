@@ -442,7 +442,7 @@ class _RestDurationSheetState extends State<_RestDurationSheet> {
                 ),
                 IconButton(
                   onPressed: () => Navigator.of(context).pop(),
-                  icon: Icon(Icons.close, color: c.text2),
+                  icon: Icon(GymIcons.close, size: 18, color: c.text2),
                   tooltip: context.t.close,
                 ),
               ],
@@ -520,7 +520,7 @@ class _RestDurationSheetState extends State<_RestDurationSheet> {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.info_outline, size: 15, color: c.text2),
+                Icon(GymIcons.info, size: 15, color: c.text2),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -585,7 +585,7 @@ class _Stepper extends StatelessWidget {
           padding: const EdgeInsets.all(8),
           child: Row(
             children: [
-              _StepButton(icon: Icons.remove, onTap: onMinus, semantic: 'decrease $label'),
+              _StepButton(icon: GymIcons.minus, onTap: onMinus, semantic: 'decrease $label'),
               Expanded(
                 child: Center(
                   child: Text(
@@ -599,7 +599,7 @@ class _Stepper extends StatelessWidget {
                   ),
                 ),
               ),
-              _StepButton(icon: Icons.add, onTap: onPlus, semantic: 'increase $label'),
+              _StepButton(icon: GymIcons.add, onTap: onPlus, semantic: 'increase $label'),
             ],
           ),
         ),

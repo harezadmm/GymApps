@@ -7,7 +7,10 @@
 library;
 
 import 'package:flutter/material.dart';
+import '../../core/art3d.dart';
+import '../../core/gym_icons.dart';
 import '../../core/illustration.dart';
+import '../../core/motion.dart';
 
 import '../../core/strings.dart';
 import '../../core/theme.dart';
@@ -36,7 +39,7 @@ class _OnboardingTop extends StatelessWidget {
         children: [
           IconButton(
             onPressed: onBack,
-            icon: Icon(Icons.arrow_back, color: onBack == null ? c.text3 : c.text2),
+            icon: Icon(GymIcons.arrowLeft, size: 22, color: onBack == null ? c.text3 : c.text2),
             tooltip: context.t.back,
           ),
           Expanded(
@@ -71,6 +74,7 @@ class ProgramTemplate {
     required this.name,
     required this.rhythm,
     required this.detail,
+    required this.art,
   });
 
   final String id;
@@ -79,6 +83,11 @@ class ProgramTemplate {
   /// "3 routines · rotation" — berapa rutinitas dan bagaimana urutannya maju.
   final String rhythm;
   final String detail;
+
+  /// Ikon 3D di kiri kartu. Enam nama template mirip satu sama lain bagi
+  /// pemula ("Upper / Lower" vs "Full Body"); benda yang berbeda per kartu
+  /// memberi mata jangkar untuk membedakan dan mengingat pilihannya.
+  final Gym3d art;
 }
 
 /// Template bawaan sesuai tabel spec §5.
@@ -88,36 +97,48 @@ const programTemplates = <ProgramTemplate>[
     name: 'Push / Pull / Legs',
     rhythm: '3 routines · rotation',
     detail: 'Balanced volume, 3–6 sessions a week',
+    // Split binaraga klasik: dumbel, alat paling umum di ketiga harinya.
+    art: Gym3d.dumbbell,
   ),
   ProgramTemplate(
     id: 'upper-lower',
     name: 'Upper / Lower',
     rhythm: '2 routines · rotation',
     detail: 'Simple alternation, good for 4 days',
+    // Dua gagang yang bergantian ditekan — dua separuh badan yang bergantian.
+    art: Gym3d.grippers,
   ),
   ProgramTemplate(
     id: 'bro-split',
     name: 'Bro split',
     rhythm: '5 routines · Mon–Fri',
     detail: 'One muscle group per day',
+    // Satu-satunya template berhari tetap (Senin–Jumat): kalender.
+    art: Gym3d.calendar,
   ),
   ProgramTemplate(
     id: 'heavy-duty',
     name: 'Heavy Duty',
     rhythm: '4 routines · rotation',
     detail: '1 working set to failure, 3 rest days',
+    // Satu set, seberat mungkin: kettlebell bertulisan KG.
+    art: Gym3d.kettlebell,
   ),
   ProgramTemplate(
     id: 'full-body',
     name: 'Full Body',
     rhythm: '1 routine · rotation',
     detail: 'Everything every session',
+    // Bola latihan: alat yang melibatkan seluruh badan sekaligus.
+    art: Gym3d.exerciseBall,
   ),
   ProgramTemplate(
     id: 'five-by-five',
     name: '5 × 5',
     rhythm: '2 routines · rotation',
     detail: 'Strength focus, linear progression',
+    // Progresi linear = menambah piringan tiap sesi.
+    art: Gym3d.weightPlates,
   ),
 ];
 
@@ -167,7 +188,7 @@ class _ProgramPickerScreenState extends State<ProgramPickerScreen> {
                     const SizedBox(height: 10),
                   ],
                   const SizedBox(height: 4),
-                  _OutlinedAction(icon: Icons.add, label: context.t.buildMyOwn, onTap: widget.onBuildOwn),
+                  _OutlinedAction(icon: GymIcons.add, label: context.t.buildMyOwn, onTap: widget.onBuildOwn),
                 ],
               ),
             ),
@@ -199,19 +220,37 @@ class _ProgramCard extends StatelessWidget {
       color: selected ? c.selected : c.surface,
       borderRadius: BorderRadius.circular(GymRadius.card),
       child: InkWell(
-        onTap: onTap,
+        // Ketukan di kolom ikon jatuh ke sini, bukan ke SelectRow; getarnya
+        // disamakan supaya seluruh kartu terasa satu tombol.
+        onTap: () {
+          GymHaptics.tap();
+          onTap();
+        },
         borderRadius: BorderRadius.circular(GymRadius.card),
         child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(GymRadius.card),
             border: Border.all(color: selected ? c.accent : c.border),
           ),
-          child: SelectRow(
-            title: template.name,
-            subtitle: context.t.catalogue(template.rhythm),
-            detail: context.t.catalogue(template.detail),
-            selected: selected,
-            onTap: onTap,
+          // SelectRow hanya menerima IconData untuk cakram ikonnya, jadi ikon
+          // 3D berdiri di kolomnya sendiri; padding kiri 14 sama dengan
+          // padding SelectRow, sehingga jarak ikon–judul tetap seimbang.
+          child: Row(
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(left: 14),
+                child: Gym3dIcon(template.art, size: 46),
+              ),
+              Expanded(
+                child: SelectRow(
+                  title: template.name,
+                  subtitle: context.t.catalogue(template.rhythm),
+                  detail: context.t.catalogue(template.detail),
+                  selected: selected,
+                  onTap: onTap,
+                ),
+              ),
+            ],
           ),
         ),
       ),

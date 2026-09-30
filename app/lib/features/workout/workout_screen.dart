@@ -416,14 +416,16 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                   onPressed: program.minRestDays <= 0
                       ? null
                       : () => store.updateProgram(program.copyWith(minRestDays: program.minRestDays - 1)),
-                  icon: Icon(Icons.remove, color: c.accent),
+                  icon: Icon(GymIcons.minus, size: 22, color: c.accent),
                   tooltip: t.fewer,
                 ),
                 IconButton(
                   onPressed: program.minRestDays >= 7
                       ? null
                       : () => store.updateProgram(program.copyWith(minRestDays: program.minRestDays + 1)),
-                  icon: Icon(GymIcons.plus, color: c.accent),
+                  // Tambah polos, pasangan minus di kirinya — stepper yang sama
+                  // di layar split kustom juga begitu.
+                  icon: Icon(GymIcons.add, size: 22, color: c.accent),
                   tooltip: t.more,
                 ),
               ],
@@ -730,11 +732,11 @@ class _RoutineRow extends StatelessWidget {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(GymRadius.control)),
                 onSelected: onAction,
                 itemBuilder: (context) => [
-                  _item(c, _RoutineAction.edit, Icons.tune, context.t.editExercises),
-                  _item(c, _RoutineAction.rename, Icons.drive_file_rename_outline, context.t.rename),
-                  _item(c, _RoutineAction.duplicate, Icons.copy_all_outlined, context.t.duplicate),
-                  if (canMakeNext) _item(c, _RoutineAction.makeNext, Icons.skip_next_outlined, context.t.setAsNext),
-                  _item(c, _RoutineAction.delete, Icons.delete_outline, context.t.deleteWord, tone: c.danger),
+                  _item(c, _RoutineAction.edit, GymIcons.sliders, context.t.editExercises),
+                  _item(c, _RoutineAction.rename, GymIcons.edit, context.t.rename),
+                  _item(c, _RoutineAction.duplicate, GymIcons.copy, context.t.duplicate),
+                  if (canMakeNext) _item(c, _RoutineAction.makeNext, GymIcons.skip, context.t.setAsNext),
+                  _item(c, _RoutineAction.delete, GymIcons.trash, context.t.deleteWord, tone: c.danger),
                 ],
               ),
             ],
@@ -786,8 +788,9 @@ class _OrderRow extends StatelessWidget {
               customBorder: const CircleBorder(),
               child: Padding(
                 padding: const EdgeInsets.all(4),
-                child: Icon(isNext ? Icons.play_circle : Icons.circle_outlined,
-                    size: 20, color: isNext ? c.accent : c.text3),
+                // Glyph play Basic UI sudah berbingkai lingkaran, jadi ia dan
+                // lingkaran kosong bertukar tanpa lompatan ukuran.
+                child: Icon(isNext ? GymIcons.play : GymIcons.circle, size: 18, color: isNext ? c.accent : c.text3),
               ),
             ),
             const SizedBox(width: 10),
@@ -803,13 +806,13 @@ class _OrderRow extends StatelessWidget {
             IconButton(
               onPressed: canUp ? onUp : null,
               visualDensity: VisualDensity.compact,
-              icon: Icon(Icons.arrow_upward, size: 18, color: canUp ? c.text2 : c.text3),
+              icon: Icon(GymIcons.arrowUp, size: 18, color: canUp ? c.text2 : c.text3),
               tooltip: context.t.moveUp,
             ),
             IconButton(
               onPressed: canDown ? onDown : null,
               visualDensity: VisualDensity.compact,
-              icon: Icon(Icons.arrow_downward, size: 18, color: canDown ? c.text2 : c.text3),
+              icon: Icon(GymIcons.arrowDown, size: 18, color: canDown ? c.text2 : c.text3),
               tooltip: context.t.moveDown,
             ),
           ],

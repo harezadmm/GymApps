@@ -43,6 +43,46 @@ void main() {
     expect(File('pubspec.yaml').readAsStringSync(), contains('assets/fonts/GymIcons.ttf'));
   });
 
+  test('SVG sumber font berupa isian dan tercatat di SOURCES.md', () {
+    // Font ikon hanya menggambar isian. SVG yang garisnya masih berupa
+    // stroke lolos build tanpa galat, tetapi glyph-nya kosong di aplikasi.
+    final sources = File('../design/iconscout/SOURCES.md').readAsStringSync();
+    final svgs = Directory('../design/iconscout/icons')
+        .listSync()
+        .whereType<File>()
+        .where((f) => f.path.endsWith('.svg'))
+        .toList();
+    expect(svgs, isNotEmpty);
+    for (final f in svgs) {
+      final name = f.uri.pathSegments.last.replaceAll('.svg', '');
+      final svg = f.readAsStringSync();
+      expect(svg, contains('<path'), reason: name);
+      expect(RegExp(r'stroke\s*[=:]\s*"?(?!none)').hasMatch(svg), isFalse, reason: '$name masih memakai stroke');
+      // Lisensinya per aset: glyph yang tidak tercatat tidak bisa dilacak
+      // balik ke slug yang dibeli.
+      final bare = name.startsWith('ui_') ? name.substring(3) : name;
+      expect(RegExp('[|/] ${RegExp.escape(bare)} [|/]').hasMatch(sources), isTrue,
+          reason: '$bare belum tercatat di SOURCES.md');
+    }
+  });
+
+  test('lib/ tidak memakai ikon Material lagi', () {
+    // Ikon Material bergaris lebih tipis dan bersudut lain; satu saja di
+    // antara ikon Barudak Lier langsung terlihat asing.
+    const pending = <String>[];
+    final material = RegExp(r'(^|[^A-Za-z])Icons\.[a-z_0-9]+');
+    final found = <String>[];
+    for (final f in Directory('lib').listSync(recursive: true).whereType<File>()) {
+      final path = f.path.replaceAll(r'\', '/');
+      if (!path.endsWith('.dart') || pending.any(path.endsWith)) continue;
+      final lines = f.readAsLinesSync();
+      for (var i = 0; i < lines.length; i++) {
+        if (material.hasMatch(lines[i])) found.add('$path:${i + 1}');
+      }
+    }
+    expect(found, isEmpty);
+  });
+
   test('setiap kelompok alat punya ikonnya sendiri', () {
     final icons = {for (final g in equipmentGroups.keys) GymIcons.forGroup(g)};
     expect(icons.length, equipmentGroups.length);

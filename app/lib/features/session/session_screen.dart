@@ -1235,7 +1235,7 @@ class _TopBar extends StatelessWidget {
           children: [
             IconButton(
               onPressed: onLeave,
-              icon: Icon(Icons.keyboard_arrow_down, color: c.text2),
+              icon: Icon(GymIcons.chevronDown, size: 22, color: c.text2),
               tooltip: context.t.minimise,
             ),
             Expanded(
@@ -1312,7 +1312,7 @@ class _TopBar extends StatelessWidget {
                                             ),
                                           ),
                                           const SizedBox(width: 6),
-                                          Icon(Icons.close, size: 15, color: c.accent),
+                                          Icon(GymIcons.close, size: 11, color: c.accent),
                                         ],
                                       ),
                                     ),
@@ -1622,7 +1622,7 @@ class _NotesField extends StatelessWidget {
       decoration: InputDecoration(
         hintText: context.t.sessionNotes,
         hintStyle: TextStyle(fontSize: 14, color: c.text2),
-        prefixIcon: Icon(Icons.notes, size: 18, color: c.text2),
+        prefixIcon: Icon(GymIcons.note, size: 17, color: c.text2),
         filled: true,
         fillColor: c.surface,
         contentPadding: const EdgeInsets.symmetric(vertical: 14),
@@ -1771,7 +1771,7 @@ class _ExerciseCard extends StatelessWidget {
                   turns: ex.expanded ? 0.5 : 0,
                   duration: GymMotion.of(context, GymMotion.normal),
                   curve: GymMotion.curve,
-                  child: Icon(Icons.keyboard_arrow_down, color: c.text2),
+                  child: Icon(GymIcons.chevronDown, size: 22, color: c.text2),
                 ),
                 tooltip: ex.expanded ? t.collapse : t.expand,
               ),
@@ -1782,23 +1782,23 @@ class _ExerciseCard extends StatelessWidget {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(GymRadius.control)),
                 onSelected: onAction,
                 itemBuilder: (context) => [
-                  item(_ExerciseAction.moveUp, Icons.arrow_upward, t.moveUp, enabled: !isFirst),
-                  item(_ExerciseAction.moveDown, Icons.arrow_downward, t.moveDown, enabled: !isLast),
-                  item(_ExerciseAction.replace, Icons.swap_horiz, t.replaceExercise),
-                  item(_ExerciseAction.addWarmup, Icons.whatshot_outlined, t.addWarmup),
-                  item(_ExerciseAction.addDropSet, Icons.south_east, t.addDropSet),
-                  item(_ExerciseAction.addRestPause, Icons.pause_circle_outline, t.addRestPause),
+                  item(_ExerciseAction.moveUp, GymIcons.arrowUp, t.moveUp, enabled: !isFirst),
+                  item(_ExerciseAction.moveDown, GymIcons.arrowDown, t.moveDown, enabled: !isLast),
+                  item(_ExerciseAction.replace, GymIcons.swap, t.replaceExercise),
+                  item(_ExerciseAction.addWarmup, GymIcons.fire, t.addWarmup),
+                  item(_ExerciseAction.addDropSet, GymIcons.arrowDownRight, t.addDropSet),
+                  item(_ExerciseAction.addRestPause, GymIcons.pause, t.addRestPause),
                   item(
                     _ExerciseAction.superset,
-                    Icons.link,
+                    GymIcons.link,
                     ex.config.superset ? t.endSuperset : t.supersetWithNext,
                     enabled: ex.config.superset || !isLast,
                   ),
-                  item(_ExerciseAction.note, Icons.sticky_note_2_outlined, t.exerciseNote),
+                  item(_ExerciseAction.note, GymIcons.note, t.exerciseNote),
                   item(_ExerciseAction.history, GymIcons.chart, t.exerciseHistory),
                   item(
                     _ExerciseAction.removeLastSet,
-                    Icons.remove_circle_outline,
+                    GymIcons.minusCircle,
                     t.removeLastSet,
                     enabled: ex.sets.length > 1,
                   ),
@@ -1813,7 +1813,7 @@ class _ExerciseCard extends StatelessWidget {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.sticky_note_2_outlined, size: 14, color: c.warn),
+                  Icon(GymIcons.note, size: 14, color: c.warn),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
@@ -1952,10 +1952,12 @@ class _WhyBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.gym;
     final (icon, tint) = switch (kind) {
-      PrescriptionKind.up => (Icons.trending_up, c.accent),
-      PrescriptionKind.deload => (Icons.trending_down, c.warn),
-      PrescriptionKind.hold => (Icons.trending_flat, c.text2),
-      _ => (Icons.flag_outlined, c.text2),
+      // Basic UI tidak punya grafik tren; panah serong dari glyph panah yang
+      // sama menyampaikan naik / turun / tahan tanpa gaya garis kedua.
+      PrescriptionKind.up => (GymIcons.arrowUpRight, c.accent),
+      PrescriptionKind.deload => (GymIcons.arrowDownRight, c.warn),
+      PrescriptionKind.hold => (GymIcons.arrowRight, c.text2),
+      _ => (GymIcons.flag, c.text2),
     };
 
     return Container(
@@ -2154,7 +2156,10 @@ class _SetRowTile extends StatelessWidget {
             ),
           ),
           SizedBox(
+            // Tinggi dikunci: lingkaran 20 dp saja terlalu kecil untuk
+            // diketuk dengan tangan berkapur.
             width: 38,
+            height: 38,
             child: Semantics(
               button: true,
               checked: done,
@@ -2172,12 +2177,20 @@ class _SetRowTile extends StatelessWidget {
                   duration: GymMotion.of(context, GymMotion.quick),
                   switchInCurve: Curves.easeOutBack,
                   transitionBuilder: (child, anim) => ScaleTransition(scale: anim, child: child),
-                  child: Icon(
-                    done ? Icons.check_circle : Icons.circle_outlined,
-                    key: ValueKey(done),
-                    size: 24,
-                    color: done ? c.doneInk : c.text3,
-                  ),
+                  // Paket ikon hanya berisi garis, sedangkan "selesai" harus
+                  // terbaca dari ujung mata di tengah set. Jadi lingkarannya
+                  // diisi sendiri dan centangnya diberi warna latar baris —
+                  // hasilnya sama dengan check_circle Material yang dulu.
+                  child: done
+                      ? Container(
+                          key: const ValueKey(true),
+                          width: 20,
+                          height: 20,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(color: c.doneInk, shape: BoxShape.circle),
+                          child: Icon(GymIcons.check, size: 11, color: c.doneBg),
+                        )
+                      : Icon(GymIcons.circle, key: const ValueKey(false), size: 20, color: c.text3),
                 ),
               ),
             ),
@@ -2266,7 +2279,7 @@ class _CellState extends State<_Cell> {
         widget.onStep!(dir);
       },
       borderRadius: BorderRadius.circular(GymRadius.input),
-      child: SizedBox(width: 24, height: 36, child: Icon(dir < 0 ? Icons.remove : Icons.add, size: 16, color: c.text2)),
+      child: SizedBox(width: 24, height: 36, child: Icon(dir < 0 ? GymIcons.minus : GymIcons.add, size: 15, color: c.text2)),
     );
 
     final field = TextField(

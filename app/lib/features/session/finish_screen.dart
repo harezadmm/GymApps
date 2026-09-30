@@ -13,6 +13,7 @@ import '../../domain/units.dart';
 import '../../core/charts.dart';
 import '../../core/format.dart';
 import '../../core/gym_icons.dart';
+import '../../core/lottie_art.dart';
 import '../../core/motion.dart';
 import '../../core/strings.dart';
 import '../../core/strings_session.dart';
@@ -124,7 +125,6 @@ class _FinishScreenState extends State<FinishScreen> {
                     // mata dari "selesai" ke angka lalu ke target berikutnya.
                     Reveal(
                       child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Expanded(
                             child: Column(
@@ -133,13 +133,22 @@ class _FinishScreenState extends State<FinishScreen> {
                                 SectionLabel(context.t.sessionComplete, color: c.doneInk),
                                 const SizedBox(height: 4),
                                 Text(widget.routineName, style: Theme.of(context).textTheme.headlineMedium),
+                                const SizedBox(height: 4),
+                                // Tanggal pindah ke bawah nama: pojok kanan
+                                // sekarang milik popper, dan nama rutinitas
+                                // yang panjang butuh lebar penuh kolom ini.
+                                Text(widget.dateLabel, style: TextStyle(fontSize: 12.5, color: c.text2)),
                               ],
                             ),
                           ),
-                          Padding(
-                            padding: const EdgeInsets.only(top: 8),
-                            child: Text(widget.dateLabel, style: TextStyle(fontSize: 12.5, color: c.text2)),
-                          ),
+                          const SizedBox(width: 8),
+                          // Satu-satunya perayaan di layar ini: popper yang
+                          // meletus sekali saat ringkasan terbuka — jawaban
+                          // atas "sesi tercatat", lalu diam. Semburannya
+                          // mengarah ke pojok kanan atas, menjauh dari teks.
+                          // Hiasan: "SESSION COMPLETE" di sebelahnya sudah
+                          // mengatakan hal yang sama ke pembaca layar.
+                          const GymLottieView(GymLottie.sessionDone, size: 96),
                         ],
                       ),
                     ),
@@ -173,12 +182,12 @@ class _FinishScreenState extends State<FinishScreen> {
                       child: Row(
                         children: [
                           Expanded(
-                            child: _Metric(icon: Icons.done_all, count: setsDone.toDouble(), label: context.t.setsDone),
+                            child: _Metric(icon: GymIcons.checkDouble, count: setsDone.toDouble(), label: context.t.setsDone),
                           ),
                           const SizedBox(width: 10),
                           Expanded(
                             child: _Metric(
-                              icon: Icons.emoji_events_outlined,
+                              icon: GymIcons.trophy,
                               count: records.length.toDouble(),
                               label: context.t.newPRs,
                               tone: records.isEmpty ? null : c.warn,
@@ -369,12 +378,18 @@ class _RecordsCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(Icons.emoji_events_outlined, size: 15, color: c.warn),
-              const SizedBox(width: 8),
-              SectionLabel(context.t.newPersonalRecords, color: c.warn),
+              // Piala yang berkilau sekali saat kartu ini datang. Kartu rekor
+              // hanya muncul kalau memang ada rekor, jadi geraknya selalu
+              // menjawab sesuatu yang baru terjadi. Warnanya c.warn, sama
+              // dengan ikon statis yang digantikannya.
+              const GymLottieView(GymLottie.newRecord, size: 40),
+              // Kanvas piala sudah punya ruang kosong di sisinya; jarak
+              // penuh 8 dp akan terbaca seperti 14.
+              const SizedBox(width: 4),
+              Expanded(child: SectionLabel(context.t.newPersonalRecords, color: c.warn)),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 6),
           for (final (i, entry) in records.indexed) ...[
             if (i > 0) const SizedBox(height: 8),
             Row(
@@ -385,7 +400,8 @@ class _RecordsCard extends StatelessWidget {
                   // "(was 0)" yang terbaca seperti pernah mengangkat nol.
                   entry.$2.previous == null
                       ? 'e1RM ${formatDelta(entry.$2.now.est)} ${context.unitLabel}'
-                      : 'e1RM ${formatDelta(entry.$2.now.est)} ${context.unitLabel} (was ${formatDelta(entry.$2.previous!)})',
+                      : 'e1RM ${formatDelta(entry.$2.now.est)} ${context.unitLabel} '
+                          '(${context.t.lang == AppLanguage.indonesian ? 'sebelumnya' : 'was'} ${formatDelta(entry.$2.previous!)})',
                   style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: c.text2),
                 ),
               ],

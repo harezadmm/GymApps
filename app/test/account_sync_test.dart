@@ -569,7 +569,7 @@ void main() {
       ));
       await tester.pump();
 
-      final button = find.text('Train another session');
+      final button = find.text('Other session');
       await tester.scrollUntilVisible(button, 200, scrollable: find.byType(Scrollable).first);
       await tester.tap(button);
       await tester.pump();

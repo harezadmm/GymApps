@@ -7,6 +7,7 @@ library;
 
 import 'package:flutter/material.dart';
 
+import '../../core/gym_icons.dart';
 import '../../core/theme.dart';
 
 class GymField extends StatelessWidget {
@@ -83,7 +84,7 @@ class GymField extends StatelessWidget {
             children: [
               // Ikon di samping teks, bukan warna saja: warna sendirian bukan
               // penanda yang cukup bagi orang yang sulit membedakan merah.
-              Icon(Icons.error_outline, size: 15, color: c.danger),
+              Icon(GymIcons.alert, size: 14, color: c.danger),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(error!,

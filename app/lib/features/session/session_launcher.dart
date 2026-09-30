@@ -8,6 +8,7 @@ library;
 import 'package:flutter/material.dart';
 import '../../domain/units.dart';
 
+import '../../core/gym_icons.dart';
 import '../../core/strings.dart';
 import '../../core/strings_history.dart';
 import '../../core/strings_session.dart';
@@ -42,7 +43,9 @@ SessionExercise buildSessionExercise(
   final ex = catalog.byId(cfg.exerciseId);
   return SessionExercise(
     name: catalog.nameOf(cfg.exerciseId),
-    icon: ex?.icon ?? Icons.fitness_center,
+    // Gerakan yang hilang dari katalog (id dari cadangan lama) tetap butuh
+    // ikon; dumbbell dari font yang sama dengan ikon alat lainnya.
+    icon: ex?.icon ?? GymIcons.dumbbell,
     config: plan.target,
     sets: plan.sets,
     previous: plan.previous,
@@ -218,7 +221,7 @@ Future<void> resumeDraftSession(BuildContext context, {bool restored = false}) a
       () {
         final j = Map<String, dynamic>.from(raw as Map);
         final id = ((j['cfg'] as Map?)?['id'] as String?) ?? '';
-        final ex = SessionExercise.fromDraft(j, catalog.byId(id)?.icon ?? Icons.fitness_center);
+        final ex = SessionExercise.fromDraft(j, catalog.byId(id)?.icon ?? GymIcons.dumbbell);
         if (draftUnit != unit) {
           // Satuan diganti di Profil sebelum sesi dilanjutkan.
           ex.config = configBetween(ex.config, draftUnit, unit);
@@ -317,7 +320,7 @@ Future<void> reopenWorkoutSession(BuildContext context, Workout workout) async {
     ];
     exercises.add(SessionExercise(
       name: catalog.nameOf(id),
-      icon: catalog.byId(id)?.icon ?? Icons.fitness_center,
+      icon: catalog.byId(id)?.icon ?? GymIcons.dumbbell,
       config: cfg,
       sets: sets,
       previous: previous,

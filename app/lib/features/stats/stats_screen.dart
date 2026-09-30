@@ -579,7 +579,7 @@ class _StatsScreenState extends State<StatsScreen> {
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: c.text)),
                         ),
-                        Icon(Icons.keyboard_arrow_down, size: 18, color: c.text2),
+                        Icon(GymIcons.chevronDown, size: 18, color: c.text2),
                       ],
                     ),
                   ),

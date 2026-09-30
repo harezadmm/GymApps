@@ -12,6 +12,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import '../../core/gym_icons.dart';
 import '../../core/illustration.dart';
 
 import '../../data/account_store.dart';
@@ -148,7 +149,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 const SizedBox(height: 8),
                 GymField(
                   controller: _email,
-                  icon: Icons.mail_outline,
+                  icon: GymIcons.mail,
                   keyboardType: TextInputType.emailAddress,
                   hint: 'nama@email.com',
                   error: _emailError,
@@ -160,14 +161,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 const SizedBox(height: 8),
                 GymField(
                   controller: _password,
-                  icon: Icons.lock_outline,
+                  icon: GymIcons.lock,
                   obscure: _obscure,
                   error: _passwordError,
                   textInputAction: TextInputAction.next,
                   suffix: IconButton(
                     onPressed: () => setState(() => _obscure = !_obscure),
-                    icon: Icon(_obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-                        size: 19, color: c.text2),
+                    icon: Icon(_obscure ? GymIcons.eye : GymIcons.eyeOff, size: 19, color: c.text2),
                     tooltip: _obscure ? t.showPassword : t.hidePassword,
                   ),
                 ),
@@ -177,17 +177,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 const SizedBox(height: 8),
                 GymField(
                   controller: _confirm,
-                  icon: Icons.lock_outline,
+                  icon: GymIcons.lock,
                   obscure: _obscureConfirm,
                   error: _confirmError,
                   textInputAction: TextInputAction.done,
                   onSubmitted: (_) => _submit(),
                   suffix: IconButton(
                     onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
-                    icon: Icon(
-                        _obscureConfirm ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-                        size: 19,
-                        color: c.text2),
+                    icon: Icon(_obscureConfirm ? GymIcons.eye : GymIcons.eyeOff, size: 19, color: c.text2),
                     tooltip: _obscureConfirm ? t.showPassword : t.hidePassword,
                   ),
                 ),
@@ -209,7 +206,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 // Itu tidak lagi benar: akunnya dibuat lokal lebih dulu, dan
                 // sisi servernya menyusul saat ada sinyal.
                 NoteBanner(
-                  icon: supabaseConfigured ? Icons.cloud_sync_outlined : Icons.cloud_off_outlined,
+                  icon: supabaseConfigured ? GymIcons.sync : GymIcons.cloudOff,
                   text: supabaseConfigured ? t.signUpSyncs : t.signUpLocalOnly,
                   tone: c.text2,
                 ),

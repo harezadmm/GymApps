@@ -644,8 +644,8 @@ void main() {
       await _settle(tester);
 
       expect(find.text('Barbell Bench Press'), findsOneWidget, reason: 'kembali ke editor dengan gerakan baru');
-      expect(find.byIcon(Icons.circle_outlined), findsOneWidget);
-      expect(find.byIcon(Icons.check_circle), findsNothing, reason: '0 × 0 tidak boleh diklaim sudah dilakukan');
+      expect(find.byIcon(GymIcons.circle), findsOneWidget);
+      expect(find.byIcon(GymIcons.checkCircle), findsNothing, reason: '0 × 0 tidak boleh diklaim sudah dilakukan');
 
       await tester.tap(find.text('SAVE'));
       await _settle(tester);

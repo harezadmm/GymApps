@@ -373,7 +373,9 @@ class _WorkoutEditScreenState extends State<WorkoutEditScreen> {
                   children: [
                     IconButton(
                       onPressed: () => Navigator.of(context).maybePop(),
-                      icon: Icon(Icons.close, color: c.text2),
+                      // Silang Barudak Lier memenuhi kotak glyph; 18 setara
+                      // silang Material 24 yang dulu di sini.
+                      icon: Icon(GymIcons.close, size: 18, color: c.text2),
                       tooltip: t.cancel,
                     ),
                     Expanded(
@@ -649,14 +651,14 @@ class _EditRow extends StatelessWidget {
               scale: set.done ? 1 : 0.9,
               duration: GymMotion.of(context, GymMotion.quick),
               curve: GymMotion.pop,
-              child: Icon(set.done ? Icons.check_circle : Icons.circle_outlined,
-                  color: set.done ? c.doneInk : c.text3, size: 22),
+              child: Icon(set.done ? GymIcons.checkCircle : GymIcons.circle,
+                  color: set.done ? c.doneInk : c.text3, size: 20),
             ),
           ),
           IconButton(
             onPressed: onDelete,
             visualDensity: VisualDensity.compact,
-            icon: Icon(Icons.close, color: c.text3, size: 18),
+            icon: Icon(GymIcons.close, color: c.text3, size: 14),
           ),
         ],
       ),

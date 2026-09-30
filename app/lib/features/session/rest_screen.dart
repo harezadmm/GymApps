@@ -15,6 +15,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../core/gym_icons.dart';
+import '../../core/lottie_art.dart';
 import '../../core/motion.dart';
 import '../../core/strings.dart';
 import '../../core/theme.dart';
@@ -101,7 +102,7 @@ class _RestScreenState extends State<RestScreen> {
                     children: [
                       IconButton(
                         onPressed: () => Navigator.of(context).maybePop(),
-                        icon: Icon(Icons.keyboard_arrow_down, color: c.text2),
+                        icon: Icon(GymIcons.chevronDown, size: 22, color: c.text2),
                         tooltip: context.t.backToSession,
                       ),
                       Expanded(
@@ -115,6 +116,13 @@ class _RestScreenState extends State<RestScreen> {
                           ],
                         ),
                       ),
+                      const SizedBox(width: 8),
+                      // Jam pasir di pojok, jauh dari angka: penanda "masih
+                      // berjalan" seperti pemintal, satu-satunya animasi yang
+                      // boleh berulang — dan hanya selama timernya memang
+                      // jalan. Kecil dan diperlambat supaya mata tetap ke
+                      // hitung mundur. Hiasan: label ISTIRAHAT sudah bicara.
+                      GymLottieView(GymLottie.resting, size: 44, repeat: t.isRunning),
                     ],
                   ),
                 ),

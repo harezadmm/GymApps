@@ -416,8 +416,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                   color: s.done ? c.text : c.text3,
                                   fontFeatures: const [FontFeature.tabularFigures()])),
                         ),
-                        Icon(s.done ? Icons.check_circle : Icons.circle_outlined,
-                            size: 18, color: s.done ? c.doneInk : c.text3),
+                        Icon(s.done ? GymIcons.checkCircle : GymIcons.circle,
+                            size: 16, color: s.done ? c.doneInk : c.text3),
                       ],
                     ),
                   ),
@@ -671,7 +671,7 @@ class _SessionRow extends StatelessWidget {
                   ),
                   // Tidak ada glyph chevron di paket ikon; yang Material dipakai
                   // karena bentuknya netral dan sudah dipakai SettingsTile.
-                  Icon(Icons.chevron_right, size: 18, color: c.text3),
+                  Icon(GymIcons.chevronRight, size: 18, color: c.text3),
                 ],
               ),
             ),
