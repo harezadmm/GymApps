@@ -2,6 +2,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import '../../core/gym_icons.dart';
 import '../../core/illustration.dart';
 
 import '../../data/account_store.dart';
@@ -135,7 +136,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 8),
                 GymField(
                   controller: _email,
-                  icon: Icons.mail_outline,
+                  icon: GymIcons.mail,
                   keyboardType: TextInputType.emailAddress,
                   hint: 'nama@email.com',
                   textInputAction: TextInputAction.next,
@@ -145,15 +146,14 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 8),
                 GymField(
                   controller: _password,
-                  icon: Icons.lock_outline,
+                  icon: GymIcons.lock,
                   obscure: _obscure,
                   error: _error,
                   textInputAction: TextInputAction.done,
                   onSubmitted: (_) => _submit(),
                   suffix: IconButton(
                     onPressed: () => setState(() => _obscure = !_obscure),
-                    icon: Icon(_obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-                        size: 19, color: c.text2),
+                    icon: Icon(_obscure ? GymIcons.eye : GymIcons.eyeOff, size: 19, color: c.text2),
                     tooltip: _obscure ? context.t.showPassword : context.t.hidePassword,
                   ),
                 ),
@@ -191,7 +191,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       // sinkron benar-benar jalan, gambar itu justru menyatakan
                       // kebalikan dari yang terjadi.
                       Icon(
-                        supabaseConfigured ? Icons.cloud_sync_outlined : Icons.cloud_off_outlined,
+                        supabaseConfigured ? GymIcons.sync : GymIcons.cloudOff,
                         size: 17,
                         color: c.text2,
                       ),

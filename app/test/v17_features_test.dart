@@ -7,6 +7,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gymapps/core/gym_icons.dart';
 import 'package:gymapps/core/strings.dart';
 import 'package:gymapps/core/theme.dart';
 import 'package:gymapps/data/exercise_catalog.dart';
@@ -255,7 +256,7 @@ void main() {
       final bench = ex('Bench');
       await tester.pumpWidget(_wrap(store, SessionScreen(routineName: 'Push', exercises: [bench])));
       await tester.pump();
-      await tester.tap(find.byIcon(Icons.circle_outlined).first);
+      await tester.tap(find.byIcon(GymIcons.circle).first);
       await tester.pump(const Duration(milliseconds: 300));
       expect(store.draft?['name'], 'Push');
       final sets = ((store.draft!['ex'] as List).first as Map)['sets'] as List;
@@ -273,7 +274,7 @@ void main() {
       final b = ex('Row', sets: 1)..expanded = false;
       await tester.pumpWidget(_wrap(store, SessionScreen(routineName: 'Push', exercises: [a, b])));
       await tester.pump();
-      await tester.tap(find.byIcon(Icons.circle_outlined).first);
+      await tester.tap(find.byIcon(GymIcons.circle).first);
       await tester.pump(const Duration(milliseconds: 500));
       expect(find.textContaining('Next: Row'), findsWidgets);
       tester.state<NavigatorState>(find.byType(Navigator)).pop();
@@ -287,7 +288,7 @@ void main() {
       final bench = ex('Bench', sets: 1);
       await tester.pumpWidget(_wrap(store, SessionScreen(routineName: 'Push', exercises: [bench])));
       await tester.pump();
-      await tester.tap(find.byIcon(Icons.add).first);
+      await tester.tap(find.byIcon(GymIcons.add).first);
       await tester.pump();
       expect(bench.sets.first.weight, 62.5);
       expect(find.widgetWithText(TextField, '62.5'), findsOneWidget);
@@ -321,7 +322,7 @@ void main() {
       final bench = ex('Bench')..restEnabled = false;
       await tester.pumpWidget(_wrap(store, SessionScreen(routineName: 'Push', exercises: [bench])));
       await tester.pump();
-      await tester.tap(find.byIcon(Icons.circle_outlined).first);
+      await tester.tap(find.byIcon(GymIcons.circle).first);
       await tester.pump();
       expect(find.text('Reps in reserve'), findsOneWidget);
       await tester.tap(find.descendant(of: find.byType(Wrap), matching: find.text('2')));

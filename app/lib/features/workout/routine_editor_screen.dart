@@ -14,6 +14,7 @@ import '../../core/weights.dart';
 import '../../domain/units.dart';
 
 import '../../core/format.dart';
+import '../../core/gym_icons.dart';
 import '../../core/motion.dart';
 import '../../core/strings.dart';
 import '../../core/theme.dart';
@@ -240,7 +241,7 @@ class _RoutineEditorScreenState extends State<RoutineEditorScreen> {
                   children: [
                     IconButton(
                       onPressed: () => Navigator.of(context).maybePop(),
-                      icon: Icon(Icons.arrow_back, color: c.text2),
+                      icon: Icon(GymIcons.arrowLeft, size: 22, color: c.text2),
                       tooltip: t.back,
                     ),
                     Expanded(child: Text(t.editRoutine, style: Theme.of(context).textTheme.titleLarge)),
@@ -325,7 +326,7 @@ class _RoutineEditorScreenState extends State<RoutineEditorScreen> {
                           const SizedBox(height: 24),
                           GymButton(
                             label: t.deleteRoutine,
-                            icon: Icons.delete_outline,
+                            icon: GymIcons.trash,
                             tone: GymButtonTone.danger,
                             onPressed: _deleteRoutine,
                           ),
@@ -462,20 +463,20 @@ class _ExerciseEditor extends StatelessWidget {
               ),
               IconButton(
                 onPressed: onToggle,
-                icon: Icon(expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, color: c.text2),
+                icon: Icon(expanded ? GymIcons.chevronUp : GymIcons.chevronDown, size: 22, color: c.text2),
                 tooltip: expanded ? t.collapse : t.expand,
               ),
               PopupMenuButton<_RowAction>(
-                icon: Icon(Icons.more_vert, size: 20, color: c.text2),
+                icon: Icon(GymIcons.moreVertical, size: 20, color: c.text2),
                 tooltip: t.exerciseActions,
                 color: c.surface2,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(GymRadius.control)),
                 onSelected: onAction,
                 itemBuilder: (context) => [
-                  item(_RowAction.moveUp, Icons.arrow_upward, t.moveUp, enabled: !isFirst),
-                  item(_RowAction.moveDown, Icons.arrow_downward, t.moveDown, enabled: !isLast),
-                  item(_RowAction.replace, Icons.swap_horiz, t.replaceExercise),
-                  item(_RowAction.remove, Icons.delete_outline, t.removeExercise, tone: c.danger),
+                  item(_RowAction.moveUp, GymIcons.arrowUp, t.moveUp, enabled: !isFirst),
+                  item(_RowAction.moveDown, GymIcons.arrowDown, t.moveDown, enabled: !isLast),
+                  item(_RowAction.replace, GymIcons.swap, t.replaceExercise),
+                  item(_RowAction.remove, GymIcons.trash, t.removeExercise, tone: c.danger),
                 ],
               ),
             ],
@@ -656,7 +657,7 @@ class _StepperField extends StatelessWidget {
               IconButton(
                 onPressed: onMinus,
                 visualDensity: VisualDensity.compact,
-                icon: Icon(Icons.remove, size: 18, color: c.accent),
+                icon: Icon(GymIcons.minus, size: 16, color: c.accent),
                 tooltip: context.t.fewer,
               ),
               Expanded(
@@ -670,7 +671,7 @@ class _StepperField extends StatelessWidget {
               IconButton(
                 onPressed: onPlus,
                 visualDensity: VisualDensity.compact,
-                icon: Icon(Icons.add, size: 18, color: c.accent),
+                icon: Icon(GymIcons.add, size: 16, color: c.accent),
                 tooltip: context.t.more,
               ),
             ],
@@ -706,7 +707,7 @@ class _PolicyPicker extends StatelessWidget {
           isExpanded: true,
           dropdownColor: c.surface2,
           borderRadius: BorderRadius.circular(GymRadius.control),
-          icon: Icon(Icons.keyboard_arrow_down, color: c.text2),
+          icon: Icon(GymIcons.chevronDown, size: 22, color: c.text2),
           style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, color: c.text),
           items: [
             for (final p in options) DropdownMenuItem(value: p, child: Text(context.t.policy(policyName[p]!))),
@@ -742,7 +743,7 @@ class _AddExercise extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.add, size: 17, color: c.accent),
+              Icon(GymIcons.add, size: 15, color: c.accent),
               const SizedBox(width: 8),
               Text(context.t.addExercise,
                   style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, letterSpacing: 0.6, color: c.accent)),

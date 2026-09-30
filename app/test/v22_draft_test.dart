@@ -10,6 +10,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gymapps/core/gym_icons.dart';
 import 'package:gymapps/core/strings.dart';
 import 'package:gymapps/core/theme.dart';
 import 'package:gymapps/data/exercise_catalog.dart';
@@ -130,7 +131,7 @@ void main() {
     _phone(tester);
     await tester.pumpWidget(_wrap(store, SessionScreen(routineName: 'Push', exercises: [_bench()])));
     await tester.pump();
-    await tester.tap(find.byIcon(Icons.circle_outlined).first);
+    await tester.tap(find.byIcon(GymIcons.circle).first);
     await _settle(tester);
     final rest = store.draft!['rest'] as Map;
     expect(rest['total'], 90);

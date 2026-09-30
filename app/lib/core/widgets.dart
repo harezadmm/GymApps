@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 
 export 'format.dart' show formatWeight;
 
+import 'gym_icons.dart';
 import 'motion.dart';
 import 'theme.dart';
 
@@ -239,7 +240,7 @@ class StatBlock extends StatelessWidget {
                 // Blok yang bisa diketuk diberi chevron kecil: di kolom sempit
                 // tidak ada ruang untuk teks "ketuk untuk…", dan tanpa tanda
                 // apa pun blok berwarna terbaca sebagai angka mati.
-                if (tappable) Icon(Icons.chevron_right, size: 16, color: c.text3),
+                if (tappable) Icon(GymIcons.chevronRight, size: 16, color: c.text3),
               ],
             ),
             const SizedBox(height: 8),
@@ -587,7 +588,7 @@ class SettingsTile extends StatelessWidget {
                       style: TextStyle(fontSize: 13.5, color: c.text2)),
                 ),
               const SizedBox(width: 6),
-              Icon(Icons.chevron_right, size: 18, color: c.text3),
+              Icon(GymIcons.chevronRight, size: 18, color: c.text3),
             ],
           ],
         ),
@@ -737,7 +738,9 @@ class _Tick extends StatelessWidget {
         scale: selected ? 1 : 0,
         duration: GymMotion.of(context, GymMotion.quick),
         curve: GymMotion.curve,
-        child: Icon(Icons.check, size: 17, color: c.accentInk),
+        // Centang Barudak Lier memenuhi kotak glyph, jadi 13 sudah selebar
+        // centang Material 17 yang dulu di sini.
+        child: Icon(GymIcons.check, size: 13, color: c.accentInk),
       ),
     );
   }

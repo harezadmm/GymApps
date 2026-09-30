@@ -28,8 +28,12 @@ src = f'''/// Ikon dari IconScout, dibungkus jadi font `GymIcons` supaya tetap b
 /// `scripts/gen-gym-icons-dart.py` — jangan disunting tangan. Sumber tiap
 /// ikon dan cara membangun ulang fontnya ada di `design/iconscout/SOURCES.md`.
 ///
-/// Dua paket: alat gym ("Gym", Bharat Design, 24 px) dan ikon antarmuka
-/// ("Basic UI", Barudak Lier, 32 px). Keduanya garis membulat satu warna.
+/// Dua kontributor: alat gym ("Gym", Bharat Design, 24 px) dan ikon antarmuka
+/// Barudak Lier ("Basic UI" dan paket kembarannya, 32 px). Glyph antarmuka
+/// yang tidak ada di paketnya — chevron, panah, minus — dirakit dari ikon
+/// paket itu oleh `scripts/derive-gym-icons.py`. Semuanya garis membulat satu
+/// warna. Silang dan centang memenuhi kotak glyph, jadi pakai sekitar ¾
+/// ukuran ikon Material yang setara.
 library;
 
 import 'package:flutter/widgets.dart';

@@ -140,7 +140,7 @@ class Strings {
   String get dueToday => _('DUE TODAY', 'HARI INI');
   String get startSession => _('START SESSION', 'MULAI SESI');
   String get freestyle => _('Freestyle', 'Bebas');
-  String get otherSession => _('Train another session', 'Pilih sesi lain');
+  String get otherSession => _('Other session', 'Pilih sesi lain');
   String get otherSessionTitle => _('What are you training today?', 'Hari ini latihan apa?');
   String get otherSessionHint => _(
         'The rotation carries on from whichever session you train.',

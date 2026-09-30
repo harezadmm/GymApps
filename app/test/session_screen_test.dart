@@ -9,6 +9,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gymapps/core/gym_icons.dart';
 import 'package:gymapps/core/strings.dart';
 import 'package:gymapps/core/theme.dart';
 import 'package:gymapps/data/workout_store.dart';
@@ -109,7 +110,7 @@ void main() {
     await tester.pump();
     // Mencentang set pertama memulai istirahat, membuka layar hitung mundur
     // penuh; tutup lalu periksa kartu istirahat di daftar.
-    await tester.tap(find.byIcon(Icons.circle_outlined).first);
+    await tester.tap(find.byIcon(GymIcons.circle).first);
     await tester.pump(const Duration(milliseconds: 500));
     tester.state<NavigatorState>(find.byType(Navigator)).pop();
     await tester.pump(const Duration(milliseconds: 500));
@@ -127,7 +128,7 @@ void main() {
     await tester.pump();
     expect(ex.sets.first.weight, 62.5);
 
-    await tester.tap(find.byIcon(Icons.circle_outlined).first);
+    await tester.tap(find.byIcon(GymIcons.circle).first);
     await tester.pump(const Duration(milliseconds: 500));
     expect(ex.sets.first.done, isTrue);
     expect(ex.sets.first.weight, 62.5);

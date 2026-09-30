@@ -10,6 +10,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gymapps/core/gym_icons.dart';
 import 'package:gymapps/core/strings.dart';
 import 'package:gymapps/core/theme.dart';
 import 'package:gymapps/data/workout_store.dart';
@@ -283,7 +284,7 @@ void main() {
 
       // Mencentang set pertama memulai istirahat dan membuka layar penuhnya;
       // tutup layar itu, istirahat tetap berjalan di belakang.
-      await tester.tap(find.byIcon(Icons.circle_outlined).first);
+      await tester.tap(find.byIcon(GymIcons.circle).first);
       await tester.pump(const Duration(milliseconds: 500));
       tester.state<NavigatorState>(find.byType(Navigator)).pop();
       await tester.pump(const Duration(milliseconds: 500));
@@ -341,7 +342,7 @@ void main() {
       await tester.pump();
       expect(find.byType(TextField), findsNWidgets(5));
 
-      await tester.tap(find.byIcon(Icons.circle_outlined).first);
+      await tester.tap(find.byIcon(GymIcons.circle).first);
       await tester.pump(const Duration(milliseconds: 500));
       tester.state<NavigatorState>(find.byType(Navigator)).pop();
       await tester.pump(const Duration(milliseconds: 500));
@@ -382,7 +383,7 @@ void main() {
       ),
     ));
     await tester.pump();
-    await tester.tap(find.byIcon(Icons.circle_outlined).first);
+    await tester.tap(find.byIcon(GymIcons.circle).first);
     await tester.pump(const Duration(milliseconds: 500));
     // Tutup layar istirahat penuh supaya bilah atas sesi tergambar lagi;
     // luapan RenderFlex di bilah itu membuat test ini gagal dengan sendirinya.

@@ -11,6 +11,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import '../../core/art3d.dart';
 import '../../core/illustration.dart';
 import '../../core/gym_icons.dart';
 import '../library/library_screen.dart';
@@ -154,8 +155,8 @@ class HomeScreen extends StatelessWidget {
     final tiles = <Widget>[
       _QuickTile(
         label: t.otherSession,
-        icon: GymIcons.dataTransfer,
-        hue: c.hues.cyan,
+        // Kalender: memilih sesi hari lain dari program, bukan yang dijadwalkan.
+        art: Gym3d.calendar,
         onTap: !hasProgram || next == null
             ? null
             : () async {
@@ -165,20 +166,19 @@ class HomeScreen extends StatelessWidget {
       ),
       _QuickTile(
         label: t.freestyle,
-        icon: GymIcons.edit,
-        hue: c.hues.pink,
+        // Stopwatch: sesi tanpa rencana — cukup mulai jam lalu angkat.
+        art: Gym3d.stopwatch,
         onTap: () => openFreestyleSession(context, t.freestyle),
       ),
       _QuickTile(
         label: t.exerciseLibrary,
-        icon: GymIcons.dumbbell,
-        hue: c.hues.violet,
+        art: Gym3d.dumbbell,
         onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ExerciseLibraryScreen())),
       ),
       _QuickTile(
         label: t.dashboard,
-        icon: GymIcons.chart,
-        hue: c.hues.orange,
+        // Jam kebugaran dengan grafik detak: angka-angka latihanmu.
+        art: Gym3d.fitnessWatch,
         onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DashboardScreen())),
       ),
     ];
@@ -625,7 +625,7 @@ class _NextSessionCard extends StatelessWidget {
             const SizedBox(height: 10),
             NoteBanner(
               text: program.mode == ProgramMode.weekday ? t.nextTrainingDay(dayName) : t.recoverUntil(dayName),
-              icon: Icons.bedtime_outlined,
+              icon: GymIcons.moon,
               tone: c.warn,
             ),
           ],
@@ -706,7 +706,7 @@ class _NextSessionCard extends StatelessWidget {
                 flex: 2,
                 child: GymButton(
                   label: t.skip,
-                  icon: Icons.skip_next_rounded,
+                  icon: GymIcons.skip,
                   tone: GymButtonTone.neutral,
                   shape: GymButtonShape.pill,
                   onPressed: () async {
@@ -779,7 +779,7 @@ Future<Routine?> pickOtherRoutine(BuildContext context, {required Program progra
                         child: Text(t.upNext, style: const TextStyle(fontSize: 10, letterSpacing: 0.8)),
                       )
                     else
-                      Icon(Icons.play_arrow, color: c.text2),
+                      Icon(GymIcons.play, size: 20, color: c.text2),
                   ],
                 ),
               ),
@@ -1115,14 +1115,22 @@ class _DayRow extends StatelessWidget {
 }
 
 /// Ubin jalan pintas — "My Fitness Profile" di referensi: label di kiri,
-/// cakram ikon berwarna di kanan.
+/// ikon 3D di kanan.
+///
+/// Sejak v2.3 ikonnya objek 3D satu paket ([Gym3d]), bukan ikon garis di
+/// cakram berwarna: empat ubin ini pintu masuk, dan benda yang langsung
+/// dikenali (kalender, stopwatch, dumbel, jam) lebih cepat dibaca sekilas
+/// daripada empat warna cakram yang harus dihafal.
 class _QuickTile extends StatelessWidget {
-  const _QuickTile({required this.label, required this.icon, required this.hue, this.onTap});
+  const _QuickTile({required this.label, required this.art, this.onTap});
 
   final String label;
-  final IconData icon;
-  final Color hue;
+  final Gym3d art;
   final VoidCallback? onTap;
+
+  /// Ikon 46 dp dengan padding vertikal 12 = tinggi ubin 70 dp, sama dengan
+  /// cakram 42 dp + padding 14 sebelumnya — kisi Home tidak ikut bergeser.
+  static const _art = 46.0;
 
   @override
   Widget build(BuildContext context) {
@@ -1136,7 +1144,7 @@ class _QuickTile extends StatelessWidget {
           onTap: onTap,
           borderRadius: BorderRadius.circular(GymRadius.card),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(14, 14, 12, 14),
+            padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
             child: Row(
               children: [
                 Expanded(
@@ -1146,8 +1154,11 @@ class _QuickTile extends StatelessWidget {
                       style: TextStyle(
                           fontSize: 14, fontWeight: FontWeight.w700, height: 1.2, color: onTap == null ? c.text3 : c.text)),
                 ),
-                const SizedBox(width: 8),
-                Opacity(opacity: onTap == null ? 0.45 : 1, child: IconDisc(icon, color: hue, size: 42, iconSize: 21)),
+                // Celah 6 + padding kanan 10: ruang label tetap selebar dulu
+                // (ikon lebih lebar 4 dp); gambar 3D sudah membawa ruang
+                // kosong tipis di tepinya sendiri.
+                const SizedBox(width: 6),
+                Opacity(opacity: onTap == null ? 0.45 : 1, child: Gym3dIcon(art, size: _art)),
               ],
             ),
           ),

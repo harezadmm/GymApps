@@ -15,6 +15,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/charts.dart';
 import '../../core/format.dart';
+import '../../core/gym_icons.dart';
 import '../../core/layout.dart';
 import '../../core/motion.dart';
 import '../../core/strings.dart';
@@ -210,7 +211,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   children: [
                     Row(children: [
                       SquareIconButton(
-                        icon: Icons.arrow_back,
+                        icon: GymIcons.arrowLeft,
                         tooltip: t.back,
                         onPressed: () => Navigator.of(context).pop(),
                       ),

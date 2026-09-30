@@ -7,6 +7,7 @@ library;
 
 import 'package:flutter/material.dart';
 
+import '../../core/gym_icons.dart';
 import '../../core/strings.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
@@ -124,7 +125,7 @@ class _CustomSplitScreenState extends State<CustomSplitScreen> {
                 children: [
                   IconButton(
                     onPressed: () => Navigator.of(context).pop(),
-                    icon: Icon(Icons.arrow_back, color: c.text2),
+                    icon: Icon(GymIcons.arrowLeft, size: 22, color: c.text2),
                     tooltip: t.back,
                   ),
                   Expanded(child: Text(t.customSplit, style: Theme.of(context).textTheme.titleLarge)),
@@ -190,12 +191,12 @@ class _CustomSplitScreenState extends State<CustomSplitScreen> {
                           ),
                           IconButton(
                             onPressed: _restDays <= 0 ? null : () => setState(() => _restDays--),
-                            icon: Icon(Icons.remove, color: _restDays <= 0 ? c.text3 : c.accent),
+                            icon: Icon(GymIcons.minus, size: 22, color: _restDays <= 0 ? c.text3 : c.accent),
                             tooltip: t.fewer,
                           ),
                           IconButton(
                             onPressed: _restDays >= 7 ? null : () => setState(() => _restDays++),
-                            icon: Icon(Icons.add, color: _restDays >= 7 ? c.text3 : c.accent),
+                            icon: Icon(GymIcons.add, size: 22, color: _restDays >= 7 ? c.text3 : c.accent),
                             tooltip: t.more,
                           ),
                         ],
@@ -223,7 +224,7 @@ class _CustomSplitScreenState extends State<CustomSplitScreen> {
                   _AddDayRow(onTap: _addDay),
                   if (anyEmpty && _days.isNotEmpty) ...[
                     const SizedBox(height: 14),
-                    NoteBanner(text: t.emptyDaysNote, icon: Icons.info_outline, tone: c.text2),
+                    NoteBanner(text: t.emptyDaysNote, icon: GymIcons.info, tone: c.text2),
                   ],
                 ],
               ),
@@ -326,10 +327,10 @@ class _DayCard extends StatelessWidget {
                   ],
                 ),
               ),
-              Icon(Icons.chevron_right, color: c.text3),
+              Icon(GymIcons.chevronRight, size: 22, color: c.text3),
               IconButton(
                 onPressed: onRemove,
-                icon: Icon(Icons.delete_outline, size: 20, color: c.text2),
+                icon: Icon(GymIcons.trash, size: 18, color: c.text2),
                 tooltip: t.removeDay,
               ),
             ],
@@ -364,7 +365,7 @@ class _AddDayRow extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.add, size: 17, color: c.accent),
+              Icon(GymIcons.add, size: 15, color: c.accent),
               const SizedBox(width: 8),
               Text(context.t.addDay,
                   style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, letterSpacing: 0.6, color: c.accent)),

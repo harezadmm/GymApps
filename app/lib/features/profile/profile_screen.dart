@@ -441,12 +441,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       Builder(builder: (context) {
                         final store = context.workouts;
                         final (label, tone, icon) = switch (store.syncStatus) {
-                          _ when !store.hasBackend => (t.syncOff, c.text2, Icons.cloud_off_outlined),
-                          SyncStatus.syncing => (t.syncing, c.text2, Icons.cloud_sync_outlined),
-                          SyncStatus.synced => (t.syncedNow, c.doneInk, Icons.cloud_done_outlined),
-                          SyncStatus.failed => (t.syncFailed, c.warn, Icons.cloud_off_outlined),
-                          SyncStatus.idle => (t.syncPending, c.text2, Icons.cloud_queue),
-                          SyncStatus.noSession => (t.syncNoSession, c.warn, Icons.cloud_off_outlined),
+                          _ when !store.hasBackend => (t.syncOff, c.text2, GymIcons.cloudOff),
+                          // Paket Basic UI tidak punya awan-sinkron; jari-jari
+                          // "loading" yang diputar SpinIcon sudah terbaca
+                          // sebagai proses yang sedang jalan.
+                          SyncStatus.syncing => (t.syncing, c.text2, GymIcons.sync),
+                          SyncStatus.synced => (t.syncedNow, c.doneInk, GymIcons.cloudCheck),
+                          SyncStatus.failed => (t.syncFailed, c.warn, GymIcons.cloudOff),
+                          SyncStatus.idle => (t.syncPending, c.text2, GymIcons.cloud),
+                          SyncStatus.noSession => (t.syncNoSession, c.warn, GymIcons.cloudOff),
                         };
                         final syncing = store.hasBackend && store.syncStatus == SyncStatus.syncing;
                         return FadeSwap(
@@ -581,7 +584,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   children: [
                     Container(width: 18, height: 18, decoration: BoxDecoration(color: c.accent, shape: BoxShape.circle)),
                     const SizedBox(width: 8),
-                    Icon(Icons.chevron_right, size: 18, color: c.text3),
+                    Icon(GymIcons.chevronRight, size: 18, color: c.text3),
                   ],
                 ),
                 onTap: widget.onAccentChanged == null ? null : _pickAccent,
@@ -606,7 +609,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             style: TextStyle(fontSize: 13.5, color: c.text2)),
                       ),
                       const SizedBox(width: 8),
-                      Icon(Icons.chevron_right, size: 18, color: c.text3),
+                      Icon(GymIcons.chevronRight, size: 18, color: c.text3),
                     ],
                   ),
                   onTap: _about),

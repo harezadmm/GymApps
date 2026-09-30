@@ -155,7 +155,9 @@ class _ExerciseLibraryScreenState extends State<ExerciseLibraryScreen> {
               const SizedBox(height: 12),
               GymButton(
                 label: t.exerciseHistory,
-                icon: Icons.history,
+                // Glyph grafik, sama dengan menu "Riwayat gerakan" di layar sesi:
+                // yang dibuka memang grafik perkembangan, bukan daftar waktu.
+                icon: GymIcons.chart,
                 tone: GymButtonTone.neutral,
                 height: 44,
                 onPressed: () => showExerciseHistory(context, exerciseId: e.id, name: e.name),
@@ -183,7 +185,7 @@ class _ExerciseLibraryScreenState extends State<ExerciseLibraryScreen> {
                 children: [
                   IconButton(
                     onPressed: () => Navigator.of(context).pop(),
-                    icon: Icon(Icons.arrow_back, color: c.text2),
+                    icon: Icon(GymIcons.arrowLeft, size: 22, color: c.text2),
                     tooltip: context.t.back,
                   ),
                   Expanded(
@@ -272,7 +274,7 @@ class _ExerciseLibraryScreenState extends State<ExerciseLibraryScreen> {
                           ),
                           child: Row(
                             children: [
-                              Icon(Icons.filter_alt_outlined, size: 15, color: c.text2),
+                              Icon(GymIcons.filter, size: 15, color: c.text2),
                               const SizedBox(width: 8),
                               Expanded(
                                 // Dulu tertulis "disaring untuk Gym A" padahal
@@ -522,10 +524,12 @@ class _ExerciseRow extends StatelessWidget {
             ),
             IconButton(
               onPressed: onStar,
-              icon: Icon(starred ? Icons.star : Icons.star_border, size: 19, color: starred ? c.warn : c.text3),
+              // Bintang isi dan bintang garis dari paket Basic UI yang sama
+              // (glyph dan line), jadi siluetnya persis sama saat berganti.
+              icon: Icon(starred ? GymIcons.starFilled : GymIcons.star, size: 17, color: starred ? c.warn : c.text3),
               tooltip: starred ? 'Remove from favourites' : 'Add to favourites',
             ),
-            Icon(Icons.chevron_right, size: 18, color: c.text3),
+            Icon(GymIcons.chevronRight, size: 18, color: c.text3),
           ],
         ),
       ),
@@ -578,7 +582,7 @@ class _AddCustomTile extends StatelessWidget {
           ),
           child: Row(
             children: [
-              Icon(Icons.add_circle_outline, size: 20, color: c.accent),
+              Icon(GymIcons.plus, size: 18, color: c.accent),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
