@@ -122,10 +122,18 @@ class TrainingSettings {
     this.barWeight,
     this.plates,
     this.showExerciseMedia = true,
+    this.bodyweightTarget,
   });
 
   /// Satuan tampilan beban. Data tetap disimpan dalam kg (lihat units.dart).
   final WeightUnit unit;
+
+  /// Target berat badan (FR-F4), dalam **kg** seperti catatan berat badan —
+  /// ganti satuan tidak menulis ulang apa pun, yang berganti hanya angka yang
+  /// ditampilkan. null = tidak ada target: kartu berat badan tanpa garis
+  /// target. Disimpan hanya kalau diatur, dan digabung per kolom seperti
+  /// `bar` di mergeSettings.
+  final double? bodyweightTarget;
 
   /// Berat bar kosong untuk hitung pelat (FR-D16), dalam **kg** seperti
   /// beban lain. null = bawaan satuan tampilan ([defaultBarWeight]); 0 =
@@ -251,6 +259,8 @@ class TrainingSettings {
     List<double>? plates,
     bool clearPlates = false,
     bool? showExerciseMedia,
+    double? bodyweightTarget,
+    bool clearBodyweightTarget = false,
   }) =>
       TrainingSettings(
         defaultRestSeconds: defaultRestSeconds ?? this.defaultRestSeconds,
@@ -267,6 +277,8 @@ class TrainingSettings {
         barWeight: clearBarWeight ? null : (barWeight ?? this.barWeight),
         plates: clearPlates ? null : (plates ?? this.plates),
         showExerciseMedia: showExerciseMedia ?? this.showExerciseMedia,
+        // Tri-state yang sama: null = biarkan, hapus target lewat `clear…`.
+        bodyweightTarget: clearBodyweightTarget ? null : (bodyweightTarget ?? this.bodyweightTarget),
       );
 
   /// Istirahat untuk satu gerakan: rutinitas, lalu yang disimpan dari sesi
@@ -310,6 +322,9 @@ class TrainingSettings {
         // digabung per kolom seperti `rest` atau `unit` di mergeSettings.
         if (barWeight != null) 'bar': barWeight,
         if (plates != null) 'plates': plates,
+        // Target berat badan (FR-F4) dalam kg, hanya kalau diatur: dokumen
+        // tanpa kolom ini berarti "tanpa target", bukan target nol.
+        if (bodyweightTarget != null) 'bwTarget': bodyweightTarget,
       };
 
   /// Dokumen dari build yang belum mengenal profil gym — atau akun yang belum
@@ -326,9 +341,14 @@ class TrainingSettings {
     // dibaca sebagai "belum diatur" — bukan melempar, bukan bar minus.
     final rawBar = j['bar'];
     final rawPlates = j['plates'];
+    // Target berat badan yang bukan angka positif berhingga — nol, negatif,
+    // teks, NaN dari dokumen versi lain — dibaca sebagai "tanpa target":
+    // garis target di 0 kg atau di tak hingga bukan target siapa pun.
+    final rawTarget = j['bwTarget'];
     return TrainingSettings(
       barWeight: rawBar is num && rawBar >= 0 ? rawBar.toDouble() : null,
       plates: rawPlates is List ? [for (final p in rawPlates) if (p is num && p > 0) p.toDouble()] : null,
+      bodyweightTarget: rawTarget is num && rawTarget.isFinite && rawTarget > 0 ? rawTarget.toDouble() : null,
       defaultRestSeconds: (j['rest'] as num?)?.toInt() ?? 90,
       deloadFactor: (j['dl'] as num?)?.toDouble() ?? 0.9,
       weekStartsOn: ((j['week'] as num?)?.toInt() ?? DateTime.monday).clamp(1, 7),

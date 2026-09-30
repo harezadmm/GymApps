@@ -40,6 +40,7 @@ class BarSeries extends StatefulWidget {
     this.selected,
     this.onTap,
     this.animate = true,
+    this.reference,
   });
 
   /// Tinggi batang relatif. Untuk data yang diambil dari Pen, angka ini adalah
@@ -82,6 +83,10 @@ class BarSeries extends StatefulWidget {
   /// Tumbuh dari dasar saat pertama dibangun. Matikan untuk grafik yang
   /// digambar berulang di daftar panjang.
   final bool animate;
+
+  /// Garis acuan mendatar — target berat badan (FR-F4). Nilainya dalam skala
+  /// [values] dan ikut menentukan rentang sumbu, lihat [ChartReference].
+  final ChartReference? reference;
 
   @override
   State<BarSeries> createState() => _BarSeriesState();
@@ -163,8 +168,16 @@ class _BarSeriesState extends State<BarSeries> with SingleTickerProviderStateMix
               // nol ikut dihitung melebarkan rentang sampai nol, dan minggu
               // kosong berdiri setinggi sepertiga grafik seperti data.
               final real = widget.baselineFraction > 0 ? values.where((v) => v > 0) : values;
-              final lo = (real.isEmpty ? values : real).reduce(math.min);
-              final hi = values.reduce(math.max);
+              var lo = (real.isEmpty ? values : real).reduce(math.min);
+              var hi = values.reduce(math.max);
+              // Garis acuan ikut rentang: di atas batang tertinggi atau di
+              // bawah dasar ia jatuh di luar kotak, dan garis target yang
+              // tidak terlihat sama saja dengan tidak ada target.
+              final ref = widget.reference;
+              if (ref != null) {
+                lo = math.min(lo, ref.value);
+                hi = math.max(hi, ref.value);
+              }
               final floor = widget.baselineFraction <= 0 ? 0.0 : lo - (hi - lo) * widget.baselineFraction - 0.01;
               final n = values.length;
               // Celah ikut menyempit saat batangnya rapat: 5 px tetap di
@@ -229,6 +242,31 @@ class _BarSeriesState extends State<BarSeries> with SingleTickerProviderStateMix
                                       ),
                                     );
                                   },
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      // Di atas batang (supaya tidak tertutup batang yang
+                      // melewatinya), di bawah gelembung nilai, dan tembus
+                      // sentuhan: ketukan tetap jatuh ke batangnya.
+                      if (ref != null)
+                        Positioned.fill(
+                          child: IgnorePointer(
+                            child: AnimatedValue(
+                              value: fraction(ref.value),
+                              begin: fraction(ref.value),
+                              duration: widget.animate ? null : Duration.zero,
+                              // Memudar masuk bersama batangnya; dengan
+                              // "kurangi gerak" _enter sudah 1 dan garisnya
+                              // langsung penuh.
+                              builder: (context, frac) => Opacity(
+                                opacity: _enter.value.clamp(0.0, 1.0),
+                                child: _ReferenceLine(
+                                  y: box.maxHeight - frac * box.maxHeight,
+                                  height: box.maxHeight,
+                                  label: ref.label,
+                                  color: ref.color ?? c.text2,
                                 ),
                               ),
                             ),
@@ -345,6 +383,104 @@ class _Bubble extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Garis acuan mendatar di [BarSeries] — target berat badan (FR-F4).
+///
+/// Putus-putus supaya terbaca sebagai ambang, bukan garis kisi (kisi di
+/// aplikasi ini tidak ada, dan kalau ada pun garisnya utuh). Labelnya kecil
+/// di ujung kiri garis, di atas batang-batang tertua yang paling jarang
+/// dibaca; batang terakhir di kanan — yang ditanyakan orang — tidak tertutup.
+class ChartReference {
+  const ChartReference({required this.value, required this.label, this.color});
+
+  /// Dalam skala yang sama dengan [BarSeries.values]. Ikut menentukan
+  /// rentang sumbu, jadi selalu tergambar.
+  final double value;
+
+  /// Teks pendek di ujung garis: "target 75 kg".
+  final String label;
+
+  /// Warna garis dan labelnya. null = teks sekunder: acuan mundur ke
+  /// belakang, datanya yang menonjol.
+  final Color? color;
+}
+
+/// Garis putus-putus setinggi [y] selebar grafik, dengan chip label di ujung
+/// kirinya. Chip berlatar [GymColors.surface] dengan garis tepi, seperti
+/// gelembung nilai, supaya terbaca di atas batang mana pun dan di kartu
+/// berwarna.
+class _ReferenceLine extends StatelessWidget {
+  const _ReferenceLine({required this.y, required this.height, required this.label, required this.color});
+
+  final double y;
+  final double height;
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gym;
+    // Ruang minimum di atas garis untuk chipnya: tinggi teks yang sudah
+    // diskalakan (huruf sistem 1,3×, NFR-11) plus padding, garis tepi, dan
+    // jarak 3 dp. Kurang dari ini — garis menempel tepi atas karena
+    // targetnya di atas semua batang — chip pindah ke bawah garis, bukan
+    // menabrak teks di atas grafik.
+    final room = MediaQuery.textScalerOf(context).scale(10.5) * 1.3 + 10;
+    final below = y < room;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Positioned.fill(child: CustomPaint(painter: _DashPainter(y: y, color: color))),
+        Positioned(
+          left: 0,
+          top: below ? y + 3 : null,
+          bottom: below ? null : height - y + 3,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: c.surface,
+              borderRadius: BorderRadius.circular(GymRadius.small),
+              border: Border.all(color: c.border),
+            ),
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w700,
+                color: color,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Garis mendatar putus-putus: putus 5 dp, jeda 4 dp, tebal 1,5 dp — cukup
+/// renggang untuk terbaca sebagai putus-putus pada garis setipis itu, cukup
+/// rapat untuk tetap terbaca sebagai satu garis.
+class _DashPainter extends CustomPainter {
+  _DashPainter({required this.y, required this.color});
+
+  final double y;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const dash = 5.0, gap = 4.0;
+    final pen = Paint()
+      ..color = color
+      ..strokeWidth = 1.5;
+    for (var x = 0.0; x < size.width; x += dash + gap) {
+      canvas.drawLine(Offset(x, y), Offset(math.min(x + dash, size.width), y), pen);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_DashPainter old) => old.y != y || old.color != color;
 }
 
 /// Satu sumbu radar: nama region dan dua nilai 0..1 untuk dibandingkan.

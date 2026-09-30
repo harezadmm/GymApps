@@ -11,6 +11,8 @@ import 'models.dart';
 import 'muscle_volume.dart';
 import 'onerm.dart';
 import 'program.dart';
+import 'settings.dart';
+import 'units.dart';
 
 DateTime? _date(Workout w) => DateTime.tryParse(w.date);
 
@@ -128,4 +130,66 @@ List<MovementStrength> strengthByMovement(List<Workout> history, DateTime today,
   }
   out.sort((a, b) => b.best.compareTo(a.best));
   return out.take(count).toList();
+}
+
+// ── Berat badan dan target (FR-F4) ─────────────────────────────────────────
+
+/// Arah dua catatan berat badan terakhir terhadap target.
+enum TargetHeading { toward, away }
+
+/// Jarak berat badan terakhir ke targetnya, dalam satuan tampilan — bahan
+/// untuk "3.4 kg to go" dan warna batang terakhir di kartu berat badan.
+class TargetGap {
+  const TargetGap({required this.toGo, required this.onTarget, required this.heading, required this.delta});
+
+  /// Sisa ke target, selalu ≥ 0, dibulatkan seperti angka tampilan lain
+  /// (0,01 kg / 0,1 lb) supaya "3.4 kg" di layar dan angka di sini sama.
+  final double toGo;
+
+  /// Dalam setengah satuan tampilan dari target — 0,5 kg atau 0,5 lb. Lebih
+  /// rapat dari itu bukan tren lagi, itu selisih timbangan pagi dan sore.
+  final bool onTarget;
+
+  /// Mendekat atau menjauh menurut dua catatan terakhir. null kalau baru
+  /// satu catatan, atau keduanya sama jauhnya dari target (tidak bergerak).
+  final TargetHeading? heading;
+
+  /// Catatan terakhir dikurangi sebelumnya, satuan tampilan, bertanda; null
+  /// kalau baru satu catatan. Untuk panah naik/turun di samping angkanya.
+  final double? delta;
+}
+
+/// Pembulatan ke presisi tampilan [u]: selisih dua angka yang sudah dibulatkan
+/// masih bisa membawa debu float (78,4 − 75 = 3,3999…).
+double _tidy(double v, WeightUnit u) {
+  final per = u == WeightUnit.kg ? 100 : 10;
+  return (v * per).roundToDouble() / per;
+}
+
+/// [TargetGap] untuk [log] (kg, terlama dulu) terhadap [targetKg], dibaca
+/// dalam [unit]. null kalau belum ada catatan: tanpa berat, tidak ada jarak.
+///
+/// Semua dihitung dari angka yang *ditampilkan* ([shown]), bukan kg mentah:
+/// dua catatan yang tampil sama tidak boleh diwarnai "mendekat" karena
+/// selisih 0,003 kg sisa konversi dari lb.
+TargetGap? bodyweightGap(List<BodyweightEntry> log, double targetKg, WeightUnit unit) {
+  if (log.isEmpty) return null;
+  final target = shown(targetKg, unit);
+  final last = shown(log.last.kg, unit);
+  final toGo = _tidy((last - target).abs(), unit);
+  TargetHeading? heading;
+  double? delta;
+  if (log.length >= 2) {
+    final prev = shown(log[log.length - 2].kg, unit);
+    delta = _tidy(last - prev, unit);
+    final before = _tidy((prev - target).abs(), unit);
+    // Keduanya sudah dibulatkan ke presisi yang sama, jadi perbandingannya
+    // persis: sama jauh = tidak bergerak, bukan "mendekat 0,000001".
+    if (toGo < before) {
+      heading = TargetHeading.toward;
+    } else if (toGo > before) {
+      heading = TargetHeading.away;
+    }
+  }
+  return TargetGap(toGo: toGo, onTarget: toGo <= 0.5, heading: heading, delta: delta);
 }
