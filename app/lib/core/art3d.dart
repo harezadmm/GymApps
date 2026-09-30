@@ -15,6 +15,7 @@ library;
 
 import 'package:flutter/material.dart';
 
+import 'decode_size.dart';
 import 'motion.dart';
 
 enum Gym3d {
@@ -50,8 +51,9 @@ class Gym3dIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Dekode seukuran tampilan: 46 dp di HP 3× cukup 138 px, bukan 384 px
-    // penuh untuk setiap ubin — enam ikon di satu layar tetap ringan.
-    final px = (size * MediaQuery.devicePixelRatioOf(context)).ceil().clamp(1, _sourcePx);
+    // penuh untuk setiap ubin — enam ikon di satu layar tetap ringan. Di web
+    // null — lihat [decodePx].
+    final px = decodePx(size, MediaQuery.devicePixelRatioOf(context), _sourcePx);
     final Widget image = ExcludeSemantics(
       child: Image.asset(
         art.asset,
