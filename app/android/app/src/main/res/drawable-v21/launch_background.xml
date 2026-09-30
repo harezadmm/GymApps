@@ -1,12 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Modify this file to customize your launch splash screen -->
+<!-- Splash sebelum Flutter menggambar bingkai pertama (PRD FR-I5). Versi
+     API 21+ dari drawable/launch_background.xml; dulu memakai
+     ?android:colorBackground, yang di tema terang berarti putih. Warnanya
+     GymColors.bg lewat values/colors.xml, di mode terang maupun gelap. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="?android:colorBackground" />
-
-    <!-- You can insert your own image assets here -->
-    <!-- <item>
-        <bitmap
-            android:gravity="center"
-            android:src="@mipmap/launch_image" />
-    </item> -->
+    <item android:drawable="@color/launch_background" />
 </layer-list>

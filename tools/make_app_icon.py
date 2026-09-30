@@ -7,7 +7,14 @@ tinggal ditambah di `main()`, bukan digambar ulang dengan tangan.
     python3 tools/make_app_icon.py
 
 Semua ukuran ditulis langsung ke tempatnya masing-masing (iOS, Android, web,
-favicon, dan aset dalam aplikasi).
+favicon, dan aset dalam aplikasi). Untuk Android ada tiga rupa (PRD FR-I2):
+ic_launcher.png lama untuk Android 7 ke bawah, lapisan depan ikon adaptif
+(ic_launcher_foreground.png + warna latar) untuk Android 8+, dan siluet satu
+warna (ic_launcher_monochrome.png) untuk ikon bertema Android 13+.
+
+Catatan: versi Pillow yang berbeda menghasilkan byte PNG yang berbeda walau
+gambarnya sama. Kalau hanya menambah ukuran baru, kembalikan berkas lama yang
+ikut berubah (git checkout) supaya diff-nya cuma berisi yang benar-benar baru.
 """
 
 import math
@@ -234,6 +241,61 @@ def render(inset_pct, plate_scale=1.0, rounded=True, bg_bleed=False):
     return canvas
 
 
+# Ikon adaptif Android (PRD FR-I2): kanvas 108 dp, launcher memotongnya
+# dengan bentuknya sendiri dan hanya 66 dp di tengah yang dijamin terlihat.
+# Pelatnya dikecilkan sampai berdiameter 60 dp — sedikit di dalam zona aman —
+# supaya tidak terpotong di launcher berbentuk lingkaran sekalipun.
+ADAPTIVE_PLATE_SCALE = 0.78
+
+# Lapisan belakang ikon adaptif: warna polos, bukan gradien seperti ikon
+# lama. Launcher menggeser lapisan belakang saat ikon disentuh atau dipindah,
+# dan gradien yang ikut bergeser terlihat aneh. Warnanya GymColors.bg, yang
+# juga nada tengah gradien ikon lama, jadi keduanya tetap terlihat sekeluarga.
+ADAPTIVE_BACKGROUND = "#0C0C0F"
+
+
+def adaptive_foreground(plate_scale=ADAPTIVE_PLATE_SCALE):
+    """Lapisan depan ikon adaptif: pelat dan bayangannya saja, di atas kanvas
+    transparan. Bayangannya sama dengan render() supaya pelat di layar Home
+    Android 8+ terbaca sama "duduk"-nya dengan ikon lama; ia boleh keluar
+    sedikit dari zona aman karena di situ sudah pudar."""
+    p, R = plate()
+    s = int(N * plate_scale)
+    p = p.resize((s, s), Image.LANCZOS)
+    off = (N - s) // 2
+    R = R * plate_scale
+
+    sh = Image.new("L", (N, N), 0)
+    ImageDraw.Draw(sh).ellipse(
+        [C - R, C - R + 0.018 * N, C + R, C + R + 0.018 * N], fill=190)
+    shadow = Image.new("RGBA", (N, N), (0, 0, 0, 0))
+    shadow.putalpha(sh.filter(ImageFilter.GaussianBlur(0.022 * N)))
+
+    shifted = Image.new("RGBA", (N, N), (0, 0, 0, 0))
+    shifted.paste(p, (off, off))
+    return Image.alpha_composite(shadow, shifted)
+
+
+def monochrome(plate_scale=ADAPTIVE_PLATE_SCALE):
+    """Siluet satu warna untuk ikon bertema Android 13+: sistem hanya membaca
+    alfanya lalu mewarnainya sendiri, jadi yang digambar cuma bentuk — cakram
+    pelat, lubang tengah, dan dua alur supaya terbaca sebagai pelat besi,
+    bukan donat. Alurnya lebih lebar daripada di pelat asli: pada 108 px
+    (mdpi) alur setipis aslinya hilang saat dikecilkan."""
+    m = disc(0.356 * N * plate_scale)
+    d = ImageDraw.Draw(m)
+    w = 0.005 * N
+    for r in (0.309, 0.238):
+        rr = r * N * plate_scale
+        d.ellipse([C - rr - w, C - rr - w, C + rr + w, C + rr + w], fill=0)
+        d.ellipse([C - rr + w, C - rr + w, C + rr - w, C + rr - w], fill=255)
+    hole = 0.070 * N * plate_scale
+    d.ellipse([C - hole, C - hole, C + hole, C + hole], fill=0)
+    img = Image.new("RGBA", (N, N), (255, 255, 255, 0))
+    img.putalpha(m)
+    return img
+
+
 def save(img, path, size, flatten=False):
     path = os.path.join(APP, path)
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -247,6 +309,38 @@ def save(img, path, size, flatten=False):
         out = bg
     out.save(path, "PNG", optimize=True)
     return path, size
+
+
+def write_text(path, text):
+    """Resource XML yang menyertai ikon adaptif — ditulis dari sini juga,
+    supaya warna latar dan nama berkasnya tidak bisa lepas dari PNG-nya."""
+    path = os.path.join(APP, path)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
+        f.write(text)
+    return path, 0
+
+
+IC_LAUNCHER_BACKGROUND_XML = f"""<?xml version="1.0" encoding="utf-8"?>
+<!-- Dibuat tools/make_app_icon.py — jangan diubah dengan tangan.
+     Lapisan belakang ikon adaptif (mipmap-anydpi-v26/ic_launcher.xml):
+     warna polos karena launcher menggesernya saat ikon disentuh. -->
+<resources>
+    <color name="ic_launcher_background">{ADAPTIVE_BACKGROUND}</color>
+</resources>
+"""
+
+IC_LAUNCHER_XML = """<?xml version="1.0" encoding="utf-8"?>
+<!-- Dibuat tools/make_app_icon.py — jangan diubah dengan tangan.
+     Ikon adaptif Android 8+ (PRD FR-I2): latar warna, pelat di depan, dan
+     siluet satu warna untuk ikon bertema Android 13+. Android 7 ke bawah
+     memakai mipmap-*/ic_launcher.png yang lama. -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/ic_launcher_background" />
+    <foreground android:drawable="@mipmap/ic_launcher_foreground" />
+    <monochrome android:drawable="@mipmap/ic_launcher_monochrome" />
+</adaptive-icon>
+"""
 
 
 def main():
@@ -273,6 +367,18 @@ def main():
                          ("xxhdpi", 144), ("xxxhdpi", 192)]:
         written.append(save(round_icon,
                             f"android/app/src/main/res/mipmap-{folder}/ic_launcher.png", size))
+
+    # Ikon adaptif (Android 8+) dan siluet bertema (Android 13+), PRD FR-I2.
+    # ic_launcher.png di atas tetap ada sebagai cadangan untuk Android 7.
+    foreground = adaptive_foreground()
+    mono = monochrome()
+    res = "android/app/src/main/res"
+    for folder, size in [("mdpi", 108), ("hdpi", 162), ("xhdpi", 216),
+                         ("xxhdpi", 324), ("xxxhdpi", 432)]:
+        written.append(save(foreground, f"{res}/mipmap-{folder}/ic_launcher_foreground.png", size))
+        written.append(save(mono, f"{res}/mipmap-{folder}/ic_launcher_monochrome.png", size))
+    written.append(write_text(f"{res}/values/ic_launcher_background.xml", IC_LAUNCHER_BACKGROUND_XML))
+    written.append(write_text(f"{res}/mipmap-anydpi-v26/ic_launcher.xml", IC_LAUNCHER_XML))
 
     written.append(save(round_icon, "web/icons/Icon-192.png", 192))
     written.append(save(round_icon, "web/icons/Icon-512.png", 512))
