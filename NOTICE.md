@@ -1,5 +1,31 @@
 # Third-party notices
 
+## GymApps: exercise images & animations
+
+GymApps (the Flutter app in `app/`) shows each catalogue exercise's thumbnail (JPG) and
+demonstration animation (GIF) in its Library, on session cards and in the exercise history
+sheet. They come from
+[**hasaneyldrm/exercises-dataset**](https://github.com/hasaneyldrm/exercises-dataset), the same
+dataset openGym uses, and its two parts are licensed differently:
+
+- **Metadata and instruction text** (`app/assets/data/exercises.json`: names, body parts,
+  equipment, muscles, steps) are distributed by that dataset under the **MIT License**,
+  reproduced under "Metadata & instruction text" below.
+- **Images and animations** are **© [Gym visual](https://gymvisual.com/)** and are used under
+  that dataset's terms (<https://gymvisual.com/content/3-terms-and-conditions-of-use>): not under
+  the MIT license, and not under the AGPL of openGym or GymApps.
+
+**GymApps does not redistribute or relicense the media.** No image or animation is in this
+repository, in its history, or in the built app (Android APK, web build). The app loads them at
+runtime from the dataset's CDN, pinned to one commit,
+`https://cdn.jsdelivr.net/gh/hasaneyldrm/exercises-dataset@7455efae41b330c265e7cd4b78dfa848e7ce5ebd/`
+(`images/` and `videos/`), only while the "Exercise images & animations" setting is on, and keeps
+them only in the in-memory image cache. Reusing this media yourself, commercially or not, needs
+your own licence from Gym visual; keep any attribution that accompanies it intact.
+
+The rest of this file is openGym's own notice, kept as received: GymApps' exercise catalogue and
+its media pipeline come from openGym.
+
 openGym — Copyright (C) 2026 Duarte Santos.
 openGym's own code is licensed under the **GNU AGPL v3.0** (see [LICENSE](LICENSE)).
 

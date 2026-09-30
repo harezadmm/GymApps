@@ -5,6 +5,8 @@
 /// di setiap ketukan.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../../core/gym_icons.dart';
 import '../../core/charts.dart';
@@ -13,12 +15,14 @@ import '../../core/motion.dart';
 import '../../core/format.dart';
 import '../../core/strings.dart';
 import '../../core/strings_assisted.dart';
+import '../../core/strings_media.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
 import '../../data/exercise_catalog.dart';
 import '../../data/workout_store.dart';
 import '../../domain/assisted.dart';
 import '../session/exercise_history_sheet.dart';
+import 'exercise_media.dart';
 
 class ExerciseLibraryScreen extends StatefulWidget {
   const ExerciseLibraryScreen({super.key, this.picking = false});
@@ -65,7 +69,19 @@ class _ExerciseLibraryScreenState extends State<ExerciseLibraryScreen> {
   @override
   void initState() {
     super.initState();
-    _catalog = ExerciseCatalog.load();
+    // Gambar yang tadi gagal (offline) dicoba lagi setiap library dibuka —
+    // sekali per pembukaan, bukan per rebuild (lihat `exercise_media.dart`).
+    ExerciseMedia.retryAll();
+    _loadCatalog();
+  }
+
+  /// Mulai (atau ulangi lewat "Coba lagi") pemuatan katalog. Galat aslinya
+  /// ke log, bukan ke layar: layar menampilkan kalimat yang bisa dimengerti
+  /// dan jalan keluarnya.
+  void _loadCatalog() {
+    final f = ExerciseCatalog.load();
+    _catalog = f;
+    unawaited(f.then<void>((_) {}, onError: (Object e) => debugPrint('katalog gerakan tidak terbaca: $e')));
   }
 
   @override
@@ -136,18 +152,31 @@ class _ExerciseLibraryScreenState extends State<ExerciseLibraryScreen> {
   void _showDetails(BuildContext context, Exercise e) {
     final c = context.gym;
     final t = context.t;
+    // Membuka detail adalah niat yang jelas: animasi yang tadi gagal (sinyal
+    // hilang sebentar) boleh dicoba sekali lagi di sini.
+    ExerciseMedia.retry(e.gifUrl);
+    ExerciseMedia.retry(e.imageUrl);
     showModalBottomSheet<void>(
       context: context,
+      // Bisa digulir: animasi 200 dp di atas detail tidak muat di batas 9/16
+      // layar lembar biasa saat huruf sistem 1,3× (NFR-11).
+      isScrollControlled: true,
       backgroundColor: c.surface,
       showDragHandle: true,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(GymRadius.large))),
       builder: (context) => SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Animasi peragaan dari CDN (FR-C1) — hanya gerakan bawaan, dan
+              // hanya kalau medianya dinyalakan di Profil.
+              if (e.gifUrl != null && ExerciseMedia.enabledIn(context)) ...[
+                ExerciseAnimation(exercise: e),
+                const SizedBox(height: 14),
+              ],
               Text(e.name, style: Theme.of(context).textTheme.headlineSmall),
               const SizedBox(height: 14),
               _DetailLine(label: t.targetMuscle, value: t.muscle(_cap(e.target))),
@@ -255,11 +284,29 @@ class _ExerciseLibraryScreenState extends State<ExerciseLibraryScreen> {
                 future: _catalog,
                 builder: (context, snap) {
                   if (snap.hasError) {
+                    // Galat aslinya sudah ke log lewat [_loadCatalog]. Di
+                    // layar cukup kalimat yang bisa dimengerti dan jalan
+                    // keluarnya; "FormatException: Unexpected character…"
+                    // bukan untuk orang yang sedang berdiri di gym.
                     return Center(
                       child: Padding(
                         padding: const EdgeInsets.all(24),
-                        child: Text('${context.t.catalogueUnreadable}\n${snap.error}',
-                            textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: c.text2)),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(context.t.catalogueUnreadable,
+                                textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: c.text2)),
+                            const SizedBox(height: 14),
+                            GymButton(
+                              label: context.t.tryAgain,
+                              icon: GymIcons.sync,
+                              tone: GymButtonTone.neutral,
+                              height: 44,
+                              expand: false,
+                              onPressed: () => setState(_loadCatalog),
+                            ),
+                          ],
+                        ),
                       ),
                     );
                   }
@@ -497,7 +544,9 @@ class _ExerciseRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 7),
         child: Row(
           children: [
-            IconDisc(exercise.icon, size: 44, iconSize: 23),
+            // Thumbnail dari CDN (FR-C1) di atas ikon alat; ikonnya tetap jadi
+            // cadangan saat offline, media mati, atau gerakan custom.
+            ExerciseThumb(url: exercise.imageUrl, fallback: IconDisc(exercise.icon, size: 44, iconSize: 23)),
             const SizedBox(width: 12),
             Expanded(
               child: Column(

@@ -6,6 +6,7 @@
 /// kolom cari.
 library;
 
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -18,6 +19,11 @@ import 'package:flutter/services.dart' show rootBundle;
 String _title(String s) =>
     s.isEmpty ? '' : s.split(' ').map((w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1)}').join(' ');
 
+/// Nama berkas media dari aset: teks tidak kosong, selain itu null — entri
+/// tanpa `img`, atau dokumen versi lain yang menaruh nilai aneh di sana,
+/// tidak boleh menghasilkan URL yang rusak.
+String? _fileName(Object? v) => v is String && v.isNotEmpty ? v : null;
+
 class Exercise {
   const Exercise({
     required this.id,
@@ -28,6 +34,8 @@ class Exercise {
     required this.secondary,
     this.custom = false,
     this.assisted,
+    this.image,
+    this.gif,
   });
 
   final String id;
@@ -55,6 +63,28 @@ class Exercise {
   /// Dibuat pengguna, bukan dari katalog bawaan (FR-C2).
   final bool custom;
 
+  /// Nama berkas gambar (JPG 180×180) dan animasi (GIF) di dataset openGym —
+  /// kunci `img` dan `gif` di aset (FR-C1). Yang disimpan hanya namanya,
+  /// bukan URL utuh: dua URL ±110 karakter untuk 1.324 gerakan adalah ±290 KB
+  /// string yang hidup selamanya di memori, sedangkan namanya ±16 karakter.
+  /// URL-nya dirakit saat diminta ([imageUrl], [gifUrl]). Gerakan custom
+  /// tidak punya media.
+  final String? image;
+  final String? gif;
+
+  /// Dataset media di jsDelivr, dipin ke satu commit supaya berkas yang
+  /// diunduh tidak berubah di bawah kaki kita saat dataset-nya diperbarui.
+  /// Lisensinya di NOTICE.md: metadata MIT, gambar dan GIF © Gym visual —
+  /// GymApps tidak mendistribusikannya, hanya memuat dari CDN dataset itu.
+  static const mediaBase =
+      'https://cdn.jsdelivr.net/gh/hasaneyldrm/exercises-dataset@7455efae41b330c265e7cd4b78dfa848e7ce5ebd';
+
+  /// URL thumbnail JPG; null untuk gerakan custom atau entri tanpa `img`.
+  String? get imageUrl => custom || image == null ? null : '$mediaBase/images/$image';
+
+  /// URL animasi GIF; null untuk gerakan custom atau entri tanpa `gif`.
+  String? get gifUrl => custom || gif == null ? null : '$mediaBase/videos/$gif';
+
   factory Exercise.fromJson(Map<String, dynamic> j) => Exercise(
         id: j['id'] as String? ?? '',
         // Katalog openGym menyimpan nama huruf kecil semua ("barbell row").
@@ -69,6 +99,8 @@ class Exercise {
         custom: j['custom'] == true,
         // Bukan boolean (dokumen dari versi lain) = ikuti aturan katalog.
         assisted: j['assisted'] is bool ? j['assisted'] as bool : null,
+        image: _fileName(j['img']),
+        gif: _fileName(j['gif']),
       );
 
   /// Bentuk yang sama dengan aset, supaya gerakan custom bisa disimpan di
@@ -82,6 +114,8 @@ class Exercise {
         if (secondary.isNotEmpty) 'sm': secondary,
         if (custom) 'custom': true,
         if (assisted != null) 'assisted': assisted,
+        if (image != null) 'img': image,
+        if (gif != null) 'gif': gif,
       };
 
   /// "Back · Barbell" — baris kedua di daftar.
@@ -192,14 +226,33 @@ class ExerciseCatalog {
   ExerciseConfig withAssisted(ExerciseConfig cfg) =>
       cfg.assisted == null && isAssisted(cfg.exerciseId) ? cfg.copyWith(assisted: true) : cfg;
 
-  /// [isAssisted] untuk pemanggil yang tidak memegang instance katalog —
-  /// ringkasan Home, lembar riwayat, ringkasan selesai. Gerakan custom dari
-  /// daftar statis, bawaan dari cache; sebelum aset termuat jawabannya
-  /// normal, dan layar-layar itu semuanya dibuka setelah Home memuatnya.
-  static bool assistedById(String id) => (_customById[id] ?? _cached?._byId[id])?.isAssisted ?? false;
+  /// Gerakan berdasarkan id untuk pemanggil yang tidak memegang instance
+  /// katalog — ringkasan Home, lembar riwayat, kartu sesi. Gerakan custom
+  /// dari daftar statis, bawaan dari cache; sebelum aset termuat jawabannya
+  /// null, dan layar-layar itu semuanya dibuka setelah Home memuatnya.
+  static Exercise? lookup(String id) => _customById[id] ?? _cached?._byId[id];
+
+  /// [isAssisted] lewat [lookup]: id yang tidak dikenal (atau katalog yang
+  /// belum termuat) dibaca normal.
+  static bool assistedById(String id) => lookup(id)?.isAssisted ?? false;
 
   static ExerciseCatalog? _cached;
   static Future<ExerciseCatalog>? _loading;
+
+  /// Pembaca aset pengganti untuk test: membuat pemuatan gagal demi layar
+  /// galat library, atau memberi teks katalog tanpa I/O nyata supaya "Coba
+  /// lagi" selesai di dalam zona waktu palsu widget test. null = baca
+  /// `assets/data/exercises.json` seperti biasa.
+  @visibleForTesting
+  static Future<String> Function()? readAsset;
+
+  /// Buang katalog yang di-cache supaya [load] membaca aset lagi — hanya
+  /// untuk test yang perlu melihat pemuatan dari awal.
+  @visibleForTesting
+  static void resetForTest() {
+    _cached = null;
+    _loading = null;
+  }
 
   /// Satu pemuatan untuk semua pemanggil. Layar Home memanggil ini dari
   /// beberapa FutureBuilder sekaligus sebelum yang pertama selesai; tanpa
@@ -208,11 +261,23 @@ class ExerciseCatalog {
   static Future<ExerciseCatalog> load() {
     final cached = _cached;
     if (cached != null) return Future.value(cached);
-    return _loading ??= () async {
-      final raw = await rootBundle.loadString('assets/data/exercises.json');
-      final list = (jsonDecode(raw) as List).cast<Map<String, dynamic>>().map(Exercise.fromJson).toList();
-      return _cached = ExerciseCatalog._(list);
-    }();
+    final pending = _loading;
+    if (pending != null) return pending;
+    final f = _read();
+    _loading = f;
+    // Pemuatan yang gagal (aset rusak, I/O) tidak boleh menetap sebagai
+    // future gagal yang sama untuk semua pemanggil berikutnya: "Coba lagi"
+    // di library memanggil load() lagi dan harus benar-benar membaca ulang.
+    unawaited(f.then<void>((_) {}, onError: (Object _) {
+      if (identical(_loading, f)) _loading = null;
+    }));
+    return f;
+  }
+
+  static Future<ExerciseCatalog> _read() async {
+    final raw = await (readAsset?.call() ?? rootBundle.loadString('assets/data/exercises.json'));
+    final list = (jsonDecode(raw) as List).cast<Map<String, dynamic>>().map(Exercise.fromJson).toList();
+    return _cached = ExerciseCatalog._(list);
   }
 
   /// Cari berdasarkan nama, bagian tubuh, alat, atau otot — per kata, dalam

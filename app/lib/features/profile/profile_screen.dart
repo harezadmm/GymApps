@@ -18,6 +18,7 @@ import '../../core/keep_awake.dart';
 import '../../core/rest_alert.dart';
 import '../../core/motion.dart';
 import '../../core/strings.dart';
+import '../../core/strings_media.dart';
 import '../../core/strings_plates.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
@@ -663,17 +664,49 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ),
         const SizedBox(height: 18),
+        // Gambar dan animasi gerakan (FR-C1) diunduh dari CDN dataset; satu
+        // saklar untuk kuota data yang ketat. Grupnya sendiri dengan catatan
+        // di bawahnya, seperti "Barbel & pelat": barisnya perlu satu kalimat
+        // penjelas, dan SettingsTile tidak punya baris kedua.
+        SectionLabel(t.exerciseLibrary),
+        const SizedBox(height: 8),
+        Reveal(
+          index: 3,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SettingsGroup(
+                children: [
+                  SettingsTile(
+                    icon: GymIcons.play, hue: c.hues.pink,
+                    label: t.showExerciseMedia,
+                    trailing: Switch(
+                      value: settings.showExerciseMedia,
+                      onChanged: (v) => store.updateSettings(settings.copyWith(showExerciseMedia: v)),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Text(t.exerciseMediaNote, style: TextStyle(fontSize: 12.5, height: 1.4, color: c.text2)),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 18),
         // Profil gym (FR-C3): daftar alat dan memori beban per gym. Dulu satu
         // baris "Alat di gym-ku" di grup Training; sekarang tiap gym punya
         // barisnya sendiri, dan alatnya dibuka dari situ.
         SectionLabel(t.gyms),
         const SizedBox(height: 8),
-        const Reveal(index: 3, child: GymSection()),
+        const Reveal(index: 4, child: GymSection()),
         const SizedBox(height: 18),
         SectionLabel(t.data),
         const SizedBox(height: 8),
         Reveal(
-          index: 4,
+          index: 5,
           child: SettingsGroup(
             children: [
               SettingsTile(icon: GymIcons.download, hue: c.hues.orange, label: t.exportBackup, onTap: _export),
@@ -690,7 +723,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         SectionLabel(t.app),
         const SizedBox(height: 8),
         Reveal(
-          index: 5,
+          index: 6,
           child: SettingsGroup(
             children: [
               if (widget.onThemeModeChanged != null)
@@ -746,7 +779,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
         const SizedBox(height: 20),
         Reveal(
-          index: 6,
+          index: 7,
           child: PressScale(
             child: Material(
               color: c.danger.withValues(alpha: 0.10),

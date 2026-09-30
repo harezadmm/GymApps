@@ -36,6 +36,7 @@ import '../../domain/program.dart';
 import '../../domain/progression.dart';
 import '../../domain/routine_sync.dart';
 import '../../domain/session_plan.dart';
+import '../library/exercise_media.dart';
 import '../profile/gym_profiles.dart';
 import 'exercise_history_sheet.dart';
 import 'finish_screen.dart';
@@ -1791,11 +1792,17 @@ class _ExerciseCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(color: c.surface2, borderRadius: BorderRadius.circular(GymRadius.small)),
-                child: Icon(ex.icon, size: 24, color: c.text2),
+              // Thumbnail dari CDN (FR-C1) kalau medianya nyala dan katalog
+              // mengenal gerakannya; ikon alat tetap jadi cadangan.
+              ExerciseThumb(
+                url: ExerciseCatalog.lookup(ex.config.exerciseId)?.imageUrl,
+                size: 38,
+                fallback: Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(color: c.surface2, borderRadius: BorderRadius.circular(GymRadius.small)),
+                  child: Icon(ex.icon, size: 24, color: c.text2),
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(

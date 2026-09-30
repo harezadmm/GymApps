@@ -121,6 +121,7 @@ class TrainingSettings {
     this.unit = WeightUnit.kg,
     this.barWeight,
     this.plates,
+    this.showExerciseMedia = true,
   });
 
   /// Satuan tampilan beban. Data tetap disimpan dalam kg (lihat units.dart).
@@ -164,6 +165,13 @@ class TrainingSettings {
 
   /// Tampilkan pilihan RIR (sisa rep sebelum gagal) setelah set dicentang.
   final bool logRir;
+
+  /// Gambar dan animasi gerakan dari CDN dataset (FR-C1) di library, kartu
+  /// sesi, dan lembar riwayat. Mati = tidak ada satu pun permintaan gambar,
+  /// bukan gambar yang diunduh lalu disembunyikan — untuk kuota data yang
+  /// ketat. Setelan akun, bukan HP: yang mematikannya karena kuota ingin
+  /// mati di semua HP-nya.
+  final bool showExerciseMedia;
 
   /// Profil gym (FR-C3), urut seperti dibuat. Tidak pernah kosong setelah
   /// [TrainingSettings.fromJson]: setiap sesi butuh gym untuk dicatat dan
@@ -242,6 +250,7 @@ class TrainingSettings {
     bool clearBarWeight = false,
     List<double>? plates,
     bool clearPlates = false,
+    bool? showExerciseMedia,
   }) =>
       TrainingSettings(
         defaultRestSeconds: defaultRestSeconds ?? this.defaultRestSeconds,
@@ -257,6 +266,7 @@ class TrainingSettings {
         // satuan lewat `clear…`, seperti tri-state assisted di ExerciseConfig.
         barWeight: clearBarWeight ? null : (barWeight ?? this.barWeight),
         plates: clearPlates ? null : (plates ?? this.plates),
+        showExerciseMedia: showExerciseMedia ?? this.showExerciseMedia,
       );
 
   /// Istirahat untuk satu gerakan: rutinitas, lalu yang disimpan dari sesi
@@ -276,6 +286,10 @@ class TrainingSettings {
         if (deloadFactor != 0.9) 'dl': deloadFactor,
         if (weekStartsOn != DateTime.monday) 'week': weekStartsOn,
         if (logRir) 'rir': true,
+        // Hanya ditulis saat mati, seperti `rir` hanya saat nyala: dokumen
+        // akun yang tidak menyentuhnya tetap sependek dulu, dan digabung per
+        // kolom seperti `rest` atau `unit` di mergeSettings.
+        if (!showExerciseMedia) 'media': false,
         // `eq` lama tetap ditulis sebagai cermin gym aktif: build lama di HP
         // lain hanya mengenal kunci ini, dan library-nya harus tetap tersaring
         // dengan benar.
@@ -319,6 +333,9 @@ class TrainingSettings {
       deloadFactor: (j['dl'] as num?)?.toDouble() ?? 0.9,
       weekStartsOn: ((j['week'] as num?)?.toInt() ?? DateTime.monday).clamp(1, 7),
       logRir: j['rir'] == true,
+      // Hanya `false` yang mematikan; nilai lain dari dokumen versi lain
+      // dibaca sebagai bawaan (nyala).
+      showExerciseMedia: j['media'] != false,
       gyms: gyms,
       activeGymId: active is String && gyms.any((g) => g.id == active) ? active : gyms.first.id,
       favorites: (j['fav'] as List?)?.cast<String>() ?? const [],

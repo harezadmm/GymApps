@@ -18,6 +18,7 @@ import '../../data/workout_store.dart';
 import '../../domain/assisted.dart';
 import '../../domain/models.dart';
 import '../../domain/onerm.dart';
+import '../library/exercise_media.dart';
 
 /// Ringkasan rekor satu gerakan dari riwayat (terbaru dulu atau tidak, sama saja).
 class ExerciseRecords {
@@ -112,6 +113,9 @@ Future<void> showExerciseHistory(BuildContext context, {required String exercise
   final shownHistory = historyIn(store.workouts, unit);
   final recent = recentFor(shownHistory, exerciseId);
   final records = recordsFor(shownHistory, exerciseId, isAssisted: ExerciseCatalog.assistedById);
+  // Thumbnail dan ikon alat di samping nama (FR-C1). Id yang tidak dikenal
+  // katalog cukup namanya, seperti dulu.
+  final ex = ExerciseCatalog.lookup(exerciseId);
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
@@ -148,7 +152,15 @@ Future<void> showExerciseHistory(BuildContext context, {required String exercise
             controller: scroll,
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
             children: [
-              Text(name, style: Theme.of(sheet).textTheme.titleLarge),
+              Row(
+                children: [
+                  if (ex != null) ...[
+                    ExerciseThumb(url: ex.imageUrl, size: 40, fallback: IconDisc(ex.icon, size: 40, iconSize: 20)),
+                    const SizedBox(width: 12),
+                  ],
+                  Expanded(child: Text(name, style: Theme.of(sheet).textTheme.titleLarge)),
+                ],
+              ),
               const SizedBox(height: 14),
               if (recent.isEmpty)
                 Text(t.noExerciseHistory, style: TextStyle(fontSize: 13.5, color: c.text2))
