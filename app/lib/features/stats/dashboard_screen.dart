@@ -24,6 +24,7 @@ import '../../core/weights.dart';
 import '../../core/widgets.dart';
 import '../../data/exercise_catalog.dart';
 import '../../data/workout_store.dart';
+import '../../domain/assisted.dart';
 import '../../domain/models.dart';
 import '../../domain/onerm.dart';
 import '../../domain/program.dart';
@@ -39,8 +40,9 @@ const _weeks = 12;
 const dashboardPeriods = [12, 26, 52];
 
 /// e1RM terbaik per minggu untuk satu gerakan, terlama dulu; null = minggu
-/// tanpa sesi gerakan itu.
-List<double?> weeklyBest(List<Workout> history, String exerciseId, DateTime today, {int weeks = _weeks}) {
+/// tanpa sesi gerakan itu. Mesin assisted tidak menyumbang angka (#232).
+List<double?> weeklyBest(List<Workout> history, String exerciseId, DateTime today,
+    {int weeks = _weeks, AssistedLookup? isAssisted}) {
   final end = dateOnly(today).add(const Duration(days: 1));
   final out = List<double?>.filled(weeks, null);
   for (final w in history) {
@@ -50,7 +52,7 @@ List<double?> weeklyBest(List<Workout> history, String exerciseId, DateTime toda
     if (ago >= weeks) continue;
     for (final e in w.entries) {
       if (e.exerciseId != exerciseId) continue;
-      final b = bestSetOf(e)?.est;
+      final b = bestSetOf(e, isAssisted: isAssisted)?.est;
       if (b == null) continue;
       final i = weeks - 1 - ago;
       if (out[i] == null || b > out[i]!) out[i] = b;
@@ -68,10 +70,10 @@ class StalledLift {
   final int weeks;
 }
 
-List<StalledLift> stalledLifts(List<Workout> history, DateTime today, {int window = 3}) {
+List<StalledLift> stalledLifts(List<Workout> history, DateTime today, {int window = 3, AssistedLookup? isAssisted}) {
   final out = <StalledLift>[];
   for (final id in loggedExercises(history)) {
-    final series = weeklyBest(history, id, today, weeks: 26);
+    final series = weeklyBest(history, id, today, weeks: 26, isAssisted: isAssisted);
     final recent = series.sublist(series.length - window).whereType<double>();
     final before = series.sublist(0, series.length - window).whereType<double>();
     if (recent.isEmpty || before.isEmpty) continue;
@@ -182,11 +184,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final history = historyIn(store.workouts, context.unit);
     final now = DateTime.now();
     final weeks = _weeksShown;
-    final lifts = strengthByMovement(history, now, count: 10);
+    // Mesin assisted tidak punya e1RM (#232): tidak ada di tabel kekuatan
+    // maupun daftar stagnan. Katalog dibaca lewat cache statis karena
+    // angka-angka ini dihitung sebelum FutureBuilder di bawah mendapatnya.
+    final lifts = strengthByMovement(history, now, count: 10, isAssisted: ExerciseCatalog.assistedById);
     // Minggu deload yang direncanakan bukan bukti stagnan (FR-B10): daftar ini
     // menilai kemajuan, jadi ia membaca riwayat yang sama dengan mesin progresi.
     // Grafik dan volume di bawah tetap memakai riwayat utuh.
-    final stalled = stalledLifts(progressionHistory(history, store.routines), now);
+    final stalled =
+        stalledLifts(progressionHistory(history, store.routines), now, isAssisted: ExerciseCatalog.assistedById);
     final sessions = weeklySessions(history, now, weeks: weeks);
     final unit = context.unitLabel;
 
@@ -248,7 +254,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 weeks: weeks,
                                 rows: [
                                   for (final m in lifts)
-                                    (catalog?.nameOf(m.exerciseId) ?? '…', weeklyBest(history, m.exerciseId, now, weeks: weeks)),
+                                    (
+                                      catalog?.nameOf(m.exerciseId) ?? '…',
+                                      weeklyBest(history, m.exerciseId, now,
+                                          weeks: weeks, isAssisted: ExerciseCatalog.assistedById),
+                                    ),
                                 ],
                                 onTapRow: (i) => showExerciseHistory(context,
                                     exerciseId: lifts[i].exerciseId,

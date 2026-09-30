@@ -15,9 +15,11 @@ import '../../core/format.dart';
 import '../../core/gym_icons.dart';
 import '../../core/motion.dart';
 import '../../core/strings.dart';
+import '../../core/strings_assisted.dart';
 import '../../core/strings_session.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
+import '../../domain/assisted.dart';
 import '../../domain/models.dart';
 import '../../data/exercise_catalog.dart';
 import '../../data/workout_store.dart';
@@ -88,12 +90,21 @@ class _FinishScreenState extends State<FinishScreen> {
   /// belakangan: begitu ada dua gerakan yang sama-sama memecahkan rekor,
   /// pencocokan lewat posisi akan menempelkan nama yang salah ke angka yang
   /// benar — kesalahan yang terlihat meyakinkan.
-  List<(String, OneRmRecord)> get _records {
-    final out = <(String, OneRmRecord)>[];
+  ///
+  /// Mesin assisted tidak punya e1RM (#232); rekornya adalah bantuan paling
+  /// sedikit, dan [isLoadRecord] membandingkannya ke arah yang benar.
+  List<_PersonalRecord> get _records {
+    final out = <_PersonalRecord>[];
     for (final ex in widget.exercises) {
-      final entry = WorkoutEntry(exerciseId: ex.config.exerciseId, target: ex.config, sets: ex.sets);
-      final rec = is1RMRecord(widget.history, ex.config.exerciseId, entry);
-      if (rec != null) out.add((ex.name, rec));
+      final id = ex.config.exerciseId;
+      final entry = WorkoutEntry(exerciseId: id, target: ex.config, sets: ex.sets);
+      if (entryIsAssisted(entry, ExerciseCatalog.assistedById)) {
+        final rec = isLoadRecord(widget.history, id, entry, isAssisted: ExerciseCatalog.assistedById);
+        if (rec != null) out.add(_PersonalRecord(name: ex.name, help: true, now: rec.now, previous: rec.previous));
+      } else {
+        final rec = is1RMRecord(widget.history, id, entry, isAssisted: ExerciseCatalog.assistedById);
+        if (rec != null) out.add(_PersonalRecord(name: ex.name, help: false, now: rec.now.est, previous: rec.previous));
+      }
     }
     return out;
   }
@@ -355,14 +366,26 @@ class _Metric extends StatelessWidget {
   }
 }
 
+/// Satu rekor pribadi yang baru pecah: e1RM untuk gerakan biasa, bantuan
+/// paling sedikit ([help]) untuk mesin assisted (#232).
+class _PersonalRecord {
+  const _PersonalRecord({required this.name, required this.help, required this.now, required this.previous});
+
+  final String name;
+  final bool help;
+  final double now;
+  final double? previous;
+}
+
 class _RecordsCard extends StatelessWidget {
   const _RecordsCard({required this.records});
 
-  final List<(String, OneRmRecord)> records;
+  final List<_PersonalRecord> records;
 
   @override
   Widget build(BuildContext context) {
     final c = context.gym;
+    final unit = context.unitLabel;
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
       decoration: BoxDecoration(
@@ -385,13 +408,16 @@ class _RecordsCard extends StatelessWidget {
             if (i > 0) const SizedBox(height: 8),
             Row(
               children: [
-                Expanded(child: Text(entry.$1, style: Theme.of(context).textTheme.bodyLarge)),
+                Expanded(child: Text(entry.name, style: Theme.of(context).textTheme.bodyLarge)),
                 Text(
                   // Rekor pertama tidak punya pembanding — jangan tulis
                   // "(was 0)" yang terbaca seperti pernah mengangkat nol.
-                  entry.$2.previous == null
-                      ? 'e1RM ${formatDelta(entry.$2.now.est)} ${context.unitLabel}'
-                      : 'e1RM ${formatDelta(entry.$2.now.est)} ${context.unitLabel} (was ${formatDelta(entry.$2.previous!)})',
+                  switch ((entry.help, entry.previous)) {
+                    (true, final prev) => context.t.helpRecordLine(
+                        formatDelta(entry.now), unit, prev == null ? null : formatDelta(prev)),
+                    (false, null) => 'e1RM ${formatDelta(entry.now)} $unit',
+                    (false, final prev) => 'e1RM ${formatDelta(entry.now)} $unit (was ${formatDelta(prev!)})',
+                  },
                   style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: c.text2),
                 ),
               ],
@@ -489,9 +515,12 @@ class _DeltaTag extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.gym;
     final next = prescription.weight;
+    // Tanda mengikuti selisihnya, bukan jenisnya: di mesin assisted (#232)
+    // "naik" adalah bantuan yang berkurang, dan "+-2.5" bukan angka.
+    String delta() => next! >= current ? '+${formatDelta(next - current)}' : formatDelta(next - current);
     final (text, tone) = switch (prescription.kind) {
-      PrescriptionKind.up when next != null => ('+${formatDelta(next - current)}', c.accent),
-      PrescriptionKind.deload when next != null => (formatDelta(next - current), c.warn),
+      PrescriptionKind.up when next != null => (delta(), c.accent),
+      PrescriptionKind.deload when next != null => (delta(), c.warn),
       PrescriptionKind.hold => ('hold', c.text2),
       _ => ('new', c.text2),
     };

@@ -83,16 +83,6 @@ PlannedExercise planExercise(
   final seconds = p.seconds ?? cfg.seconds;
 
   final inc = cfg.mode == LogMode.time ? 0.0 : weightIncrement(cfg, unit);
-  final warmups = <SetRow>[
-    for (var i = 0; i < cfg.warmupSets; i++)
-      SetRow(
-        phase: SetPhase.warmup,
-        // 50 % lalu 75 %: ramp yang cukup untuk satu set ke failure tanpa
-        // menghabiskan tenaganya duluan.
-        weight: weight <= 0 ? 0 : snapWeight(weight * (0.5 + 0.25 * i), inc > 0 ? inc : 2.5),
-        reps: i == 0 ? 8 : 5,
-      ),
-  ];
   final last = lastEntryFor(history, cfg.exerciseId);
   final lastWarm = last?.sets.where((s) => s.isWarmup).toList() ?? const <SetRow>[];
   final lastWork = last?.sets.where((s) => s.isWork).toList() ?? const <SetRow>[];
@@ -101,7 +91,23 @@ PlannedExercise planExercise(
   // yang akan menggeser seluruh tangga dari titik yang salah.
   final judged = identical(eligible, history) ? last : lastEntryFor(eligible, cfg.exerciseId);
   final judgedWork = judged?.sets.where((s) => s.isWork).toList() ?? const <SetRow>[];
-  final ramp = cfg.mode == LogMode.reps ? rampWeights(judgedWork, p, setCount, inc) : null;
+  // Arah beban (#232): konfigurasi yang sudah diresolusi menang, lalu target
+  // yang dibekukan di sesi terakhir yang dinilai — urutan yang sama dengan
+  // yang dipakai [nextPrescription] lewat [readSession].
+  final assisted = cfg.assisted ?? judged?.target?.assisted ?? false;
+  final warmups = <SetRow>[
+    for (var i = 0; i < cfg.warmupSets; i++)
+      SetRow(
+        phase: SetPhase.warmup,
+        // 50 % lalu 75 %: ramp yang cukup untuk satu set ke failure tanpa
+        // menghabiskan tenaganya duluan. Di mesin assisted arahnya dibalik —
+        // 150 % lalu 125 % bantuan — karena separuh bantuan justru lebih
+        // berat daripada set kerjanya.
+        weight: weight <= 0 ? 0 : snapWeight(weight * (assisted ? 1.5 - 0.25 * i : 0.5 + 0.25 * i), inc > 0 ? inc : 2.5),
+        reps: i == 0 ? 8 : 5,
+      ),
+  ];
+  final ramp = cfg.mode == LogMode.reps ? rampWeights(judgedWork, p, setCount, inc, assisted: assisted) : null;
 
   final work = <SetRow>[
     for (var i = 0; i < setCount; i++)
@@ -142,7 +148,12 @@ PlannedExercise planExercise(
 ///
 /// Set yang tidak dicentang, atau set tambahan di luar jumlah sesi lalu,
 /// memakai beban puncak yang diresepkan.
-List<double>? rampWeights(List<SetRow> lastWork, Prescription p, int setCount, double inc) {
+///
+/// Di mesin assisted (#232) titik acuannya bantuan *terkecil* — set
+/// terberat sesi lalu, yang memang jadi dasar prescription — dan pergeserannya
+/// mengikuti tanda selisihnya, jadi naik = tiap set bantuannya berkurang.
+List<double>? rampWeights(List<SetRow> lastWork, Prescription p, int setCount, double inc,
+    {bool assisted = false}) {
   final next = p.weight;
   if (next == null || next <= 0) return null;
   if (p.kind != PrescriptionKind.up && p.kind != PrescriptionKind.hold && p.kind != PrescriptionKind.deload) {
@@ -150,7 +161,7 @@ List<double>? rampWeights(List<SetRow> lastWork, Prescription p, int setCount, d
   }
   final done = [for (final s in lastWork) if (s.done && s.weight > 0) s.weight];
   if (done.length < 2 || done.toSet().length < 2) return null;
-  final top = done.reduce(math.max);
+  final top = assisted ? done.reduce(math.min) : done.reduce(math.max);
   double shift(double base) => switch (p.kind) {
         PrescriptionKind.up => addStep(base, next - top, inc > 0 ? inc : 2.5),
         PrescriptionKind.deload => math.max(inc > 0 ? inc : 0, snapWeight(base * next / top, inc)),

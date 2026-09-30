@@ -10,6 +10,8 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import '../core/gym_icons.dart';
+import '../domain/assisted.dart';
+import '../domain/models.dart';
 import '../domain/settings.dart';
 import 'package:flutter/services.dart' show rootBundle;
 
@@ -25,10 +27,20 @@ class Exercise {
     required this.target,
     required this.secondary,
     this.custom = false,
+    this.assisted,
   });
 
   final String id;
   final String name;
+
+  /// Override mesin assisted untuk gerakan custom (#232): null = ikuti aturan
+  /// katalog atas nama dan alat ([isAssisted]), true/false memaksa arahnya.
+  /// Gerakan bawaan selalu null — aturannya yang bicara.
+  final bool? assisted;
+
+  /// Beban yang dicatat adalah bantuan mesin, makin kecil makin berat. Aturan
+  /// dan alasannya di `domain/assisted.dart`.
+  bool get isAssisted => isAssistedExercise(equipment: equipment, name: name, override: assisted);
 
   /// Kunci pendek di JSON dipertahankan apa adanya saat parsing (`n`, `bp`,
   /// `eq`, `tg`) supaya file aset tidak perlu ditulis ulang.
@@ -55,6 +67,8 @@ class Exercise {
         target: j['tg'] as String? ?? '',
         secondary: (j['sm'] as List?)?.cast<String>() ?? const [],
         custom: j['custom'] == true,
+        // Bukan boolean (dokumen dari versi lain) = ikuti aturan katalog.
+        assisted: j['assisted'] is bool ? j['assisted'] as bool : null,
       );
 
   /// Bentuk yang sama dengan aset, supaya gerakan custom bisa disimpan di
@@ -67,6 +81,7 @@ class Exercise {
         'tg': target,
         if (secondary.isNotEmpty) 'sm': secondary,
         if (custom) 'custom': true,
+        if (assisted != null) 'assisted': assisted,
       };
 
   /// "Back · Barbell" — baris kedua di daftar.
@@ -161,6 +176,27 @@ class ExerciseCatalog {
   /// Nama untuk ditampilkan. Id yang tidak dikenal tetap diberi nama yang
   /// jujur, bukan string kosong yang membuat baris terlihat rusak.
   String nameOf(String id) => byId(id)?.name ?? 'Exercise $id';
+
+  /// Mesin assisted menurut katalog atau override gerakan custom (#232). Id
+  /// yang tidak dikenal dibaca normal. Bentuknya cocok dengan `AssistedLookup`
+  /// di domain, jadi bisa diteruskan apa adanya: `catalog.isAssisted`.
+  bool isAssisted(String id) => byId(id)?.isAssisted ?? false;
+
+  /// Resolusi arah beban ke konfigurasi sebelum masuk ke engine progresi.
+  ///
+  /// Slot yang masih "otomatis" (null) diisi `true` hanya kalau katalog
+  /// bilang assisted; slot normal dibiarkan null supaya dokumen tidak
+  /// mengangkut `assisted: false` di setiap gerakan setiap sesi. Override
+  /// eksplisit tidak disentuh. Hasilnya ikut dibekukan ke target sesi, jadi
+  /// sesi itu tetap dibaca dengan arah yang sama meski katalog berubah.
+  ExerciseConfig withAssisted(ExerciseConfig cfg) =>
+      cfg.assisted == null && isAssisted(cfg.exerciseId) ? cfg.copyWith(assisted: true) : cfg;
+
+  /// [isAssisted] untuk pemanggil yang tidak memegang instance katalog —
+  /// ringkasan Home, lembar riwayat, ringkasan selesai. Gerakan custom dari
+  /// daftar statis, bawaan dari cache; sebelum aset termuat jawabannya
+  /// normal, dan layar-layar itu semuanya dibuka setelah Home memuatnya.
+  static bool assistedById(String id) => (_customById[id] ?? _cached?._byId[id])?.isAssisted ?? false;
 
   static ExerciseCatalog? _cached;
   static Future<ExerciseCatalog>? _loading;

@@ -38,8 +38,11 @@ SessionExercise buildSessionExercise(
 }) {
   final s = settings ?? const TrainingSettings();
   // Faktor deload dari Profil berlaku untuk gerakan yang tidak menentukan
-  // sendiri.
-  final withDefaults = cfg.deloadFactor == null ? cfg.copyWith(deloadFactor: s.deloadFactor) : cfg;
+  // sendiri. Arah beban mesin assisted (#232) diresolusi dari katalog di
+  // sini — satu-satunya tempat katalog dan engine bertemu — dan ikut
+  // dibekukan ke target sesi lewat `plan.target`.
+  final withDefaults =
+      catalog.withAssisted(cfg.deloadFactor == null ? cfg.copyWith(deloadFactor: s.deloadFactor) : cfg);
   // [cfg] dan [history] sudah dalam satuan tampilan (lihat units.dart), jadi
   // lompatan pelatnya juga dalam satuan itu.
   final plan =
@@ -312,7 +315,9 @@ Future<void> reopenWorkoutSession(BuildContext context, Workout workout) async {
     // Riwayat lama tanpa target dibekukan ke target terakhir gerakan itu
     // *sebelum* sesi ini, sama seperti gerakan yang ditambah di sesi bebas.
     final cfgKg = entry.target ?? configForAdded(id, kgHistory);
-    final cfg = configIn(cfgKg, unit);
+    // Sesi lama yang targetnya belum menyimpan arah beban (#232) dibaca
+    // dengan arah katalog, seperti sesi baru.
+    final cfg = catalog.withAssisted(configIn(cfgKg, unit));
     // planExercise hanya diminta PREV dan alasannya; baris setnya dibuang,
     // karena set yang dipakai adalah yang sudah tercatat.
     final plan = planExercise(cfg, history, unit: unit.label, routines: store.routines);

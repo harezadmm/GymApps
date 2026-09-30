@@ -22,6 +22,12 @@
 ///   [progressionHistory] sebelum riwayat sampai ke policy mana pun.
 /// * **Setiap angka punya alasan.** [Prescription.why] selalu terisi supaya UI
 ///   bisa menjawab "kenapa angka ini?" (FR-E5).
+/// * **Mesin assisted berjalan terbalik** (openGym v1.3.8, issue #232). Beban
+///   yang dicatat adalah bantuan mesin: sesi dibaca dari bantuan *terkecil*,
+///   "naik" berarti bantuan berkurang, deload berarti bantuan bertambah, dan
+///   di nol tidak ada lagi yang bisa dikurangi. Arahnya datang dari
+///   [ExerciseConfig.assisted] yang diresolusi pemanggil — engine ini tidak
+///   mengenal katalog (lihat `domain/assisted.dart`).
 ///
 /// **Yang belum ikut di-port** dan sengaja disederhanakan: `selectDeloadCandidate`
 /// milik openGym — pencarian grid Epley leksikografis untuk memilih pasangan
@@ -116,6 +122,25 @@ double deloadTo(double current, double step, [double factor = deloadFactorDefaul
   return math.max(step, next);
 }
 
+/// Deload untuk mesin assisted (#232): lebih banyak bantuan. Cermin dari
+/// [deloadTo] — bantuan *dibagi* faktornya, bukan dikali, lalu di-snap ke
+/// grid pelat; kalau snap-nya tidak beranjak, naik satu langkah.
+double moreHelp(double current, double step, [double factor = deloadFactorDefault]) {
+  var next = snapWeight(current / factor, step);
+  if (next <= current) next = snapWeight(current + step, step);
+  return next;
+}
+
+/// Satu langkah lebih berat: tambah beban, atau untuk assisted kurangi
+/// bantuan. Tidak pernah negatif — [addStep] berhenti di nol, dan di nol
+/// [nextPrescription] tidak lagi meminta langkah ini.
+double harderBy(double w, double step, double inc, {required bool assisted}) =>
+    addStep(w, assisted ? -step : step, inc);
+
+/// Deload ke arah yang benar: beban turun, atau untuk assisted bantuan naik.
+double easierTo(double w, double inc, double factor, {required bool assisted}) =>
+    assisted ? moreHelp(w, inc, factor) : deloadTo(w, inc, factor);
+
 /// Normalkan dua batas rep range milik double progression.
 ({int reps, int repsMin}) normalizeRepRange(int? reps, int? repsMin, [int stride = 1]) {
   final step = stride > 0 ? stride : 1;
@@ -144,6 +169,7 @@ class SessionRead {
     required this.reps,
     required this.ok,
     required this.target,
+    this.assisted = false,
   });
 
   final String date;
@@ -153,7 +179,12 @@ class SessionRead {
   final int goal;
 
   /// Beban tertinggi yang benar-benar tercentang di antara set yang dinilai.
+  /// Untuk mesin assisted (#232): bantuan *terkecil* di atas nol — itulah set
+  /// terberatnya; nol berarti beban tidak diisi, bukan "tanpa bantuan".
   final double weight;
+
+  /// Sesi ini dibaca sebagai mesin assisted (lihat [readSession]).
+  final bool assisted;
 
   /// Rep per set kerja yang dinilai — sebanyak rencana, set bonus di luar itu
   /// tidak ikut (#233). Set yang tidak dicentang jadi 0.
@@ -182,9 +213,14 @@ class SessionRead {
 /// openGym sebelum v1.2.2 memang begitu, dan menilainya terhadap "tidak ada"
 /// akan menskor setiap sesi lama sebagai gagal — lalu menyambut pengguna lama
 /// dengan "gagal 11 sesi berturut, deload".
-SessionRead readSession(WorkoutEntry entry, {required String date, ExerciseConfig? fallback}) {
+///
+/// [assisted] adalah arah beban menurut konfigurasi yang berlaku sekarang
+/// (#232). null = ikuti target yang dibekukan di entri; kalau itu pun tidak
+/// tahu (riwayat sebelum v2.3), dibaca normal.
+SessionRead readSession(WorkoutEntry entry, {required String date, ExerciseConfig? fallback, bool? assisted}) {
   final target = entry.target ?? fallback;
   final mode = target?.mode ?? LogMode.reps;
+  final help = assisted ?? target?.assisted ?? false;
 
   // Warm-up disaring sekali di sini. Kalau tidak, satu warm-up yang tidak
   // dicentang akan meracuni `ok` selamanya dan menyeret `low` ke bawah. Drop
@@ -201,6 +237,8 @@ SessionRead readSession(WorkoutEntry entry, {required String date, ExerciseConfi
   final enough = logged.length >= planned;
   final sets = logged.take(math.max(1, planned)).toList();
 
+  final weight = sessionLoad(sets.where((s) => s.done), assisted: help);
+
   if (mode == LogMode.time) {
     final goal = target?.seconds ?? 0;
     final held = sets.map((s) => s.done ? s.seconds : 0).toList();
@@ -208,10 +246,11 @@ SessionRead readSession(WorkoutEntry entry, {required String date, ExerciseConfi
       date: date,
       mode: mode,
       goal: goal,
-      weight: sets.where((s) => s.done).fold(0.0, (a, s) => math.max(a, s.weight)),
+      weight: weight,
       reps: held,
       ok: goal > 0 && enough && held.isNotEmpty && held.every((h) => h >= goal),
       target: target,
+      assisted: help,
     );
   }
 
@@ -221,11 +260,23 @@ SessionRead readSession(WorkoutEntry entry, {required String date, ExerciseConfi
     date: date,
     mode: mode,
     goal: goal,
-    weight: sets.where((s) => s.done).fold(0.0, (a, s) => math.max(a, s.weight)),
+    weight: weight,
     reps: reps,
     ok: goal > 0 && enough && reps.isNotEmpty && reps.every((r) => r >= goal),
     target: target,
+    assisted: help,
   );
+}
+
+/// Beban yang mewakili satu sesi: puncak dari set tercentang. Untuk mesin
+/// assisted (#232): bantuan terkecil di atas nol. Baris bernilai nol berarti
+/// bebannya tidak diisi — kalau dibaca sebagai "tanpa bantuan", satu baris
+/// kosong akan membuat sesi 20 kg terbaca sebagai pull-up tanpa mesin dan
+/// target berikutnya "naik" dari nol.
+double sessionLoad(Iterable<SetRow> done, {required bool assisted}) {
+  if (!assisted) return done.fold(0.0, (a, s) => math.max(a, s.weight));
+  final loads = [for (final s in done) if (s.weight > 0) s.weight];
+  return loads.isEmpty ? 0 : loads.reduce(math.min);
 }
 
 /// Riwayat yang boleh menjadi dasar target berikutnya (FR-B10).
@@ -250,8 +301,10 @@ List<Workout> progressionHistory(List<Workout> workouts, List<Routine> routines)
   return [for (final w in workouts) if (!excluded.contains(w.routine)) w];
 }
 
-/// Semua sesi lampau untuk satu gerakan, terlama dulu.
-List<SessionRead> sessionsFor(List<Workout> workouts, String exerciseId, {ExerciseConfig? fallback}) {
+/// Semua sesi lampau untuk satu gerakan, terlama dulu. [assisted] diteruskan
+/// ke [readSession].
+List<SessionRead> sessionsFor(List<Workout> workouts, String exerciseId,
+    {ExerciseConfig? fallback, bool? assisted}) {
   final out = <SessionRead>[];
   for (final w in workouts) {
     for (final entry in w.entries) {
@@ -259,7 +312,7 @@ List<SessionRead> sessionsFor(List<Workout> workouts, String exerciseId, {Exerci
       // Sesi dari rutinitas deload tidak boleh jadi dasar target berikutnya (FR-B10).
       if (entry.excluded) continue;
       if (entry.sets.any((s) => s.done && !s.isWarmup)) {
-        out.add(readSession(entry, date: w.date, fallback: fallback));
+        out.add(readSession(entry, date: w.date, fallback: fallback, assisted: assisted));
       }
     }
   }
@@ -271,7 +324,10 @@ List<SessionRead> sessionsFor(List<Workout> workouts, String exerciseId, {Exerci
 /// Dua hal mengakhiri rentetan selain keberhasilan:
 ///
 /// * **Beban berubah.** Deload harus mencerminkan kegagalan pada beban yang
-///   memicunya, bukan pada beban ringan yang menyusul.
+///   memicunya, bukan pada beban ringan yang menyusul. Perubahan ke arah mana
+///   pun memutus rentetan, jadi mesin assisted (#232) ikut benar tanpa cabang
+///   khusus: bantuan yang berkurang lalu gagal adalah kegagalan pertama pada
+///   bantuan baru — kemajuan yang belum jadi, bukan stall yang berlanjut.
 /// * **Di double progression, mengalahkan rekor rep pada beban yang sama.**
 ///   Double sengaja meminta lebih sedikit daripada yang dinilainya: targetnya
 ///   memanjat dari bawah range, sementara `ok` menuntut puncaknya. Tanpa
@@ -342,7 +398,9 @@ Prescription nextPrescription({
       ? ((cfg.increment != null && cfg.increment! > 0) ? cfg.increment! : defaultSecondIncrement.toDouble())
       : weightIncrement(cfg, unit);
 
-  final sessions = sessionsFor(workouts, cfg.exerciseId, fallback: cfg).where((s) => s.mode == cfg.mode).toList();
+  final sessions = sessionsFor(workouts, cfg.exerciseId, fallback: cfg, assisted: cfg.assisted)
+      .where((s) => s.mode == cfg.mode)
+      .toList();
   if (sessions.isEmpty) {
     return Prescription(
       policy: policy,
@@ -356,12 +414,30 @@ Prescription nextPrescription({
   final limit = deloadAfter[policy] ?? 3;
 
   if (cfg.mode == LogMode.time) return _time(policy, cfg, last, stalls, limit, inc.toInt());
-  if (policy == ProgressionPolicy.hit) return _hit(policy, cfg, sessions, inc, unit);
+
+  // Arah beban (#232): konfigurasi yang sudah diresolusi pemanggil menang;
+  // kalau masih "otomatis", sesi terakhir dibaca dengan arah yang dibekukan
+  // ke targetnya — [readSession] memakai urutan yang sama.
+  final assisted = last.assisted;
+  if (assisted && last.weight <= 0) return _assistedFloor(policy, cfg, last);
+  if (policy == ProgressionPolicy.hit) return _hit(policy, cfg, sessions, inc, unit, assisted);
 
   final w = last.weight;
   if (w <= 0) return _bodyweight(policy, cfg, last);
-  if (policy == ProgressionPolicy.double_) return _double(policy, cfg, last, stalls, limit, inc, unit);
-  return _linearOrGreyskull(policy, cfg, last, stalls, limit, inc, unit);
+  if (policy == ProgressionPolicy.double_) return _double(policy, cfg, last, stalls, limit, inc, unit, assisted);
+  return _linearOrGreyskull(policy, cfg, last, stalls, limit, inc, unit, assisted);
+}
+
+/// Bantuan sudah nol: tidak ada lagi yang bisa dikurangi (#232). Target
+/// ditahan di nol dan alasannya menyuruh pindah ke versi tanpa mesin — bukan
+/// "-2,5 kg" yang jadi negatif, dan bukan jalur bodyweight yang akan
+/// menyarankan "tambah beban".
+Prescription _assistedFloor(ProgressionPolicy policy, ExerciseConfig cfg, SessionRead last) {
+  final goal = last.goal > 0 ? last.goal : cfg.reps;
+  return Prescription(
+    policy: policy, kind: PrescriptionKind.hold, weight: 0, reps: goal > 0 ? goal : null,
+    why: 'No help left to take away — move on to the unassisted exercise.',
+  );
 }
 
 Prescription _time(ProgressionPolicy policy, ExerciseConfig cfg, SessionRead last, int stalls, int limit, int inc) {
@@ -420,33 +496,40 @@ Prescription _bodyweight(ProgressionPolicy policy, ExerciseConfig cfg, SessionRe
   );
 }
 
+/// Alasan untuk mesin assisted bicara soal *bantuan*, bukan beban (#232):
+/// "+2,5 kg" di pull-up assisted terbaca sebagai lebih berat, padahal yang
+/// terjadi kebalikannya. Teks untuk gerakan biasa tidak disentuh.
 Prescription _double(ProgressionPolicy policy, ExerciseConfig cfg, SessionRead last, int stalls, int limit,
-    double inc, String unit) {
+    double inc, String unit, bool assisted) {
   final range = normalizeRepRange(cfg.reps > 0 ? cfg.reps : last.goal, cfg.repsMin);
   final w = last.weight;
   if (last.ok) {
-    final next = addStep(w, inc, inc);
+    final next = harderBy(w, inc, inc, assisted: assisted);
     return Prescription(
       policy: policy, kind: PrescriptionKind.up, weight: next, reps: range.repsMin,
-      why: 'Top of the rep range on every set — +${formatDelta(inc)} $unit, reps back to ${range.repsMin}.',
+      why: assisted
+          ? 'Top of the rep range on every set — ${formatDelta(inc)} $unit less help, reps back to ${range.repsMin}.'
+          : 'Top of the rep range on every set — +${formatDelta(inc)} $unit, reps back to ${range.repsMin}.',
     );
   }
   if (stalls >= limit) {
-    final dw = deloadTo(w, inc, deloadFactorOf(cfg));
+    final dw = easierTo(w, inc, deloadFactorOf(cfg), assisted: assisted);
     return Prescription(
       policy: policy, kind: PrescriptionKind.deload, weight: dw, reps: range.repsMin,
-      why: 'Stalled $stalls sessions — deload to ${formatDelta(dw)} $unit.',
+      why: assisted
+          ? 'Stalled $stalls sessions — more help, back to ${formatDelta(dw)} $unit.'
+          : 'Stalled $stalls sessions — deload to ${formatDelta(dw)} $unit.',
     );
   }
   final aim = math.min(range.reps, math.max(range.repsMin, last.low + 1));
   return Prescription(
     policy: policy, kind: PrescriptionKind.hold, weight: w, reps: aim,
-    why: 'Same weight — go for $aim reps this time.',
+    why: assisted ? 'Same help — go for $aim reps this time.' : 'Same weight — go for $aim reps this time.',
   );
 }
 
 Prescription _linearOrGreyskull(ProgressionPolicy policy, ExerciseConfig cfg, SessionRead last, int stalls,
-    int limit, double inc, String unit) {
+    int limit, double inc, String unit, bool assisted) {
   final w = last.weight;
   if (last.ok) {
     // Set terakhir Greyskull dibawa ke failure: lewati dua kali target di situ
@@ -454,24 +537,35 @@ Prescription _linearOrGreyskull(ProgressionPolicy policy, ExerciseConfig cfg, Se
     final dbl = policy == ProgressionPolicy.greyskull && last.goal > 0 && last.amrap >= last.goal * 2;
     final step = dbl ? inc * 2 : inc;
     return Prescription(
-      policy: policy, kind: PrescriptionKind.up, weight: addStep(w, step, inc),
-      why: dbl
-          ? 'Last set ${last.amrap} reps — double the target, so a double jump of +${formatDelta(step)} $unit.'
-          : '+${formatDelta(step)} $unit — all reps hit last session.',
+      policy: policy, kind: PrescriptionKind.up, weight: harderBy(w, step, inc, assisted: assisted),
+      why: switch ((assisted, dbl)) {
+        (true, true) =>
+          'Last set ${last.amrap} reps — double the target, so a double step of ${formatDelta(step)} $unit less help.',
+        (true, false) => '${formatDelta(step)} $unit less help — all reps hit last session.',
+        (false, true) =>
+          'Last set ${last.amrap} reps — double the target, so a double jump of +${formatDelta(step)} $unit.',
+        (false, false) => '+${formatDelta(step)} $unit — all reps hit last session.',
+      },
     );
   }
   if (stalls >= limit) {
-    final dw = deloadTo(w, inc, deloadFactorOf(cfg));
+    final dw = easierTo(w, inc, deloadFactorOf(cfg), assisted: assisted);
     return Prescription(
       policy: policy, kind: PrescriptionKind.deload, weight: dw,
-      why: stalls > 1
-          ? 'Reps short $stalls sessions running — reset to ${formatDelta(dw)} $unit and climb again.'
-          : 'Reps short — reset to ${formatDelta(dw)} $unit and climb again.',
+      why: switch ((assisted, stalls > 1)) {
+        (true, true) =>
+          'Reps short $stalls sessions running — more help, back to ${formatDelta(dw)} $unit, then work it down again.',
+        (true, false) => 'Reps short — more help, back to ${formatDelta(dw)} $unit, then work it down again.',
+        (false, true) => 'Reps short $stalls sessions running — reset to ${formatDelta(dw)} $unit and climb again.',
+        (false, false) => 'Reps short — reset to ${formatDelta(dw)} $unit and climb again.',
+      },
     );
   }
   return Prescription(
     policy: policy, kind: PrescriptionKind.hold, weight: w,
-    why: 'Reps short last session — same weight again (${limit - stalls} of $limit to go).',
+    why: assisted
+        ? 'Reps short last session — same help again (${limit - stalls} of $limit to go).'
+        : 'Reps short last session — same weight again (${limit - stalls} of $limit to go).',
   );
 }
 
@@ -480,7 +574,8 @@ Prescription _linearOrGreyskull(ProgressionPolicy policy, ExerciseConfig cfg, Se
 /// Bedanya dari policy lain: **hanya membaca satu working set**, yaitu baris
 /// non-warm-up pertama. Itu memang metodenya — satu set ke failure per gerakan.
 /// Set tambahan yang terlanjur tercatat diabaikan, bukan dijadikan alasan gagal.
-Prescription _hit(ProgressionPolicy policy, ExerciseConfig cfg, List<SessionRead> sessions, double inc, String unit) {
+Prescription _hit(ProgressionPolicy policy, ExerciseConfig cfg, List<SessionRead> sessions, double inc, String unit,
+    bool assisted) {
   final range = normalizeRepRange(cfg.reps > 0 ? cfg.reps : 10, cfg.repsMin ?? 6);
   final hi = range.reps;
   final lo = range.repsMin;
@@ -491,6 +586,7 @@ Prescription _hit(ProgressionPolicy policy, ExerciseConfig cfg, List<SessionRead
 
   // Dips, pull-up, push-up tanpa beban tambahan: tidak ada beban untuk
   // dinaikkan atau diturunkan. Dulu di sini keluar "+2,5 kg" untuk dips.
+  // Mesin assisted di nol tidak sampai sini — [_assistedFloor] menahannya.
   if (w <= 0) {
     if (reps >= hi) {
       return Prescription(
@@ -511,17 +607,21 @@ Prescription _hit(ProgressionPolicy policy, ExerciseConfig cfg, List<SessionRead
   }
 
   if (reps >= hi) {
-    final next = addStep(w, inc, inc);
+    final next = harderBy(w, inc, inc, assisted: assisted);
     return Prescription(
       policy: policy, kind: PrescriptionKind.up, weight: next, reps: lo,
-      why: '$reps reps — past the top of the range, +${formatDelta(inc)} $unit and reps back to $lo.',
+      why: assisted
+          ? '$reps reps — past the top of the range, ${formatDelta(inc)} $unit less help and reps back to $lo.'
+          : '$reps reps — past the top of the range, +${formatDelta(inc)} $unit and reps back to $lo.',
     );
   }
 
   if (reps >= lo) {
     return Prescription(
       policy: policy, kind: PrescriptionKind.hold, weight: w, reps: reps + 1,
-      why: '$reps reps — still inside the range, same weight, go for ${reps + 1}.',
+      why: assisted
+          ? '$reps reps — still inside the range, same help, go for ${reps + 1}.'
+          : '$reps reps — still inside the range, same weight, go for ${reps + 1}.',
     );
   }
 
@@ -531,15 +631,19 @@ Prescription _hit(ProgressionPolicy policy, ExerciseConfig cfg, List<SessionRead
   final prev = sessions.length >= 2 ? sessions[sessions.length - 2] : null;
   final twiceShort = prev != null && prev.weight == w && prev.firstWorking < lo;
   if (twiceShort) {
-    final dw = deloadTo(w, inc, deloadFactorOf(cfg));
+    final dw = easierTo(w, inc, deloadFactorOf(cfg), assisted: assisted);
     return Prescription(
       policy: policy, kind: PrescriptionKind.deload, weight: dw, reps: lo,
-      why: 'Two sessions running under $lo reps — deload to ${formatDelta(dw)} $unit. Consider adding a rest day.',
+      why: assisted
+          ? 'Two sessions running under $lo reps — more help, back to ${formatDelta(dw)} $unit. Consider adding a rest day.'
+          : 'Two sessions running under $lo reps — deload to ${formatDelta(dw)} $unit. Consider adding a rest day.',
     );
   }
   return Prescription(
     policy: policy, kind: PrescriptionKind.hold, weight: w, reps: lo,
-    why: '$reps reps, under $lo — same weight again before deciding to deload.',
+    why: assisted
+        ? '$reps reps, under $lo — same help again before deciding to deload.'
+        : '$reps reps, under $lo — same weight again before deciding to deload.',
   );
 }
 

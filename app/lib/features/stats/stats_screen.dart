@@ -26,6 +26,7 @@ import '../../core/weights.dart';
 import '../../core/widgets.dart';
 import '../../data/exercise_catalog.dart';
 import '../../data/workout_store.dart';
+import '../../domain/assisted.dart';
 import '../../domain/models.dart';
 import '../../domain/muscle_volume.dart';
 import '../../domain/stats.dart';
@@ -526,8 +527,13 @@ class _StatsScreenState extends State<StatsScreen> {
     final t = context.t;
     final history = historyIn(context.workouts.workouts, context.unit);
     final now = DateTime.now();
-    final logged = loggedExercises(history);
     final catalog = _cat;
+    // Mesin assisted tidak punya e1RM (#232): tidak ditawarkan di pemilih
+    // grafik — kurvanya akan kosong — dan tidak masuk daftar kekuatan.
+    final logged = [
+      for (final id in loggedExercises(history))
+        if (!exerciseIsAssisted(history, id, catalog?.isAssisted)) id,
+    ];
 
     if (logged.isEmpty || catalog == null) {
       return _layout([
@@ -544,11 +550,11 @@ class _StatsScreenState extends State<StatsScreen> {
 
     final id = logged.contains(_e1rmId) ? _e1rmId! : logged.first;
     const weeks = 12;
-    final series = weeklyE1rm(history, id, now, weeks: weeks);
+    final series = weeklyE1rm(history, id, now, weeks: weeks, isAssisted: catalog.isAssisted);
     final peak = series.last;
     final first = series.firstWhere((v) => v > 0, orElse: () => 0);
     final pct = first > 0 ? (peak - first) / first * 100 : 0.0;
-    final movements = strengthByMovement(history, now, count: 12);
+    final movements = strengthByMovement(history, now, count: 12, isAssisted: catalog.isAssisted);
     final unit = context.unitLabel;
 
     return _layout(

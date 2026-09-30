@@ -10,26 +10,43 @@ import '../../domain/units.dart';
 
 import '../../core/format.dart';
 import '../../core/strings.dart';
+import '../../core/strings_assisted.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
+import '../../data/exercise_catalog.dart';
 import '../../data/workout_store.dart';
+import '../../domain/assisted.dart';
 import '../../domain/models.dart';
 import '../../domain/onerm.dart';
 
 /// Ringkasan rekor satu gerakan dari riwayat (terbaru dulu atau tidak, sama saja).
 class ExerciseRecords {
-  const ExerciseRecords({this.heaviest, this.heaviestDate, this.best, this.bestVolume, this.bestVolumeDate});
+  const ExerciseRecords({
+    this.heaviest,
+    this.heaviestDate,
+    this.best,
+    this.bestVolume,
+    this.bestVolumeDate,
+    this.assisted = false,
+  });
 
+  /// Beban rekor: tertinggi, atau untuk mesin assisted bantuan *terendah*
+  /// di atas nol (#232) — labelnya ikut berganti di UI.
   final double? heaviest;
   final String? heaviestDate;
   final BestSet? best;
   final double? bestVolume;
   final String? bestVolumeDate;
+
+  /// Gerakan ini dibaca sebagai mesin assisted.
+  final bool assisted;
 }
 
-ExerciseRecords recordsFor(List<Workout> workouts, String exerciseId) {
-  double? heaviest;
-  String? heaviestDate;
+/// [isAssisted] menjawab arah beban untuk riwayat yang targetnya belum
+/// menyimpannya (sebelum v2.3); target yang dibekukan selalu menang.
+ExerciseRecords recordsFor(List<Workout> workouts, String exerciseId, {AssistedLookup? isAssisted}) {
+  final assisted = exerciseIsAssisted(workouts, exerciseId, isAssisted);
+  final load = bestLoad(workouts, exerciseId, assisted: assisted);
   double? volume;
   String? volumeDate;
   for (final w in workouts) {
@@ -39,10 +56,6 @@ ExerciseRecords recordsFor(List<Workout> workouts, String exerciseId) {
       for (final s in e.sets) {
         if (!s.done || s.isWarmup) continue;
         v += s.weight * s.reps;
-        if (s.weight > 0 && (heaviest == null || s.weight > heaviest)) {
-          heaviest = s.weight;
-          heaviestDate = w.date;
-        }
       }
       if (v > 0 && (volume == null || v > volume)) {
         volume = v;
@@ -52,11 +65,12 @@ ExerciseRecords recordsFor(List<Workout> workouts, String exerciseId) {
   }
   final chronological = [...workouts]..sort((a, b) => a.date.compareTo(b.date));
   return ExerciseRecords(
-    heaviest: heaviest,
-    heaviestDate: heaviestDate,
-    best: best1RM(chronological, exerciseId),
+    heaviest: load?.load,
+    heaviestDate: load?.date,
+    best: best1RM(chronological, exerciseId, isAssisted: isAssisted),
     bestVolume: volume,
     bestVolumeDate: volumeDate,
+    assisted: assisted,
   );
 }
 
@@ -97,7 +111,7 @@ Future<void> showExerciseHistory(BuildContext context, {required String exercise
   final unit = store.settings.unit;
   final shownHistory = historyIn(store.workouts, unit);
   final recent = recentFor(shownHistory, exerciseId);
-  final records = recordsFor(shownHistory, exerciseId);
+  final records = recordsFor(shownHistory, exerciseId, isAssisted: ExerciseCatalog.assistedById);
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
@@ -140,7 +154,10 @@ Future<void> showExerciseHistory(BuildContext context, {required String exercise
                 Text(t.noExerciseHistory, style: TextStyle(fontSize: 13.5, color: c.text2))
               else ...[
                 Row(children: [
-                  record(t.prHeaviest, records.heaviest == null ? '—' : '${formatWeight(records.heaviest!)} ${unit.label}',
+                  // Mesin assisted: "Terberat 30 kg" adalah set paling ringan
+                  // — labelnya harus bilang apa yang sebenarnya diukur.
+                  record(records.assisted ? t.prLeastHelp : t.prHeaviest,
+                      records.heaviest == null ? '—' : '${formatWeight(records.heaviest!)} ${unit.label}',
                       records.heaviestDate),
                   const SizedBox(width: 8),
                   record(t.prBestE1rm, records.best == null ? '—' : '${formatDelta(records.best!.est)} ${unit.label}',

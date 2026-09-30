@@ -47,12 +47,13 @@ class _Recent {
       volume += _volumeOf(w);
     }
 
-    // Gerakan yang e1RM-nya minggu ini melewati semua sesi sebelumnya.
+    // Gerakan yang e1RM-nya minggu ini melewati semua sesi sebelumnya. Mesin
+    // assisted tidak punya e1RM (#232), jadi tidak pernah masuk hitungan.
     final ids = {for (final w in recent) for (final e in w.entries) e.exerciseId};
     final all = newestFirst.reversed.toList();
     e1rmUp = ids.where((id) {
-      final now = best1RM(all, id);
-      final before = best1RM(older, id);
+      final now = best1RM(all, id, isAssisted: ExerciseCatalog.assistedById);
+      final before = best1RM(older, id, isAssisted: ExerciseCatalog.assistedById);
       return now != null && before != null && now.est > before.est;
     }).length;
 
@@ -648,7 +649,11 @@ class _NextSessionCard extends StatelessWidget {
                           // Target yang sama persis dengan yang akan terbuka
                           // di layar sesi — dihitung dengan fungsi yang sama.
                           final unit = context.unit;
-                          final plan = planExercise(configIn(cfg, unit), historyIn(history, unit),
+                          // Arah beban mesin assisted (#232) diresolusi seperti
+                          // saat sesi dibuka; sebelum katalog termuat namanya
+                          // pun masih "…", jadi angkanya boleh menyusul.
+                          final shownCfg = configIn(cfg, unit);
+                          final plan = planExercise(catalog?.withAssisted(shownCfg) ?? shownCfg, historyIn(history, unit),
                               routineDefault: routine.policy, unit: unit.label, routines: store.routines);
                           final work = plan.sets.firstWhere((s) => !s.isWarmup, orElse: () => const SetRow());
                           final target = work.weight > 0

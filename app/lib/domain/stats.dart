@@ -6,6 +6,7 @@
 library;
 
 import '../data/exercise_catalog.dart';
+import 'assisted.dart';
 import 'models.dart';
 import 'muscle_volume.dart';
 import 'onerm.dart';
@@ -67,8 +68,11 @@ List<String> loggedExercises(List<Workout> history) {
 
 /// e1RM terbaik per minggu untuk satu gerakan, [weeks] minggu, terlama dulu.
 /// Minggu tanpa sesi membawa nilai minggu sebelumnya, supaya grafiknya
-/// menunjukkan kekuatan, bukan jadwal latihan.
-List<double> weeklyE1rm(List<Workout> history, String exerciseId, DateTime today, {int weeks = 12}) {
+/// menunjukkan kekuatan, bukan jadwal latihan. Sesi mesin assisted tidak
+/// menyumbang angka (#232) — [isAssisted] menjawab untuk riwayat yang
+/// targetnya belum menyimpan arah.
+List<double> weeklyE1rm(List<Workout> history, String exerciseId, DateTime today,
+    {int weeks = 12, AssistedLookup? isAssisted}) {
   final end = dateOnly(today).add(const Duration(days: 1));
   final best = List<double?>.filled(weeks, null);
   double? before;
@@ -77,7 +81,7 @@ List<double> weeklyE1rm(List<Workout> history, String exerciseId, DateTime today
     if (d == null || !d.isBefore(end)) continue;
     for (final e in w.entries) {
       if (e.exerciseId != exerciseId) continue;
-      final b = bestSetOf(e)?.est;
+      final b = bestSetOf(e, isAssisted: isAssisted)?.est;
       if (b == null) continue;
       final ago = end.difference(d).inDays ~/ 7;
       if (ago >= weeks) {
@@ -109,15 +113,17 @@ class MovementStrength {
   final double delta;
 }
 
+/// Gerakan assisted tidak masuk daftar (#232): tanpa e1RM tidak ada
+/// "kekuatan" yang bisa diurutkan.
 List<MovementStrength> strengthByMovement(List<Workout> history, DateTime today,
-    {int count = 4, int window = 28}) {
+    {int count = 4, int window = 28, AssistedLookup? isAssisted}) {
   final cutoff = dateOnly(today).subtract(Duration(days: window));
   final older = [for (final w in history) if ((_date(w) ?? today).isBefore(cutoff)) w];
   final out = <MovementStrength>[];
   for (final id in loggedExercises(history)) {
-    final now = best1RM(history, id)?.est;
+    final now = best1RM(history, id, isAssisted: isAssisted)?.est;
     if (now == null) continue;
-    final then = best1RM(older, id)?.est;
+    final then = best1RM(older, id, isAssisted: isAssisted)?.est;
     out.add(MovementStrength(exerciseId: id, best: now, delta: then == null ? 0 : now - then));
   }
   out.sort((a, b) => b.best.compareTo(a.best));

@@ -18,6 +18,7 @@ import '../../core/format.dart';
 import '../../core/gym_icons.dart';
 import '../../core/motion.dart';
 import '../../core/strings.dart';
+import '../../core/strings_assisted.dart';
 import '../../core/strings_routine.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
@@ -42,6 +43,11 @@ class RoutineSaved extends RoutineEditorResult {
 
 /// Bagian tubuh yang lompatan 5 kg-nya wajar — sama dengan daftar openGym.
 const _heavyBodyParts = {'upper legs', 'lower legs', 'back'};
+
+/// Tri-state mesin assisted (#232) → indeks segmen: otomatis · assisted ·
+/// biasa. Publik supaya test bisa membaca segmen mana yang terpilih tanpa
+/// menebak dari warnanya.
+int assistedIndex(bool? assisted) => switch (assisted) { null => 0, true => 1, false => 2 };
 
 /// Pilihan increment beban. Di luar ini jarang ada alat yang bisa dimuat.
 const _increments = [0.5, 1.0, 1.25, 2.0, 2.5, 5.0, 10.0];
@@ -118,6 +124,9 @@ class _RoutineEditorScreenState extends State<RoutineEditorScreen> {
       warmupSets: keep?.warmupSets ?? 0,
       bodyweight: bw,
       heavyBodyPart: _heavyBodyParts.contains(e.bodyPart),
+      // Override mesin assisted (#232) ikut dipertahankan saat gerakan
+      // diganti; gerakan baru mulai dari "otomatis".
+      assisted: keep?.assisted,
     );
   }
 
@@ -440,6 +449,7 @@ class _ExerciseEditor extends StatelessWidget {
       heavyBodyPart: config.heavyBodyPart,
       warmupSets: config.warmupSets,
       superset: config.superset,
+      assisted: config.assisted,
     );
   }
 
@@ -643,6 +653,27 @@ class _ExerciseEditor extends StatelessWidget {
                     mode: config.mode,
                     onChanged: (p) => onChanged(config.copyWith(policy: p)),
                   ),
+                  // Mesin assisted (#232) hanya berarti untuk beban, jadi
+                  // mode waktu tidak menampilkannya. Bawaannya otomatis:
+                  // katalog sudah mengenali delapan gerakan assisted, dan
+                  // pilihan ini untuk mesin atau gerakan custom yang tidak
+                  // mengikuti pola namanya.
+                  if (config.mode == LogMode.reps) ...[
+                    const SizedBox(height: 12),
+                    SectionLabel(t.assistedLabel),
+                    const SizedBox(height: 6),
+                    SegmentedTabs(
+                      labels: [t.assistedAuto, t.assistedYes, t.assistedNo],
+                      index: assistedIndex(config.assisted),
+                      onChanged: (i) => onChanged(switch (i) {
+                        1 => config.copyWith(assisted: true),
+                        2 => config.copyWith(assisted: false),
+                        _ => config.copyWith(clearAssisted: true),
+                      }),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(t.assistedHint, style: TextStyle(fontSize: 12, height: 1.35, color: c.text2)),
+                  ],
                   if (!isLast) ...[
                     const SizedBox(height: 6),
                     SwitchListTile(

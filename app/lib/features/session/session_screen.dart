@@ -22,6 +22,7 @@ import '../../core/keep_awake.dart';
 import '../../core/motion.dart';
 import '../../core/rest_alert.dart';
 import '../../core/strings.dart';
+import '../../core/strings_assisted.dart';
 import '../../core/strings_session.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
@@ -965,11 +966,13 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
       case _ExerciseAction.addWarmup:
         final firstWork = ex.sets.firstWhere((s) => !s.isWarmup, orElse: () => const SetRow());
         final inc = weightIncrement(ex.config, _unit.label);
+        // Mesin assisted (#232): warm-up berarti *lebih banyak* bantuan.
+        final assisted = ex.config.assisted == true;
         setState(() {
           ex.addRow(
             SetRow(
               phase: SetPhase.warmup,
-              weight: firstWork.weight <= 0 ? 0 : snapWeight(firstWork.weight * 0.5, inc),
+              weight: firstWork.weight <= 0 ? 0 : snapWeight(firstWork.weight * (assisted ? 1.5 : 0.5), inc),
               reps: 8,
             ),
             atStart: true,
@@ -980,13 +983,17 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
         final base = ex.sets.lastWhere((s) => !s.isWarmup, orElse: () => const SetRow());
         final inc = weightIncrement(ex.config, _unit.label);
         final drop = action == _ExerciseAction.addDropSet;
+        // Drop set di mesin assisted (#232) = bantuan ditambah, bukan dikurangi.
+        final assisted = ex.config.assisted == true;
         setState(() {
           ex.addRow(
             SetRow(
               phase: drop ? SetPhase.drop : SetPhase.restPause,
               // Drop set: turun sekitar 20 %. Rest-pause: beban sama, rep jauh
               // lebih sedikit — beberapa rep lagi setelah jeda 15 detik.
-              weight: base.weight <= 0 ? 0 : (drop ? snapWeight(base.weight * 0.8, inc) : base.weight),
+              weight: base.weight <= 0
+                  ? 0
+                  : (drop ? snapWeight(base.weight * (assisted ? 1.25 : 0.8), inc) : base.weight),
               reps: drop ? base.reps : math.max(1, (base.reps / 3).round()),
               seconds: base.seconds,
             ),
@@ -1842,6 +1849,13 @@ class _ExerciseCard extends StatelessWidget {
                         const SizedBox(height: 12),
                         _RestRow(exercise: ex, onEdit: onEditRest, onToggle: onToggleRest, onStart: onStartRest),
                         if (p != null) ...[const SizedBox(height: 10), _WhyBanner(text: t.why(p.why), kind: p.kind)],
+                        // Mesin assisted (#232): pengingat kecil bahwa angka
+                        // di kolom KG adalah bantuan, sebelum orangnya
+                        // mengetik "lebih berat" ke arah yang salah.
+                        if (ex.config.assisted == true) ...[
+                          const SizedBox(height: 10),
+                          NoteBanner(text: t.assistedNote, icon: GymIcons.info, tone: c.text2),
+                        ],
                         const SizedBox(height: 12),
                         _SetTable(
                           exercise: ex,

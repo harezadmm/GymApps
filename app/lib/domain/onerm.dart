@@ -4,10 +4,18 @@
 /// butuh beban **dan** rep, dan hanya set mode `reps` yang punya keduanya. Set
 /// cardio dan set berbasis waktu karena itu gugur sendiri di setiap pemindaian
 /// di sini — tidak ada pengecekan tipe gerakan yang harus dijaga tetap sinkron.
+///
+/// Satu pengecualian yang tidak bisa dibaca dari set-nya: mesin assisted
+/// (#232). Angkanya bantuan mesin, bukan beban yang diangkat, jadi "e1RM 40 kg
+/// dari 30 × 8" adalah angka yang tidak berarti apa-apa — dan akan *naik* saat
+/// orangnya makin lemah. Entri assisted tidak menghasilkan estimasi sama
+/// sekali; arahnya dijawab target yang dibekukan atau [AssistedLookup] dari
+/// pemanggil (lihat `assisted.dart`).
 library;
 
 import 'dart:math' as math;
 
+import 'assisted.dart';
 import 'models.dart';
 
 /// Di atas sebanyak ini rep, estimasi lebih banyak bicara soal daya tahan
@@ -57,8 +65,10 @@ class BestSet {
   final String? date;
 }
 
-/// Estimasi terbaik dari set-set tercentang di satu entry.
-BestSet? bestSetOf(WorkoutEntry entry, [OneRmFormula formula = defaultFormula]) {
+/// Estimasi terbaik dari set-set tercentang di satu entry. null untuk mesin
+/// assisted (#232): tidak ada estimasi yang jujur dari angka bantuan.
+BestSet? bestSetOf(WorkoutEntry entry, {OneRmFormula formula = defaultFormula, AssistedLookup? isAssisted}) {
+  if (entryIsAssisted(entry, isAssisted)) return null;
   BestSet? best;
   for (final s in entry.sets) {
     if (!s.done || s.isWarmup) continue;
@@ -72,13 +82,15 @@ BestSet? bestSetOf(WorkoutEntry entry, [OneRmFormula formula = defaultFormula]) 
 }
 
 /// Satu titik per sesi yang menghasilkan estimasi — bahan grafik tren.
-/// Kronologis, mengikuti urutan sesi ditambahkan.
-List<BestSet> e1rmSeries(List<Workout> workouts, String exerciseId, [OneRmFormula formula = defaultFormula]) {
+/// Kronologis, mengikuti urutan sesi ditambahkan. Sesi assisted tidak
+/// menyumbang titik (#232).
+List<BestSet> e1rmSeries(List<Workout> workouts, String exerciseId,
+    {OneRmFormula formula = defaultFormula, AssistedLookup? isAssisted}) {
   final pts = <BestSet>[];
   for (final w in workouts) {
     for (final entry in w.entries) {
       if (entry.exerciseId != exerciseId) continue;
-      final best = bestSetOf(entry, formula);
+      final best = bestSetOf(entry, formula: formula, isAssisted: isAssisted);
       if (best != null) {
         pts.add(BestSet(est: best.est, weight: best.weight, reps: best.reps, date: w.date));
       }
@@ -89,9 +101,10 @@ List<BestSet> e1rmSeries(List<Workout> workouts, String exerciseId, [OneRmFormul
 }
 
 /// Estimasi terbaik sepanjang masa untuk satu gerakan.
-BestSet? best1RM(List<Workout> workouts, String exerciseId, [OneRmFormula formula = defaultFormula]) {
+BestSet? best1RM(List<Workout> workouts, String exerciseId,
+    {OneRmFormula formula = defaultFormula, AssistedLookup? isAssisted}) {
   BestSet? best;
-  for (final p in e1rmSeries(workouts, exerciseId, formula)) {
+  for (final p in e1rmSeries(workouts, exerciseId, formula: formula, isAssisted: isAssisted)) {
     if (best == null || p.est > best.est) best = p;
   }
   return best;
@@ -114,12 +127,13 @@ class OneRmRecord {
 OneRmRecord? is1RMRecord(
   List<Workout> workouts,
   String exerciseId,
-  WorkoutEntry entry, [
+  WorkoutEntry entry, {
   OneRmFormula formula = defaultFormula,
-]) {
-  final now = bestSetOf(entry, formula);
+  AssistedLookup? isAssisted,
+}) {
+  final now = bestSetOf(entry, formula: formula, isAssisted: isAssisted);
   if (now == null) return null;
-  final prev = best1RM(workouts, exerciseId, formula);
+  final prev = best1RM(workouts, exerciseId, formula: formula, isAssisted: isAssisted);
   if (prev != null && now.est <= prev.est) return null;
   return OneRmRecord(now: now, previous: prev?.est);
 }

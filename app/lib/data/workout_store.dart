@@ -478,6 +478,7 @@ class WorkoutStore extends ChangeNotifier {
     required String bodyPart,
     required String target,
     String equipment = '',
+    bool? assisted,
   }) async {
     final clean = name.trim();
     for (final e in _customEx) {
@@ -491,6 +492,8 @@ class WorkoutStore extends ChangeNotifier {
       target: target,
       secondary: const [],
       custom: true,
+      // Override mesin assisted (#232); null = ikuti aturan katalog.
+      assisted: assisted,
     );
     _customEx = [..._customEx, ex];
     ExerciseCatalog.registerCustom(_customEx);

@@ -12,10 +12,12 @@ import '../../core/motion.dart';
 
 import '../../core/format.dart';
 import '../../core/strings.dart';
+import '../../core/strings_assisted.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
 import '../../data/exercise_catalog.dart';
 import '../../data/workout_store.dart';
+import '../../domain/assisted.dart';
 import '../session/exercise_history_sheet.dart';
 
 class ExerciseLibraryScreen extends StatefulWidget {
@@ -152,6 +154,13 @@ class _ExerciseLibraryScreenState extends State<ExerciseLibraryScreen> {
               if (e.secondary.isNotEmpty)
                 _DetailLine(label: t.secondaryMuscles, value: e.secondary.map(_cap).join(', ')),
               _DetailLine(label: t.equipmentLabel, value: _cap(e.equipment)),
+              // Mesin assisted (#232): angka yang dicatat adalah bantuan.
+              // Disebut di sini supaya tidak ada kejutan saat rekornya
+              // ternyata "makin kecil".
+              if (e.isAssisted) ...[
+                const SizedBox(height: 6),
+                NoteBanner(text: t.assistedNote, icon: GymIcons.info, tone: c.text2),
+              ],
               const SizedBox(height: 12),
               GymButton(
                 label: t.exerciseHistory,
@@ -643,6 +652,11 @@ class _CustomExerciseSheetState extends State<CustomExerciseSheet> {
   late final _name = TextEditingController(text: _capitalise(widget.initialName));
   int? _muscle;
   String? _equipment;
+
+  /// Override mesin assisted (#232). null selama saklarnya tidak disentuh:
+  /// yang tampil adalah tebakan aturan katalog dari nama dan alat, dan hanya
+  /// pilihan eksplisit yang disimpan.
+  bool? _assisted;
   bool _saving = false;
 
   static String _capitalise(String s) {
@@ -711,6 +725,7 @@ class _CustomExerciseSheetState extends State<CustomExerciseSheet> {
       target: m.$2,
       bodyPart: m.$3,
       equipment: _equipment ?? '',
+      assisted: _assisted,
     );
     if (mounted) Navigator.of(context).pop(ex);
   }
@@ -797,7 +812,19 @@ class _CustomExerciseSheetState extends State<CustomExerciseSheet> {
                         () => setState(() => _equipment = _equipment == e ? null : e)),
                 ],
               ),
-              const SizedBox(height: 22),
+              const SizedBox(height: 8),
+              // Saklar, bukan tri-state seperti di editor rutinitas: di sini
+              // orangnya sedang mendeskripsikan mesinnya, dan "otomatis"
+              // sudah terwakili oleh posisi awal saklar yang mengikuti nama
+              // dan alat yang diketik.
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(t.assistedLabel, style: Theme.of(context).textTheme.bodyLarge),
+                subtitle: Text(t.assistedNote, style: TextStyle(fontSize: 12.5, color: c.text2)),
+                value: _assisted ?? isAssistedExercise(equipment: _equipment ?? '', name: _name.text),
+                onChanged: (v) => setState(() => _assisted = v),
+              ),
+              const SizedBox(height: 14),
               GymButton(label: t.save, onPressed: _saving ? null : _save),
             ],
           ),

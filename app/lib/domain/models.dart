@@ -119,12 +119,23 @@ class ExerciseConfig {
     this.heavyBodyPart = false,
     this.warmupSets = 0,
     this.superset = false,
+    this.assisted,
   });
 
   final String exerciseId;
 
   /// null = pakai default rutinitas, lalu default mode (lihat [policyFor]).
   final ProgressionPolicy? policy;
+
+  /// Mesin assisted (openGym v1.3.8, issue #232): beban yang dicatat adalah
+  /// *bantuan* mesin, jadi makin kecil makin berat dan progresi berjalan
+  /// terbalik. null = otomatis dari katalog (lihat `isAssistedExercise`);
+  /// true/false memaksa satu arah untuk slot rutinitas ini — mesin tertentu
+  /// atau gerakan custom yang namanya tidak mengikuti pola katalog.
+  ///
+  /// Ikut dibekukan ke target sesi supaya sesi lama tetap dibaca dengan arah
+  /// yang berlaku saat sesi itu dijalankan.
+  final bool? assisted;
 
   final LogMode mode;
   final int sets;
@@ -175,6 +186,8 @@ class ExerciseConfig {
     bool? bodyweight,
     bool? superset,
     String? exerciseId,
+    bool? assisted,
+    bool clearAssisted = false,
   }) {
     return ExerciseConfig(
       exerciseId: exerciseId ?? this.exerciseId,
@@ -193,6 +206,9 @@ class ExerciseConfig {
       bodyweight: bodyweight ?? this.bodyweight,
       heavyBodyPart: heavyBodyPart,
       warmupSets: warmupSets ?? this.warmupSets,
+      // Tri-state: `clearAssisted` mengembalikan ke otomatis, karena null
+      // lewat parameter biasa berarti "jangan ubah".
+      assisted: clearAssisted ? null : (assisted ?? this.assisted),
     );
   }
 
@@ -216,6 +232,10 @@ class ExerciseConfig {
         if (heavyBodyPart) 'heavy': true,
         if (warmupSets > 0) 'wu': warmupSets,
         if (superset) 'ss': true,
+        // Kunci panjang, bukan singkatan: mengikuti nama field openGym
+        // (#232) supaya ekspor/impor tetap saling terbaca (NFR-10). Hanya
+        // override eksplisit yang ditulis; "otomatis" tidak diangkut.
+        if (assisted != null) 'assisted': assisted,
       };
 
   factory ExerciseConfig.fromJson(Map<String, dynamic> j) => ExerciseConfig(
@@ -238,6 +258,9 @@ class ExerciseConfig {
         heavyBodyPart: j['heavy'] == true,
         warmupSets: (j['wu'] as num?)?.toInt() ?? 0,
         superset: j['ss'] == true,
+        // Bukan boolean (dokumen lama, atau nilai rusak) dibaca sebagai
+        // "otomatis", bukan sebagai salah satu arah.
+        assisted: j['assisted'] is bool ? j['assisted'] as bool : null,
       );
 }
 
