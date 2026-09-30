@@ -4,6 +4,8 @@ library;
 import 'dart:convert';
 import 'dart:io';
 
+import 'dart:ui' show instantiateImageCodec;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gymapps/core/gym_icons.dart';
@@ -106,7 +108,22 @@ void main() {
     for (final a in GymArt.values) {
       final f = File(a.asset);
       expect(f.existsSync(), isTrue, reason: a.asset);
-      expect(f.readAsStringSync(), startsWith('<svg'), reason: a.asset);
+      final b = f.readAsBytesSync();
+      // WebP: 'RIFF' .... 'WEBP'. Kecil supaya enam figur tidak memberatkan
+      // APK maupun muat pertama versi web.
+      expect(String.fromCharCodes(b.sublist(0, 4)), 'RIFF', reason: a.asset);
+      expect(String.fromCharCodes(b.sublist(8, 12)), 'WEBP', reason: a.asset);
+      expect(b.length, lessThan(60 * 1024), reason: a.asset);
+    }
+  });
+
+  test('rasio lebar tiap ilustrasi sama dengan berkasnya', () async {
+    for (final a in GymArt.values) {
+      final codec = await instantiateImageCodec(File(a.asset).readAsBytesSync());
+      final frame = await codec.getNextFrame();
+      final ratio = frame.image.width / frame.image.height;
+      expect(ratio, closeTo(a.aspect, 0.01), reason: a.asset);
+      frame.image.dispose();
     }
   });
 

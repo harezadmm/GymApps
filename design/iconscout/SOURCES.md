@@ -123,19 +123,26 @@ Dipakai untuk judul layar, nama rutinitas, dan angka besar di blok statistik.
 
 ## Ilustrasi (`app/assets/illustrations/`)
 
-Satu kontributor, **Nataliia Nesterenko**, figur potongan tanpa latar (flat).
-Lingkaran aksen di belakangnya digambar aplikasi (`GymIllustration(blob: true)`),
-jadi ikut warna aksen dan tema. Ilustrasi Roundsquid sebelumnya diganti
-karena membawa latar gumpalan sendiri yang bertabrakan dengan kartu.
+Satu tokoh 3D dari satu paket: **"Fitness Character" oleh Mintemid**
+(`gym-woman-3d-icon-pack_290164`, premium, tanpa atribusi), dalam enam pose.
+PNG 3000 px dipotong rapat ke isinya dan disimpan sebagai WebP transparan
+600 px tinggi (±25–36 KB). Lingkaran aksen di belakangnya digambar aplikasi
+(`GymIllustration(blob: true)`), jadi ikut warna aksen dan tema.
 
-| Berkas | Slug IconScout | Dipakai di |
-| --- | --- | --- |
-| hero_lift.svg | female-powerlifter-lifting-barbell-3857849 | kartu sesi berikutnya (Home) |
-| lift_overhead.svg | athlete-with-barbell-3937472 | layar masuk |
-| lift_barbell.svg | sportswoman-lifting-barbell-3857850 | layar daftar |
-| plan_workout.svg | woman-doing-squat-exercise-4243315 | pilih program |
-| empty_history.svg | athlete-with-sport-equipment-3937483 | riwayat kosong |
-| empty_stats.svg | athlete-exercising-on-bar-3937482 | statistik kosong |
+Riwayat: Roundsquid (latar gumpalan, "aneh") → Nataliia Nesterenko (figur
+datar potongan, "kurang suka") → tokoh 3D ini, yang juga sejalan dengan ikon
+3D violet di ubin Beranda. Pilihan lain yang dipertimbangkan (susunan benda 3D
+violet dari paket ikon, satu kettlebell besar) ada di tiruan kartu hero yang
+dikirim ke pemakai.
+
+| Berkas | Slug IconScout | Pose | Dipakai di |
+| --- | --- | --- | --- |
+| hero_lift.webp | physical-fitness-athletic-training-12493644 | squat barbel | kartu sesi berikutnya (Home) |
+| lift_overhead.webp | gym-woman-lifting-barbell-overhead-12493643 | barbel di atas kepala | layar masuk |
+| lift_barbell.webp | athletic-female-doing-gym-training-12493639 | dua dumbbell di atas | layar daftar |
+| plan_workout.webp | strong-fitness-routine-with-weights-12493637 | berdiri siap | pilih program |
+| empty_history.webp | fitness-girl-healthy-lifestyle-exercise-12493636 | santai dengan botol | riwayat kosong |
+| empty_stats.webp | weightlifting-challenge-fitness-motivation-12493640 | lunge | statistik kosong |
 
 ## Ikon 3D (`app/assets/3d/`)
 
