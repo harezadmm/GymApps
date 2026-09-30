@@ -161,7 +161,7 @@ Future<bool> ensureNoDraft(BuildContext context) async {
         ),
         GymButton(
           label: t.continueUpper,
-          height: 42,
+          height: 44,
           expand: false,
           onPressed: () => Navigator.of(dialog).pop('resume'),
         ),

@@ -295,7 +295,7 @@ class GymSection extends StatelessWidget {
           GymButton(
             label: t.delete,
             tone: GymButtonTone.danger,
-            height: 42,
+            height: 44,
             expand: false,
             onPressed: () => Navigator.of(dialog).pop(true),
           ),
@@ -407,7 +407,7 @@ class _GymNameDialogState extends State<_GymNameDialog> {
           onPressed: () => Navigator.of(context).pop(),
           child: Text(context.t.cancel, style: TextStyle(fontWeight: FontWeight.w700, color: c.text2)),
         ),
-        GymButton(label: context.t.save, height: 42, expand: false, onPressed: _submit),
+        GymButton(label: context.t.save, height: 44, expand: false, onPressed: _submit),
       ],
     );
   }

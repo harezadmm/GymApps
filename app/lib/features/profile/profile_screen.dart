@@ -256,7 +256,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         content: Text(t.importConfirmBody),
         actions: [
           TextButton(onPressed: () => Navigator.of(context).pop(false), child: Text(t.cancel)),
-          GymButton(label: t.importAction, height: 42, expand: false, onPressed: () => Navigator.of(context).pop(true)),
+          GymButton(label: t.importAction, height: 44, expand: false, onPressed: () => Navigator.of(context).pop(true)),
         ],
       ),
     );
@@ -706,7 +706,7 @@ class _PasswordDialogState extends State<_PasswordDialog> {
           onPressed: () => Navigator.of(context).pop(),
           child: Text(t.cancel, style: TextStyle(fontWeight: FontWeight.w700, color: c.text2)),
         ),
-        GymButton(label: t.connect, height: 42, expand: false, onPressed: _submit),
+        GymButton(label: t.connect, height: 44, expand: false, onPressed: _submit),
       ],
     );
   }

@@ -10,6 +10,12 @@ export 'format.dart' show formatWeight;
 import 'motion.dart';
 import 'theme.dart';
 
+/// Kepadatan untuk [IconButton] yang harus rapat tapi tetap ≥ 44 dp
+/// (NFR-11). [VisualDensity.compact] memangkas kotak sentuhnya dari 48 ke
+/// 40 dp — itu yang dulu dipakai di baris set, stepper, dan tombol urut;
+/// −1 hanya memangkasnya ke 44.
+const touchDensity = VisualDensity(horizontal: -1, vertical: -1);
+
 /// Kartu standar: abu gelap di atas latar hampir hitam, tanpa garis tepi.
 class GymCard extends StatelessWidget {
   const GymCard({super.key, required this.child, this.padding, this.color, this.radius});
@@ -71,9 +77,16 @@ class SectionTitle extends StatelessWidget {
             child: InkWell(
               onTap: onAction,
               borderRadius: BorderRadius.circular(GymRadius.pill),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                child: Text(action!, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.text2)),
+              // Teksnya kecil, tapi kotak sentuhnya tetap ≥ 44 dp (NFR-11).
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 44),
+                child: Center(
+                  widthFactor: 1,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Text(action!, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.text2)),
+                  ),
+                ),
               ),
             ),
           ),
@@ -166,12 +179,21 @@ class AvatarCircle extends StatelessWidget {
       child: Text(text, style: TextStyle(fontSize: size * 0.34, fontWeight: FontWeight.w800, color: c.accent)),
     );
     if (onTap == null) return body;
+    // Lingkarannya boleh 40 (header Home), kotak sentuhnya tidak boleh di
+    // bawah 44 dp (NFR-11): lingkaran diletakkan di tengah kotak sentuh.
+    final hit = size < 44 ? 44.0 : size;
+    // Material-nya tanpa shape: Material berbentuk lingkaran menyaring
+    // sentuhan di luar lingkarannya, dan sudut kotak 44 dp ikut hilang.
+    // Riaknya tetap bulat lewat customBorder InkWell.
     return Tooltip(
       message: tooltip ?? '',
       child: Material(
         type: MaterialType.transparency,
-        shape: const CircleBorder(),
-        child: InkWell(customBorder: const CircleBorder(), onTap: onTap, child: body),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onTap,
+          child: SizedBox(width: hit, height: hit, child: Center(child: body)),
+        ),
       ),
     );
   }
@@ -222,6 +244,11 @@ class StatBlock extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.gym;
     final tappable = onTap != null;
+    final valueBox = FittedBox(
+      fit: BoxFit.scaleDown,
+      alignment: Alignment.centerLeft,
+      child: valueWidget ?? Text(value, style: valueStyle(context)),
+    );
     final content = Container(
       height: height,
       padding: const EdgeInsets.fromLTRB(14, 13, 14, 14),
@@ -251,11 +278,12 @@ class StatBlock extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, height: 1.2, color: c.text)),
           const SizedBox(height: 8),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: valueWidget ?? Text(value, style: valueStyle(context)),
-          ),
+          // Dengan tinggi tetap, angka besarlah yang mengalah saat huruf
+          // sistem 1,3× membuat labelnya dua baris: Flexible memberi FittedBox
+          // batas tinggi, jadi angkanya mengecil alih-alih meluber (NFR-11).
+          // Tanpa tinggi tetap, Column-nya tak berbatas dan Flexible justru
+          // error, jadi di sana FittedBox berdiri sendiri.
+          if (height != null) Flexible(child: valueBox) else valueBox,
           if (hint != null) ...[
             const SizedBox(height: 3),
             Text(hint!, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11, color: c.text2)),
@@ -291,7 +319,10 @@ class StatBlock extends StatelessWidget {
 }
 
 /// Tombol utama violet berbentuk pil. Tinggi 52 supaya nyaman ditekan dengan
-/// tangan berkeringat sambil berdiri (NFR-12: target sentuh ≥ 48 dp).
+/// tangan berkeringat sambil berdiri. Versi ringkas di dialog dan bilah atas
+/// boleh lebih pendek, tapi tidak di bawah [minHeight] (NFR-11: target sentuh
+/// ≥ 44 dp) — assert-nya menjaga supaya tombol 38 dp yang ditemukan audit
+/// anti-slop 001 tidak kembali diam-diam.
 class GymButton extends StatelessWidget {
   const GymButton({
     super.key,
@@ -302,7 +333,10 @@ class GymButton extends StatelessWidget {
     this.height = 52,
     this.expand = true,
     this.shape = GymButtonShape.rounded,
-  });
+  }) : assert(height >= minHeight, 'GymButton lebih pendek dari 44 dp melanggar NFR-11');
+
+  /// Batas bawah tinggi tombol — target sentuh minimum NFR-11.
+  static const minHeight = 44.0;
 
   final String label;
   final VoidCallback? onPressed;
@@ -485,44 +519,63 @@ class FilterChips extends StatelessWidget {
   final int index;
   final ValueChanged<int> onChanged;
 
+  /// Tinggi baris chip = tinggi kotak sentuh tiap chip (NFR-11).
+  static const hitHeight = 44.0;
+
+  /// Tinggi pil yang terlihat, dari referensi.
+  static const pillHeight = 36.0;
+
   @override
   Widget build(BuildContext context) {
     final c = context.gym;
     return SizedBox(
-      height: 36,
+      // 44, bukan 36: pil yang terlihat tetap 36 dp, tapi setiap chip menerima
+      // sentuhan setinggi 44 dp (NFR-11) — chip filter yang meleset di jari
+      // basah adalah temuan audit anti-slop 001, bukan teori.
+      height: hitHeight,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: labels.length,
         separatorBuilder: (_, _) => const SizedBox(width: 8),
         itemBuilder: (context, i) {
           final on = i == index;
-          return AnimatedContainer(
-            duration: GymMotion.of(context, GymMotion.quick),
-            curve: GymMotion.curve,
-            decoration: BoxDecoration(
-              color: on ? c.accentFill : c.surface2,
+          return Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+              onTap: () {
+                if (on) return;
+                GymHaptics.tap();
+                onChanged(i);
+              },
               borderRadius: BorderRadius.circular(GymRadius.pill),
-            ),
-            child: Material(
-              type: MaterialType.transparency,
-              child: InkWell(
-                onTap: () {
-                  if (on) return;
-                  GymHaptics.tap();
-                  onChanged(i);
-                },
-                borderRadius: BorderRadius.circular(GymRadius.pill),
-                child: Container(
-                  alignment: Alignment.center,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: AnimatedDefaultTextStyle(
-                    duration: GymMotion.of(context, GymMotion.quick),
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: on ? c.accentInk : c.text,
+              child: Center(
+                // Warnanya tetap berganti lembut seperti dulu (AnimatedContainer),
+                // tapi pilnya digambar lewat Ink: dekorasinya jatuh di kanvas
+                // Material di bawah riak, jadi riak tetap terlihat di atas pil
+                // walau InkWell-nya kini lebih tinggi dari pilnya.
+                child: TweenAnimationBuilder<Color?>(
+                  tween: ColorTween(end: on ? c.accentFill : c.surface2),
+                  duration: GymMotion.of(context, GymMotion.quick),
+                  curve: GymMotion.curve,
+                  builder: (context, color, child) => Ink(
+                    height: pillHeight,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: color,
+                      borderRadius: BorderRadius.circular(GymRadius.pill),
                     ),
-                    child: Text(labels[i]),
+                    child: child,
+                  ),
+                  child: Center(
+                    child: AnimatedDefaultTextStyle(
+                      duration: GymMotion.of(context, GymMotion.quick),
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: on ? c.accentInk : c.text,
+                      ),
+                      child: Text(labels[i]),
+                    ),
                   ),
                 ),
               ),
@@ -783,6 +836,12 @@ class ScreenHeader extends StatelessWidget {
 }
 
 /// Tombol ikon bulat di header — dulu kotak, referensi memakai lingkaran.
+///
+/// Lingkaran yang terlihat 42 dp, kotak sentuhnya 44 × 44 (NFR-11). Dulu
+/// InkWell-nya sebesar lingkarannya dan 44-nya "diandalkan dari padding
+/// pembungkus" — padding yang tidak selalu ada (audit anti-slop 001, temuan
+/// 4). Tangan berkeringat di gym adalah kasus pakai yang sebenarnya, bukan
+/// teori.
 class SquareIconButton extends StatelessWidget {
   const SquareIconButton({super.key, required this.icon, this.onPressed, this.tone, this.tooltip});
 
@@ -791,25 +850,37 @@ class SquareIconButton extends StatelessWidget {
   final Color? tone;
   final String? tooltip;
 
+  /// Sisi kotak sentuh; dibuka supaya test bisa menjaganya.
+  static const hitSize = 44.0;
+  static const _circle = 42.0;
+
   @override
   Widget build(BuildContext context) {
     final c = context.gym;
     final button = PressScale(
       enabled: onPressed != null,
       scale: 0.92,
+      // Material tanpa shape: Material berbentuk lingkaran menyaring sentuhan
+      // di luar lingkarannya, dan sudut kotak 44 dp ikut hilang. Riaknya
+      // tetap bulat lewat customBorder InkWell.
       child: Material(
-        color: c.surface,
-        shape: const CircleBorder(),
+        type: MaterialType.transparency,
         child: InkWell(
           onTap: onPressed,
           customBorder: const CircleBorder(),
           child: SizedBox(
-            // Lingkaran yang terlihat 42; area sentuhnya 44 lewat padding di
-            // pembungkusnya — tangan berkeringat di gym adalah kasus pakai yang
-            // sebenarnya, bukan teori.
-            width: 42,
-            height: 42,
-            child: Icon(icon, size: 20, color: tone ?? c.text),
+            width: hitSize,
+            height: hitSize,
+            child: Center(
+              // Ink, bukan Container: cakramnya digambar di kanvas Material di
+              // bawah riak, jadi riak tetap terlihat di atas cakram.
+              child: Ink(
+                width: _circle,
+                height: _circle,
+                decoration: ShapeDecoration(color: c.surface, shape: const CircleBorder()),
+                child: Center(child: Icon(icon, size: 20, color: tone ?? c.text)),
+              ),
+            ),
           ),
         ),
       ),

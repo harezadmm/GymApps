@@ -93,7 +93,7 @@ class BodyweightCard extends StatelessWidget {
             label: t.logBodyweight,
             icon: GymIcons.scale,
             tone: GymButtonTone.neutral,
-            height: 42,
+            height: 44,
             onPressed: () => _log(context),
           ),
         ],
@@ -144,7 +144,7 @@ class _BodyweightDialogState extends State<_BodyweightDialog> {
           onPressed: () => Navigator.of(context).pop(),
           child: Text(t.cancel, style: TextStyle(fontWeight: FontWeight.w700, color: c.text2)),
         ),
-        GymButton(label: t.save, height: 42, expand: false, onPressed: _submit),
+        GymButton(label: t.save, height: 44, expand: false, onPressed: _submit),
       ],
     );
   }

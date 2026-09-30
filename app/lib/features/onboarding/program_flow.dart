@@ -65,7 +65,7 @@ Future<bool> confirmReplaceProgram(BuildContext context) async {
           ),
           GymButton(
             label: context.t.replace,
-            height: 42,
+            height: 44,
             expand: false,
             onPressed: () => Navigator.of(context).pop(true),
           ),

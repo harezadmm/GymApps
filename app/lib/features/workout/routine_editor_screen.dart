@@ -183,7 +183,7 @@ class _RoutineEditorScreenState extends State<RoutineEditorScreen> {
               onPressed: () => Navigator.of(context).pop(false),
               child: Text(context.t.discard, style: TextStyle(fontWeight: FontWeight.w700, color: c.danger)),
             ),
-            GymButton(label: context.t.save, height: 42, expand: false, onPressed: () => Navigator.of(context).pop(true)),
+            GymButton(label: context.t.save, height: 44, expand: false, onPressed: () => Navigator.of(context).pop(true)),
           ],
         );
       },
@@ -215,7 +215,7 @@ class _RoutineEditorScreenState extends State<RoutineEditorScreen> {
             ),
             GymButton(
               label: context.t.delete,
-              height: 42,
+              height: 44,
               expand: false,
               tone: GymButtonTone.danger,
               onPressed: () => Navigator.of(context).pop(true),
@@ -258,7 +258,7 @@ class _RoutineEditorScreenState extends State<RoutineEditorScreen> {
                       tooltip: t.back,
                     ),
                     Expanded(child: Text(t.editRoutine, style: Theme.of(context).textTheme.titleLarge)),
-                    GymButton(label: t.save, height: 36, expand: false, shape: GymButtonShape.pill, onPressed: _save),
+                    GymButton(label: t.save, height: 44, expand: false, shape: GymButtonShape.pill, onPressed: _save),
                   ],
                 ),
               ),
@@ -722,7 +722,7 @@ class _StepperField extends StatelessWidget {
             children: [
               IconButton(
                 onPressed: onMinus,
-                visualDensity: VisualDensity.compact,
+                visualDensity: touchDensity,
                 icon: Icon(Icons.remove, size: 18, color: c.accent),
                 tooltip: context.t.fewer,
               ),
@@ -736,7 +736,7 @@ class _StepperField extends StatelessWidget {
               ),
               IconButton(
                 onPressed: onPlus,
-                visualDensity: VisualDensity.compact,
+                visualDensity: touchDensity,
                 icon: Icon(Icons.add, size: 18, color: c.accent),
                 tooltip: context.t.more,
               ),

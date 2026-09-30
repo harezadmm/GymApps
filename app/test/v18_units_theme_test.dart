@@ -172,6 +172,19 @@ void main() {
       }
     });
 
+    test('text3 terbaca sebagai teks (≥ 4,5:1) di atas kartu dan latar, di kedua tema', () {
+      // Audit anti-slop 001 temuan 5: text3 dulu ≈ 3,5:1 dan disebut
+      // "dekoratif", padahal dipakai ±49 label sungguhan. Dijaga di atas
+      // surface DAN bg karena label itu ada di kartu maupun langsung di latar.
+      for (final b in Brightness.values) {
+        final c = buildGymTheme(brightness: b).extension<GymColors>()!;
+        expect(_contrast(c.text3, c.surface), greaterThanOrEqualTo(4.5), reason: '$b di atas surface');
+        expect(_contrast(c.text3, c.bg), greaterThanOrEqualTo(4.5), reason: '$b di atas bg');
+        // Tetap lebih redup dari text2: hierarki teksnya tidak hilang.
+        expect(_contrast(c.text3, c.surface), lessThan(_contrast(c.text2, c.surface)), reason: '$b');
+      }
+    });
+
     test('setiap pilihan aksen digelapkan cukup untuk teks putih dan untuk tautan di atas putih', () {
       for (final a in [...accentChoices, const Color(0xFFFFD60A)]) {
         final shownAccent = lightAccent(a);

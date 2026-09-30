@@ -22,6 +22,7 @@ import '../../core/keep_awake.dart';
 import '../../core/motion.dart';
 import '../../core/rest_alert.dart';
 import '../../core/strings.dart';
+import '../../core/strings_a11y.dart';
 import '../../core/strings_assisted.dart';
 import '../../core/strings_session.dart';
 import '../../core/theme.dart';
@@ -820,7 +821,7 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
             ),
             GymButton(
               label: context.t.finishAndSave,
-              height: 42,
+              height: 44,
               expand: false,
               onPressed: () => Navigator.of(context).pop('finish'),
             ),
@@ -1059,7 +1060,7 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
           ),
           GymButton(
             label: action,
-            height: 42,
+            height: 44,
             expand: false,
             tone: GymButtonTone.danger,
             onPressed: () => Navigator.of(context).pop(true),
@@ -1098,7 +1099,7 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
             ),
             GymButton(
               label: context.t.delete,
-              height: 42,
+              height: 44,
               expand: false,
               tone: GymButtonTone.danger,
               onPressed: () => Navigator.of(context).pop(true),
@@ -1370,7 +1371,9 @@ class _TopBar extends StatelessWidget {
               ),
             GymButton(
               label: context.t.finish,
-              height: 38,
+              // 44, bukan 38: tombol yang menutup sesi harus mudah kena
+              // (NFR-11) — dan tidak lebih mudah dari kapsul di sebelahnya.
+              height: 44,
               expand: false,
               shape: GymButtonShape.pill,
               onPressed: onFinish,
@@ -1953,18 +1956,22 @@ class _RestRow extends StatelessWidget {
                 InkWell(
                   onTap: onEdit,
                   borderRadius: BorderRadius.circular(GymRadius.pill),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          text,
-                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: on ? c.accent : c.text3),
-                        ),
-                        const SizedBox(width: 4),
-                        Icon(GymIcons.edit, size: 14, color: c.text2),
-                      ],
+                  // Setinggi 44 dp (NFR-11), dulu setinggi teksnya saja.
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(minHeight: 44),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            text,
+                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: on ? c.accent : c.text3),
+                          ),
+                          const SizedBox(width: 4),
+                          Icon(GymIcons.edit, size: 14, color: c.text2),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -1977,11 +1984,13 @@ class _RestRow extends StatelessWidget {
             IconButton(
               onPressed: onStart,
               tooltip: context.t.start,
-              visualDensity: VisualDensity.compact,
+              visualDensity: touchDensity,
               style: IconButton.styleFrom(backgroundColor: c.accentSoft),
               icon: Icon(GymIcons.play, size: 18, color: c.accent),
             ),
-          Switch(value: on, onChanged: onToggle, materialTapTargetSize: MaterialTapTargetSize.shrinkWrap),
+          // Tanpa shrinkWrap: kotak sentuh Switch 60 × 48, bukan 60 × 40
+          // (NFR-11). Lebarnya sama, jadi baris ini tetap muat di 360 dp.
+          Switch(value: on, onChanged: onToggle),
         ],
       ),
     );
@@ -2051,13 +2060,21 @@ class _SetTable extends StatelessWidget {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+          // Lebar kolom persis mengikuti [_SetRowTile] supaya judulnya duduk
+          // di atas kolomnya.
           child: Row(
             children: [
-              SizedBox(width: 34, child: SectionLabel(context.t.setCol)),
-              SizedBox(width: 62, child: SectionLabel(context.t.prevCol)),
-              Expanded(child: Center(child: SectionLabel(context.t.weightCol(context.unitLabel)))),
-              Expanded(child: Center(child: SectionLabel(timed ? context.t.secCol : context.t.repsCol))),
-              const SizedBox(width: 38),
+              SizedBox(width: _SetRowTile.setWidth, child: SectionLabel(context.t.setCol)),
+              SizedBox(width: _SetRowTile.prevWidth, child: SectionLabel(context.t.prevCol)),
+              Expanded(
+                flex: _SetRowTile.weightFlex,
+                child: Center(child: SectionLabel(context.t.weightCol(context.unitLabel))),
+              ),
+              Expanded(
+                flex: _SetRowTile.repsFlex,
+                child: Center(child: SectionLabel(timed ? context.t.secCol : context.t.repsCol)),
+              ),
+              const SizedBox(width: _SetRowTile.checkWidth),
             ],
           ),
         ),
@@ -2135,6 +2152,16 @@ class _SetRowTile extends StatelessWidget {
   final void Function(double weight, {bool refresh}) onWeight;
   final ValueChanged<int> onReps;
 
+  /// Lebar kolom tetap. Saat sel centang naik dari 38 ke 44 dp (NFR-11),
+  /// yang mengalah adalah kolom PREV (56 → 50) dan jatah kolom rep, bukan
+  /// target sentuhnya: "62.5 × 10" memudar di ujung PREV, sedangkan kotak
+  /// beban tetap ≥ 52 dp untuk "102.5" di HP 360 dp.
+  static const setWidth = 30.0;
+  static const prevWidth = 50.0;
+  static const checkWidth = 44.0;
+  static const weightFlex = 5;
+  static const repsFlex = 2;
+
   @override
   Widget build(BuildContext context) {
     final c = context.gym;
@@ -2155,7 +2182,7 @@ class _SetRowTile extends StatelessWidget {
       child: Row(
         children: [
           SizedBox(
-            width: 30,
+            width: setWidth,
             child: Text(
               label,
               textAlign: TextAlign.center,
@@ -2167,7 +2194,7 @@ class _SetRowTile extends StatelessWidget {
             ),
           ),
           SizedBox(
-            width: 56,
+            width: prevWidth,
             child: Text(
               previous,
               maxLines: 1,
@@ -2177,7 +2204,7 @@ class _SetRowTile extends StatelessWidget {
             ),
           ),
           Expanded(
-            flex: 5,
+            flex: weightFlex,
             child: _Cell(
               text: set.weight == 0 ? '' : formatDelta(set.weight),
               doneText: formatWeight(set.weight),
@@ -2191,7 +2218,7 @@ class _SetRowTile extends StatelessWidget {
             ),
           ),
           Expanded(
-            flex: 3,
+            flex: repsFlex,
             child: _Cell(
               text: timed ? (set.seconds == 0 ? '' : '${set.seconds}') : (set.reps == 0 ? '' : '${set.reps}'),
               doneText: timed ? '${set.seconds}s' : (set.rir == null ? '${set.reps}' : '${set.reps} @${set.rir}'),
@@ -2202,7 +2229,7 @@ class _SetRowTile extends StatelessWidget {
             ),
           ),
           SizedBox(
-            width: 38,
+            width: checkWidth,
             child: Semantics(
               button: true,
               checked: done,
@@ -2215,16 +2242,25 @@ class _SetRowTile extends StatelessWidget {
                   FocusScope.of(context).unfocus();
                   onToggled(!done);
                 },
-                borderRadius: BorderRadius.circular(GymRadius.pill),
-                child: AnimatedSwitcher(
-                  duration: GymMotion.of(context, GymMotion.quick),
-                  switchInCurve: Curves.easeOutBack,
-                  transitionBuilder: (child, anim) => ScaleTransition(scale: anim, child: child),
-                  child: Icon(
-                    done ? Icons.check_circle : Icons.circle_outlined,
-                    key: ValueKey(done),
-                    size: 24,
-                    color: done ? c.doneInk : c.text3,
+                customBorder: const CircleBorder(),
+                // Kotak sentuh 44 × 44 (NFR-11): dulu InkWell-nya sebesar
+                // ikonnya, 24 dp, di dalam sel 38 dp — dan ini tombol yang
+                // paling sering ditekan di seluruh aplikasi.
+                child: SizedBox(
+                  width: checkWidth,
+                  height: checkWidth,
+                  child: Center(
+                    child: AnimatedSwitcher(
+                      duration: GymMotion.of(context, GymMotion.quick),
+                      switchInCurve: Curves.easeOutBack,
+                      transitionBuilder: (child, anim) => ScaleTransition(scale: anim, child: child),
+                      child: Icon(
+                        done ? Icons.check_circle : Icons.circle_outlined,
+                        key: ValueKey(done),
+                        size: 24,
+                        color: done ? c.doneInk : c.text3,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -2289,9 +2325,17 @@ class _CellState extends State<_Cell> {
     super.dispose();
   }
 
+  /// Lebar minimum kotak angka: "102.5" dengan huruf 15 tebal.
+  static const _minField = 52.0;
+
+  /// Lebar terkecil tombol −/+ kalau sel benar-benar sempit; masih lebih
+  /// lebar dari 24 dp yang dulu.
+  static const _minStep = 28.0;
+
   @override
   Widget build(BuildContext context) {
     final c = context.gym;
+    final t = context.t;
     final style = TextStyle(
       fontSize: 15,
       fontWeight: FontWeight.w700,
@@ -2308,13 +2352,25 @@ class _CellState extends State<_Cell> {
       );
     }
 
-    Widget stepButton(int dir) => InkWell(
-      onTap: () {
-        GymHaptics.tap();
-        widget.onStep!(dir);
-      },
-      borderRadius: BorderRadius.circular(GymRadius.input),
-      child: SizedBox(width: 24, height: 36, child: Icon(dir < 0 ? Icons.remove : Icons.add, size: 16, color: c.text2)),
+    // Tombol −/+ setinggi 44 dp (NFR-11) dan selebar sisa ruang setelah
+    // kotak angka mendapat [_minField]: di HP 360 dp ±35 dp, di HP yang lebih
+    // lebar 44 dp penuh. Ikonnya hanya − dan +, jadi pembaca layar diberi
+    // tahu apa yang dikurangi.
+    Widget stepButton(int dir, double width) => Semantics(
+      button: true,
+      label: dir < 0 ? t.decrease(t.weightWord) : t.increase(t.weightWord),
+      child: InkWell(
+        onTap: () {
+          GymHaptics.tap();
+          widget.onStep!(dir);
+        },
+        borderRadius: BorderRadius.circular(GymRadius.input),
+        child: SizedBox(
+          width: width,
+          height: 44,
+          child: Icon(dir < 0 ? Icons.remove : Icons.add, size: 16, color: c.text2),
+        ),
+      ),
     );
 
     final field = TextField(
@@ -2350,17 +2406,25 @@ class _CellState extends State<_Cell> {
       ),
     );
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 5),
-      child: widget.onStep == null
-          ? field
-          : Row(
-              children: [
-                stepButton(-1),
-                Expanded(child: field),
-                stepButton(1),
-              ],
-            ),
+    if (widget.onStep == null) {
+      return Padding(padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 5), child: field);
+    }
+    return LayoutBuilder(
+      builder: (context, box) {
+        final width = ((box.maxWidth - 8 - _minField) / 2).clamp(_minStep, 44.0);
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Row(
+            children: [
+              stepButton(-1, width),
+              Expanded(
+                child: Padding(padding: const EdgeInsets.symmetric(vertical: 5), child: field),
+              ),
+              stepButton(1, width),
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -2376,43 +2440,51 @@ class _RirChips extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.gym;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(34, 6, 4, 2),
+      padding: const EdgeInsets.fromLTRB(34, 2, 4, 0),
       // Wrap, bukan Row: label dan lima pilihan tidak selalu muat satu baris
-      // di HP 360 dp dengan huruf besar.
+      // di HP 360 dp dengan huruf besar. Kelima chip dikelompokkan dalam satu
+      // Row supaya yang turun ke baris berikutnya adalah kelimanya bersama,
+      // bukan dua chip terakhir saja.
       child: Wrap(
         spacing: 4,
-        runSpacing: 4,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          Padding(
-            padding: const EdgeInsets.only(right: 4),
-            child: Text(context.t.rirPrompt, style: TextStyle(fontSize: 11.5, color: c.text2)),
-          ),
-          for (var v = 0; v <= 4; v++)
-            Padding(
-              padding: EdgeInsets.zero,
-              child: InkWell(
-                onTap: () => onPick(v),
-                borderRadius: BorderRadius.circular(GymRadius.pill),
-                child: Container(
-                  width: 30,
-                  height: 28,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: selected == v ? c.accentFill : c.surface2,
-                    borderRadius: BorderRadius.circular(GymRadius.pill),
-                  ),
-                  child: Text(
-                    v == 4 ? '4+' : '$v',
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w700,
-                      color: selected == v ? c.accentInk : c.text,
+          Text(context.t.rirPrompt, style: TextStyle(fontSize: 11.5, color: c.text2)),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (var v = 0; v <= 4; v++)
+                InkWell(
+                  onTap: () => onPick(v),
+                  customBorder: const CircleBorder(),
+                  // Kotak sentuh 44 × 44 (NFR-11); pil yang terlihat 36 × 30.
+                  // Dulu pilnya 30 × 28 dan itu seluruh area sentuhnya.
+                  child: SizedBox(
+                    width: 44,
+                    height: 44,
+                    child: Center(
+                      child: Container(
+                        width: 36,
+                        height: 30,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: selected == v ? c.accentFill : c.surface2,
+                          borderRadius: BorderRadius.circular(GymRadius.pill),
+                        ),
+                        child: Text(
+                          v == 4 ? '4+' : '$v',
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                            color: selected == v ? c.accentInk : c.text,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ),
+            ],
+          ),
         ],
       ),
     );
@@ -2467,7 +2539,7 @@ class _NoteDialogState extends State<_NoteDialog> {
         ),
         GymButton(
           label: t.save,
-          height: 42,
+          height: 44,
           expand: false,
           onPressed: () => Navigator.of(context).pop(_controller.text),
         ),
@@ -2494,7 +2566,8 @@ class _DashedAction extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(GymRadius.card),
         child: Container(
-          height: compact ? 36 : 46,
+          // Versi ringkas pun tidak di bawah 44 dp (NFR-11).
+          height: compact ? 44 : 46,
           alignment: Alignment.center,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(compact ? GymRadius.small : GymRadius.control),

@@ -646,14 +646,14 @@ class _RoutineSyncCardState extends State<_RoutineSyncCard> {
           if (_state == _SyncState.synced)
             GymButton(
               label: t.revertUpper,
-              height: 42,
+              height: 44,
               tone: GymButtonTone.neutral,
               onPressed: _busy ? null : () => _apply(false),
             )
           else
             GymButton(
               label: t.saveToRoutine,
-              height: 42,
+              height: 44,
               tone: GymButtonTone.neutral,
               icon: GymIcons.sync,
               onPressed: _busy ? null : () => _apply(true),

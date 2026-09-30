@@ -265,14 +265,22 @@ class RestTimerCard extends StatelessWidget {
                                   style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.text2)),
                             ),
                             const SizedBox(width: 4),
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 3),
+                            // Ikon-saja: butuh nama untuk pembaca layar, dan
+                            // kotak sentuh 44 dp (NFR-11) — dulu 23 dp. Ikonnya
+                            // digeser ke bawah di dalam kotak supaya tetap
+                            // sejajar dengan garis dasar angka besar.
+                            Tooltip(
+                              message: context.t.changeDuration,
                               child: InkWell(
                                 onTap: onEditDuration,
-                                borderRadius: BorderRadius.circular(GymRadius.pill),
-                                child: Padding(
-                                  padding: const EdgeInsets.all(4),
-                                  child: Icon(GymIcons.edit, size: 15, color: c.text2),
+                                customBorder: const CircleBorder(),
+                                child: SizedBox(
+                                  width: 44,
+                                  height: 44,
+                                  child: Align(
+                                    alignment: const Alignment(0, 0.35),
+                                    child: Icon(GymIcons.edit, size: 15, color: c.text2),
+                                  ),
                                 ),
                               ),
                             ),
@@ -627,7 +635,9 @@ class _StepButton extends StatelessWidget {
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(GymRadius.stepper),
-          child: SizedBox(width: 38, height: 38, child: Icon(icon, size: 20, color: c.accent)),
+          // 44, bukan 38 (NFR-11): kotak stepper setinggi 64 dengan padding 8
+          // masih menyisakan 48, jadi tidak ada yang perlu mengalah.
+          child: SizedBox(width: 44, height: 44, child: Icon(icon, size: 20, color: c.accent)),
         ),
       ),
     );

@@ -222,7 +222,7 @@ Widget _appChrome(BuildContext context, Widget? child) {
     systemNavigationBarColor: c.surface,
     systemNavigationBarIconBrightness: c.isLight ? Brightness.dark : Brightness.light,
   );
-  var body = _phoneWidthOnWeb(context, child);
+  var body = _viewport(context, child);
   if (kIsWeb && c.isLight) {
     // Aplikasi web di Home Screen iPhone memakai bilah status
     // black-translucent: teksnya selalu putih, dan pengaturannya hanya dibaca
@@ -240,19 +240,41 @@ Widget _appChrome(BuildContext context, Widget? child) {
   return AnnotatedRegion<SystemUiOverlayStyle>(value: style, child: body);
 }
 
-/// Penyesuaian tampilan khusus web, dipasang lewat `MaterialApp.builder`.
+/// Batas atas skala huruf sistem (Dynamic Type / ukuran huruf Android).
 ///
-/// * Inset aman iPhone: mesin Flutter web tidak mengisi `MediaQuery.padding`,
-///   jadi nilainya dibaca dari CSS (lihat `safe_area_web.dart`) dan
-///   disuntikkan di sini. Tanpa ini, `SafeArea` di semua layar tidak berbuat
-///   apa-apa dan tombol FINISH tergambar di balik jam iPhone.
-/// * Layar lebar (laptop): aplikasi tampil selebar ponsel di tengah. Tata
+/// Di atas 1,3× angka mulai terpotong: pencatat memakai baris bertinggi tetap
+/// (tabel set 46 dp, kapsul istirahat, bilah atas) supaya ibu jari hafal
+/// posisinya di antara set, dan angka beban yang terpenggal lebih buruk
+/// daripada huruf yang sedikit lebih kecil dari permintaan sistem. Sampai
+/// 1,3× semua layar utama dijaga widget test (`v23_a11y_test.dart`), jadi
+/// batas ini adalah batas yang benar-benar diuji, bukan tebakan (NFR-11,
+/// audit anti-slop 001 temuan 10).
+const maxTextScale = 1.3;
+
+/// [mq] dengan skala hurufnya dijepit ke [maxTextScale]. Dipasang sekali di
+/// `MaterialApp.builder`, di atas semua layar — satu tempat yang menentukan,
+/// bukan tiap `Text` menjepit sendiri-sendiri.
+MediaQueryData clampTextScale(MediaQueryData mq) =>
+    mq.copyWith(textScaler: mq.textScaler.clamp(maxScaleFactor: maxTextScale));
+
+/// Penyesuaian MediaQuery untuk seluruh aplikasi, dipasang lewat
+/// `MaterialApp.builder`.
+///
+/// * Skala huruf: dijepit ke [maxTextScale] di semua platform, lihat
+///   [clampTextScale].
+/// * Inset aman iPhone (web): mesin Flutter web tidak mengisi
+///   `MediaQuery.padding`, jadi nilainya dibaca dari CSS (lihat
+///   `safe_area_web.dart`) dan disuntikkan di sini. Tanpa ini, `SafeArea` di
+///   semua layar tidak berbuat apa-apa dan tombol FINISH tergambar di balik
+///   jam iPhone.
+/// * Layar lebar (laptop, web): aplikasi tampil selebar ponsel di tengah. Tata
 ///   letaknya memang satu kolom; kartu yang direntang ke 1400 px hanya membuat
 ///   angka-angkanya berjauhan. MediaQuery ikut dipersempit supaya widget yang
 ///   membaca lebar layar melihat lebar yang sama dengan yang digambar.
-Widget _phoneWidthOnWeb(BuildContext context, Widget? child) {
-  if (!kIsWeb || child == null) return child ?? const SizedBox.shrink();
-  var mq = MediaQuery.of(context);
+Widget _viewport(BuildContext context, Widget? child) {
+  if (child == null) return const SizedBox.shrink();
+  var mq = clampTextScale(MediaQuery.of(context));
+  if (!kIsWeb) return MediaQuery(data: mq, child: child);
   final css = readCssSafeArea();
   if (css != EdgeInsets.zero && mq.padding == EdgeInsets.zero) {
     mq = mq.copyWith(padding: css, viewPadding: css);
@@ -842,7 +864,7 @@ class _NewPasswordDialogState extends State<_NewPasswordDialog> {
           onPressed: () => Navigator.of(context).pop(),
           child: Text(t.cancel, style: TextStyle(fontWeight: FontWeight.w700, color: c.text2)),
         ),
-        GymButton(label: t.save, height: 42, expand: false, onPressed: _submit),
+        GymButton(label: t.save, height: 44, expand: false, onPressed: _submit),
       ],
     );
   }

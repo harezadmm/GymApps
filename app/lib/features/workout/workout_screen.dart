@@ -100,7 +100,12 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         ScreenHeader(
           title: context.t.workout,
           actions: [
-            SquareIconButton(icon: GymIcons.plus, tone: c.accent, onPressed: _newRoutine),
+            SquareIconButton(
+              icon: GymIcons.plus,
+              tone: c.accent,
+              tooltip: context.t.newRoutineTitle,
+              onPressed: _newRoutine,
+            ),
           ],
         ),
         SegmentedTabs(
@@ -155,17 +160,22 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                 ),
               ),
               const SizedBox(width: 12),
-              PressScale(
-                scale: 0.92,
-                child: Material(
-                  color: c.accentSoft,
-                  borderRadius: BorderRadius.circular(GymRadius.small),
-                  child: InkWell(
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const ExerciseLibraryScreen()),
-                    ),
+              // Ikon-saja: butuh nama untuk pembaca layar, dan kotaknya 44 dp
+              // (NFR-11), bukan 42.
+              Tooltip(
+                message: context.t.exerciseLibrary,
+                child: PressScale(
+                  scale: 0.92,
+                  child: Material(
+                    color: c.accentSoft,
                     borderRadius: BorderRadius.circular(GymRadius.small),
-                    child: SizedBox(width: 42, height: 42, child: Icon(GymIcons.dumbbell, size: 20, color: c.accent)),
+                    child: InkWell(
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const ExerciseLibraryScreen()),
+                      ),
+                      borderRadius: BorderRadius.circular(GymRadius.small),
+                      child: SizedBox(width: 44, height: 44, child: Icon(GymIcons.dumbbell, size: 20, color: c.accent)),
+                    ),
                   ),
                 ),
               ),
@@ -176,32 +186,38 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       const SizedBox(height: 22),
       Text(context.t.newWorkout, style: Theme.of(context).textTheme.titleLarge),
       const SizedBox(height: 10),
-      Row(
-        children: [
-          Expanded(
-            child: Reveal(
-              index: 1,
-              child: _StartCard(
-                icon: GymIcons.edit,
-                title: context.t.startEmpty,
-                detail: context.t.freestyleLog,
-                onTap: () => openFreestyleSession(context, context.t.freestyle),
+      // IntrinsicHeight + stretch: kartu yang judulnya melipat dua baris
+      // (huruf sistem 1,3×, terjemahan panjang) meninggikan kedua kartu
+      // bersama-sama, bukan meluber dari tinggi tetap 104 dp.
+      IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: Reveal(
+                index: 1,
+                child: _StartCard(
+                  icon: GymIcons.edit,
+                  title: context.t.startEmpty,
+                  detail: context.t.freestyleLog,
+                  onTap: () => openFreestyleSession(context, context.t.freestyle),
+                ),
               ),
             ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Reveal(
-              index: 2,
-              child: _StartCard(
-                icon: GymIcons.play,
-                title: context.t.fromProgram,
-                detail: next == null ? context.t.noProgramYet : context.t.isNext(next.routine.name),
-                onTap: next == null ? () => setState(() => _tab = 1) : () => _start(next.routine),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Reveal(
+                index: 2,
+                child: _StartCard(
+                  icon: GymIcons.play,
+                  title: context.t.fromProgram,
+                  detail: next == null ? context.t.noProgramYet : context.t.isNext(next.routine.name),
+                  onTap: next == null ? () => setState(() => _tab = 1) : () => _start(next.routine),
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
       const SizedBox(height: 22),
       Row(
@@ -577,7 +593,7 @@ class _NameDialogState extends State<_NameDialog> {
           onPressed: () => Navigator.of(context).pop(),
           child: Text(context.t.cancel, style: TextStyle(fontWeight: FontWeight.w700, color: c.text2)),
         ),
-        GymButton(label: context.t.save, height: 42, expand: false, onPressed: _submit),
+        GymButton(label: context.t.save, height: 44, expand: false, onPressed: _submit),
       ],
     );
   }
@@ -609,7 +625,7 @@ class _ConfirmDeleteDialog extends StatelessWidget {
         ),
         GymButton(
           label: context.t.delete,
-          height: 42,
+          height: 44,
           expand: false,
           tone: GymButtonTone.danger,
           onPressed: () => Navigator.of(context).pop(true),
@@ -638,7 +654,10 @@ class _StartCard extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(GymRadius.card),
         child: Container(
-          height: 104,
+          // Tinggi minimum, bukan tetap: isinya boleh meninggikan kartu.
+          // Pemanggilnya memberi tinggi terikat (IntrinsicHeight + stretch),
+          // jadi Spacer di dalam Column tetap sah.
+          constraints: const BoxConstraints(minHeight: 104),
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(GymRadius.card),
@@ -781,13 +800,23 @@ class _OrderRow extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(14, 6, 4, 6),
         child: Row(
           children: [
-            InkWell(
-              onTap: isNext ? null : onMakeNext,
-              customBorder: const CircleBorder(),
-              child: Padding(
-                padding: const EdgeInsets.all(4),
-                child: Icon(isNext ? Icons.play_circle : Icons.circle_outlined,
-                    size: 20, color: isNext ? c.accent : c.text3),
+            // Ikon-saja, jadi diberi nama untuk pembaca layar dan tooltip;
+            // kotak sentuhnya 44 dp (NFR-11), dulu 28.
+            Tooltip(
+              message: isNext ? context.t.nextUp : context.t.setAsNext,
+              child: Semantics(
+                button: onMakeNext != null && !isNext,
+                selected: isNext,
+                child: InkWell(
+                  onTap: isNext ? null : onMakeNext,
+                  customBorder: const CircleBorder(),
+                  child: SizedBox(
+                    width: 44,
+                    height: 44,
+                    child: Icon(isNext ? Icons.play_circle : Icons.circle_outlined,
+                        size: 20, color: isNext ? c.accent : c.text3),
+                  ),
+                ),
               ),
             ),
             const SizedBox(width: 10),
@@ -802,13 +831,13 @@ class _OrderRow extends StatelessWidget {
             ),
             IconButton(
               onPressed: canUp ? onUp : null,
-              visualDensity: VisualDensity.compact,
+              visualDensity: touchDensity,
               icon: Icon(Icons.arrow_upward, size: 18, color: canUp ? c.text2 : c.text3),
               tooltip: context.t.moveUp,
             ),
             IconButton(
               onPressed: canDown ? onDown : null,
-              visualDensity: VisualDensity.compact,
+              visualDensity: touchDensity,
               icon: Icon(Icons.arrow_downward, size: 18, color: canDown ? c.text2 : c.text3),
               tooltip: context.t.moveDown,
             ),

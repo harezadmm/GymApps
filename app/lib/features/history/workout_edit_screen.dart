@@ -19,6 +19,7 @@ import 'package:flutter/services.dart';
 import '../../core/gym_icons.dart';
 import '../../core/motion.dart';
 import '../../core/strings.dart';
+import '../../core/strings_a11y.dart';
 import '../../core/strings_history.dart';
 import '../../core/theme.dart';
 import '../../core/weights.dart';
@@ -191,7 +192,7 @@ class _WorkoutEditScreenState extends State<WorkoutEditScreen> {
           ),
           GymButton(
             label: t.discard,
-            height: 42,
+            height: 44,
             expand: false,
             tone: GymButtonTone.danger,
             onPressed: () => Navigator.of(context).pop(true),
@@ -333,7 +334,7 @@ class _WorkoutEditScreenState extends State<WorkoutEditScreen> {
             ),
             GymButton(
               label: t.delete,
-              height: 42,
+              height: 44,
               expand: false,
               tone: GymButtonTone.danger,
               onPressed: () => Navigator.of(context).pop(true),
@@ -385,7 +386,7 @@ class _WorkoutEditScreenState extends State<WorkoutEditScreen> {
                     ),
                     GymButton(
                       label: t.save,
-                      height: 38,
+                      height: 44,
                       expand: false,
                       shape: GymButtonShape.pill,
                       onPressed: _save,
@@ -500,7 +501,7 @@ class _EntryCard extends StatelessWidget {
               IconButton(
                 onPressed: onRemove,
                 tooltip: t.removeExercise,
-                visualDensity: VisualDensity.compact,
+                visualDensity: touchDensity,
                 icon: Icon(GymIcons.trash, size: 19, color: c.text2),
               ),
               PopupMenuButton<int>(
@@ -644,7 +645,8 @@ class _EditRow extends StatelessWidget {
           ),
           IconButton(
             onPressed: onToggle,
-            visualDensity: VisualDensity.compact,
+            tooltip: context.t.setDoneToggle(set.done),
+            visualDensity: touchDensity,
             // Centang yang membesar sedikit lalu kembali: perubahan keadaan
             // yang paling sering ditekan di layar ini, dan mata harus
             // menangkapnya tanpa membaca ulang barisnya.
@@ -658,7 +660,8 @@ class _EditRow extends StatelessWidget {
           ),
           IconButton(
             onPressed: onDelete,
-            visualDensity: VisualDensity.compact,
+            tooltip: context.t.removeSet,
+            visualDensity: touchDensity,
             icon: Icon(Icons.close, color: c.text3, size: 18),
           ),
         ],

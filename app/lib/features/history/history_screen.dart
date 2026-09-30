@@ -108,7 +108,19 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 Row(
                   children: [
                     Expanded(child: SectionLabel(t.activity)),
-                    Text(t.sessionsThisYear(_thisYear(all)), style: TextStyle(fontSize: 12, color: c.text2)),
+                    // Flexible dan boleh dua baris: dengan huruf sistem 1,3×
+                    // "N sessions this year" melipat rata kanan, bukan meluber
+                    // keluar kartu (NFR-11). Labelnya pendek, jadi teks inilah
+                    // yang diberi jatah lebih besar.
+                    Flexible(
+                      flex: 2,
+                      child: Text(
+                        t.sessionsThisYear(_thisYear(all)),
+                        maxLines: 2,
+                        textAlign: TextAlign.end,
+                        style: TextStyle(fontSize: 12, color: c.text2),
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 14),
@@ -277,7 +289,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
           ),
           GymButton(
             label: t.delete,
-            height: 42,
+            height: 44,
             expand: false,
             tone: GymButtonTone.danger,
             onPressed: () => Navigator.of(context).pop(true),
@@ -446,7 +458,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         ),
                         GymButton(
                           label: t.resume,
-                          height: 42,
+                          height: 44,
                           expand: false,
                           onPressed: () => Navigator.of(context).pop(true),
                         ),

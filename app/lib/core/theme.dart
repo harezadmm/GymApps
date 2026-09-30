@@ -56,9 +56,14 @@ class GymColors extends ThemeExtension<GymColors> {
   /// dipakai untuk pembatas baris, bukan bingkai kartu.
   final Color border;
 
-  /// NFR-11 minta kontras teks ≥ 4,5:1. [text2] di atas [surface] ≈ 6,6:1.
-  /// [text3] di bawah ambang itu — hanya untuk elemen dekoratif yang tidak
-  /// membawa informasi.
+  /// NFR-11 minta kontras teks ≥ 4,5:1, dan ketiganya lolos di atas [surface]
+  /// maupun [bg]: [text2] ≈ 6,6:1, [text3] tepat di ambang — gelap 4,52:1 di
+  /// atas [surface] (5,1 di atas [bg]), terang 4,95:1 di atas [surface] (4,51
+  /// di atas [bg]). [text3] dulu ≈ 3,5:1 dan disebut "hanya untuk dekorasi",
+  /// padahal dipakai ±49 label teks sungguhan (audit anti-slop 001, temuan
+  /// 5); nadanya dinaikkan ke nilai terdekat yang lolos, bukan pemakaiannya
+  /// yang dilarang. Di atas [surface2] (chip, kotak input) [text3] masih
+  /// ≈ 4,0:1 — teks yang harus terbaca di sana memakai [text2].
   final Color text;
   final Color text2;
   final Color text3;
@@ -124,7 +129,7 @@ class GymColors extends ThemeExtension<GymColors> {
     border: Color(0xFF232328),
     text: Color(0xFFF4F4F6),
     text2: Color(0xFFA0A0AA),
-    text3: Color(0xFF6F6F7A),
+    text3: Color(0xFF82828D),
     accent: Color(0xFF8F7FFF),
     accentFill: Color(0xFF6A5AE6),
     accentInk: Color(0xFFFFFFFF),
@@ -153,7 +158,7 @@ class GymColors extends ThemeExtension<GymColors> {
     border: Color(0xFFE3E3EA),
     text: Color(0xFF111118),
     text2: Color(0xFF5B5B68),
-    text3: Color(0xFF7A7A88),
+    text3: Color(0xFF6F6F7D),
     accent: Color(0xFF5B4BD6),
     accentFill: Color(0xFF5B4BD6),
     accentInk: Color(0xFFFFFFFF),

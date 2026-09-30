@@ -264,7 +264,7 @@ class _ForgotDialogState extends State<_ForgotDialog> {
         ),
         GymButton(
           label: t.sendLink,
-          height: 42,
+          height: 44,
           expand: false,
           onPressed: () => Navigator.of(context).pop(_controller.text.trim()),
         ),

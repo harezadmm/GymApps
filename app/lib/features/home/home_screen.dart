@@ -456,7 +456,7 @@ class _ResumeCard extends StatelessWidget {
               child: GymButton(
                 label: t.discardDraft,
                 tone: GymButtonTone.neutral,
-                height: 42,
+                height: 44,
                 onPressed: () async {
                   final store = WorkoutScope.read(context);
                   final ok = await showDialog<bool>(
@@ -479,7 +479,7 @@ class _ResumeCard extends StatelessWidget {
             ),
             const SizedBox(width: 10),
             Expanded(
-              child: GymButton(label: t.resume, height: 42, onPressed: () => resumeDraftSession(context)),
+              child: GymButton(label: t.resume, height: 44, onPressed: () => resumeDraftSession(context)),
             ),
           ]),
         ],
@@ -1037,16 +1037,26 @@ class _WeekStrip extends StatelessWidget {
                     children: [
                       Text(
                         context.t.weekdayShort(d.weekday).substring(0, 1),
+                        maxLines: 1,
                         style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: done ? c.accentInk : c.text2),
                       ),
                       const SizedBox(height: 3),
-                      Text(
-                        '${d.day}',
-                        style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            color: done ? c.accentInk : c.text,
-                            fontFeatures: const [FontFeature.tabularFigures()]),
+                      // Kotaknya hanya ±37 dp lebar di HP 360: dengan huruf
+                      // sistem 1,3× angka "30" tidak boleh melipat ke baris
+                      // kedua dan meluber keluar kotak 62 dp — ia mengecil
+                      // sedikit (NFR-11: huruf besar tidak boleh memotong isi).
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          '${d.day}',
+                          maxLines: 1,
+                          softWrap: false,
+                          style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: done ? c.accentInk : c.text,
+                              fontFeatures: const [FontFeature.tabularFigures()]),
+                        ),
                       ),
                       // Titik kecil untuk hari latihan yang direncanakan di mode
                       // hari tetap — supaya "hari ini libur" terlihat tanpa teks.
