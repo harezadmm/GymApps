@@ -7,7 +7,6 @@
 library;
 
 import 'package:flutter/material.dart';
-import '../../core/art3d.dart';
 import '../../core/gym_icons.dart';
 import '../../core/illustration.dart';
 import '../../core/motion.dart';
@@ -74,7 +73,7 @@ class ProgramTemplate {
     required this.name,
     required this.rhythm,
     required this.detail,
-    required this.art,
+    required this.icon,
   });
 
   final String id;
@@ -84,10 +83,10 @@ class ProgramTemplate {
   final String rhythm;
   final String detail;
 
-  /// Ikon 3D di kiri kartu. Enam nama template mirip satu sama lain bagi
-  /// pemula ("Upper / Lower" vs "Full Body"); benda yang berbeda per kartu
-  /// memberi mata jangkar untuk membedakan dan mengingat pilihannya.
-  final Gym3d art;
+  /// Ikon garis di tile berwarna di kiri kartu. Enam nama template mirip satu
+  /// sama lain bagi pemula ("Upper / Lower" vs "Full Body"); ikon dan hue yang
+  /// berbeda per kartu memberi mata jangkar untuk membedakan pilihannya.
+  final IconData icon;
 }
 
 /// Template bawaan sesuai tabel spec §5.
@@ -98,15 +97,15 @@ const programTemplates = <ProgramTemplate>[
     rhythm: '3 routines · rotation',
     detail: 'Balanced volume, 3–6 sessions a week',
     // Split binaraga klasik: dumbel, alat paling umum di ketiga harinya.
-    art: Gym3d.dumbbell,
+    icon: GymIcons.dumbbell,
   ),
   ProgramTemplate(
     id: 'upper-lower',
     name: 'Upper / Lower',
     rhythm: '2 routines · rotation',
     detail: 'Simple alternation, good for 4 days',
-    // Dua gagang yang bergantian ditekan — dua separuh badan yang bergantian.
-    art: Gym3d.grippers,
+    // Dua separuh badan yang bergantian — panah bolak-balik.
+    icon: GymIcons.swap,
   ),
   ProgramTemplate(
     id: 'bro-split',
@@ -114,31 +113,31 @@ const programTemplates = <ProgramTemplate>[
     rhythm: '5 routines · Mon–Fri',
     detail: 'One muscle group per day',
     // Satu-satunya template berhari tetap (Senin–Jumat): kalender.
-    art: Gym3d.calendar,
+    icon: GymIcons.calendar,
   ),
   ProgramTemplate(
     id: 'heavy-duty',
     name: 'Heavy Duty',
     rhythm: '4 routines · rotation',
     detail: '1 working set to failure, 3 rest days',
-    // Satu set, seberat mungkin: kettlebell bertulisan KG.
-    art: Gym3d.kettlebell,
+    // Satu set, seberat mungkin: kettlebell.
+    icon: GymIcons.kettlebell,
   ),
   ProgramTemplate(
     id: 'full-body',
     name: 'Full Body',
     rhythm: '1 routine · rotation',
     detail: 'Everything every session',
-    // Bola latihan: alat yang melibatkan seluruh badan sekaligus.
-    art: Gym3d.exerciseBall,
+    // Seluruh badan sekaligus: bola latihan.
+    icon: GymIcons.ball,
   ),
   ProgramTemplate(
     id: 'five-by-five',
     name: '5 × 5',
     rhythm: '2 routines · rotation',
     detail: 'Strength focus, linear progression',
-    // Progresi linear = menambah piringan tiap sesi.
-    art: Gym3d.weightPlates,
+    // Progresi linear = barbel yang bertambah piringan tiap sesi.
+    icon: GymIcons.barbell,
   ),
 ];
 
@@ -182,6 +181,7 @@ class _ProgramPickerScreenState extends State<ProgramPickerScreen> {
                   for (final (i, t) in programTemplates.indexed) ...[
                     _ProgramCard(
                       template: t,
+                      hue: c.hues.at(i),
                       selected: i == _picked,
                       onTap: () => setState(() => _picked = i),
                     ),
@@ -207,9 +207,12 @@ class _ProgramPickerScreenState extends State<ProgramPickerScreen> {
 }
 
 class _ProgramCard extends StatelessWidget {
-  const _ProgramCard({required this.template, required this.selected, required this.onTap});
+  const _ProgramCard({required this.template, required this.hue, required this.selected, required this.onTap});
 
   final ProgramTemplate template;
+
+  /// Hue tile ikon — bergilir per kartu supaya enam template mudah dibedakan.
+  final Color hue;
   final bool selected;
   final VoidCallback onTap;
 
@@ -232,14 +235,14 @@ class _ProgramCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(GymRadius.card),
             border: Border.all(color: selected ? c.accent : c.border),
           ),
-          // SelectRow hanya menerima IconData untuk cakram ikonnya, jadi ikon
-          // 3D berdiri di kolomnya sendiri; padding kiri 14 sama dengan
-          // padding SelectRow, sehingga jarak ikon–judul tetap seimbang.
+          // Tile ikon berdiri di kolomnya sendiri supaya hue-nya bisa berbeda
+          // per kartu; padding kiri 14 sama dengan padding SelectRow, sehingga
+          // jarak ikon–judul tetap seimbang.
           child: Row(
             children: [
               Padding(
                 padding: const EdgeInsets.only(left: 14),
-                child: Gym3dIcon(template.art, size: 46),
+                child: HueTile(icon: template.icon, hue: hue, size: 46, radius: GymRadius.control, iconSize: 22),
               ),
               Expanded(
                 child: SelectRow(

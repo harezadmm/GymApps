@@ -11,7 +11,6 @@
 library;
 
 import 'package:flutter/material.dart';
-import '../../core/art3d.dart';
 import '../../core/illustration.dart';
 import '../../core/gym_icons.dart';
 import '../library/library_screen.dart';
@@ -156,7 +155,7 @@ class HomeScreen extends StatelessWidget {
       _QuickTile(
         label: t.otherSession,
         // Kalender: memilih sesi hari lain dari program, bukan yang dijadwalkan.
-        art: Gym3d.calendar,
+        icon: GymIcons.calendar,
         onTap: !hasProgram || next == null
             ? null
             : () async {
@@ -167,18 +166,17 @@ class HomeScreen extends StatelessWidget {
       _QuickTile(
         label: t.freestyle,
         // Stopwatch: sesi tanpa rencana — cukup mulai jam lalu angkat.
-        art: Gym3d.stopwatch,
+        icon: GymIcons.alarm,
         onTap: () => openFreestyleSession(context, t.freestyle),
       ),
       _QuickTile(
         label: t.exerciseLibrary,
-        art: Gym3d.dumbbell,
+        icon: GymIcons.dumbbell,
         onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ExerciseLibraryScreen())),
       ),
       _QuickTile(
         label: t.dashboard,
-        // Jam kebugaran dengan grafik detak: angka-angka latihanmu.
-        art: Gym3d.fitnessWatch,
+        icon: GymIcons.chart,
         onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DashboardScreen())),
       ),
     ];
@@ -1114,22 +1112,16 @@ class _DayRow extends StatelessWidget {
   }
 }
 
-/// Ubin jalan pintas — "My Fitness Profile" di referensi: label di kiri,
-/// ikon 3D di kanan.
-///
-/// Sejak v2.3 ikonnya objek 3D satu paket ([Gym3d]), bukan ikon garis di
-/// cakram berwarna: empat ubin ini pintu masuk, dan benda yang langsung
-/// dikenali (kalender, stopwatch, dumbel, jam) lebih cepat dibaca sekilas
-/// daripada empat warna cakram yang harus dihafal.
+/// Ubin jalan pintas: label di kiri, tile ikon garis di kanan. Sementara —
+/// Beranda v3 (Task 8 rencana) menggantikan kisi ini dengan pil status dan
+/// tautan seksi.
 class _QuickTile extends StatelessWidget {
-  const _QuickTile({required this.label, required this.art, this.onTap});
+  const _QuickTile({required this.label, required this.icon, this.onTap});
 
   final String label;
-  final Gym3d art;
+  final IconData icon;
   final VoidCallback? onTap;
 
-  /// Ikon 46 dp dengan padding vertikal 12 = tinggi ubin 70 dp, sama dengan
-  /// cakram 42 dp + padding 14 sebelumnya — kisi Home tidak ikut bergeser.
   static const _art = 46.0;
 
   @override
@@ -1154,11 +1146,11 @@ class _QuickTile extends StatelessWidget {
                       style: TextStyle(
                           fontSize: 14, fontWeight: FontWeight.w700, height: 1.2, color: onTap == null ? c.text3 : c.text)),
                 ),
-                // Celah 6 + padding kanan 10: ruang label tetap selebar dulu
-                // (ikon lebih lebar 4 dp); gambar 3D sudah membawa ruang
-                // kosong tipis di tepinya sendiri.
                 const SizedBox(width: 6),
-                Opacity(opacity: onTap == null ? 0.45 : 1, child: Gym3dIcon(art, size: _art)),
+                Opacity(
+                  opacity: onTap == null ? 0.45 : 1,
+                  child: HueTile(icon: icon, hue: c.accent, size: _art, radius: GymRadius.control, iconSize: 22),
+                ),
               ],
             ),
           ),
