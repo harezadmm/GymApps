@@ -33,8 +33,8 @@ void main() {
         if (!assigned) offenders.add('${f.path}: ${m.group(0)}');
       }
     }
-    // Ilustrasi (1) dan ikon 3D (2): kalau 0, pemindainya yang rusak.
-    expect(seen, greaterThanOrEqualTo(3));
+    // Ilustrasi (1): kalau 0, pemindainya yang rusak.
+    expect(seen, greaterThanOrEqualTo(1));
     expect(offenders, isEmpty);
   });
 }

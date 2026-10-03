@@ -78,9 +78,8 @@ flutter:
     - assets/data/exercises.json
     - assets/brand/app_icon.png
     - assets/illustrations/
-    # Animasi Lottie dan ikon 3D dari IconScout (design/iconscout/SOURCES.md).
+    # Animasi Lottie dari IconScout (design/iconscout/SOURCES.md).
     - assets/lottie/
-    - assets/3d/
 
   fonts:
     # Ikon alat gym dari IconScout (design/iconscout/SOURCES.md).
