@@ -1,24 +1,32 @@
-/// Potongan UI yang dipakai berulang di banyak layar, mengikuti referensi
-/// `REFRENSI/NEW REFRENSI/`. Ditaruh di satu tempat supaya padding, radius,
-/// dan warna tidak diketik ulang per layar lalu perlahan menyimpang.
+/// Potongan UI yang dipakai berulang di banyak layar — UI v3 "Bevel glass"
+/// (`design/UI-V3.md` §6). Ditaruh di satu tempat supaya padding, radius, dan
+/// warna tidak diketik ulang per layar lalu perlahan menyimpang.
 library;
+
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
 export 'format.dart' show formatWeight;
+export 'glass.dart' show GlassIconButton, GlassSurface, GlassTone, glassInk;
 
+import 'glass.dart';
 import 'gym_icons.dart';
 import 'motion.dart';
 import 'theme.dart';
 
-/// Kartu standar: abu gelap di atas latar hampir hitam, tanpa garis tepi.
+/// Kartu standar: putih/abu di atas latar, sudut 22, bayangan lembut.
 class GymCard extends StatelessWidget {
-  const GymCard({super.key, required this.child, this.padding, this.color, this.radius});
+  const GymCard({super.key, required this.child, this.padding, this.color, this.radius, this.shadow = true});
 
   final Widget child;
   final EdgeInsetsGeometry? padding;
   final Color? color;
   final double? radius;
+
+  /// Bayangan kartu. Kartu berwarna (bukan surface) tidak diberi bayangan —
+  /// warnanya sudah memisahkannya dari latar.
+  final bool shadow;
 
   @override
   Widget build(BuildContext context) {
@@ -29,13 +37,14 @@ class GymCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: color ?? c.surface,
         borderRadius: BorderRadius.circular(radius ?? GymRadius.card),
+        boxShadow: shadow && color == null ? [c.cardShadow] : null,
       ),
       child: child,
     );
   }
 }
 
-/// Label kapital kecil di atas satu bagian — "THIS WEEK", "PRESETS", "SET".
+/// Label kapital kecil di atas satu grup — "RUTINITAS PROGRAM", "LATIHAN".
 class SectionLabel extends StatelessWidget {
   const SectionLabel(this.text, {super.key, this.color});
 
@@ -51,8 +60,8 @@ class SectionLabel extends StatelessWidget {
   }
 }
 
-/// Judul bagian bergaya referensi — "Popular exercises · See all": judul di
-/// kiri, aksi kecil di kanan.
+/// Judul seksi — "Sesi berikutnya · Pilih lain": judul 17/700 di kiri,
+/// tautan 13/600 aksen di kanan.
 class SectionTitle extends StatelessWidget {
   const SectionTitle(this.title, {super.key, this.action, this.onAction});
 
@@ -74,7 +83,7 @@ class SectionTitle extends StatelessWidget {
               borderRadius: BorderRadius.circular(GymRadius.pill),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                child: Text(action!, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.text2)),
+                child: Text(action!, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.accent)),
               ),
             ),
           ),
@@ -83,7 +92,9 @@ class SectionTitle extends StatelessWidget {
   }
 }
 
-/// Lencana bulat kecil — "DUE TODAY", "78.4 kg".
+/// Pil kecil berisi teks — "+1 rep", "Berikutnya", "tahan". Warnanya dari
+/// pemanggil: doneBg/doneInk untuk kenaikan, warnSoft/warn untuk deload,
+/// surface2/text2 untuk netral.
 class Pill extends StatelessWidget {
   const Pill({super.key, required this.child, this.color, this.textColor, this.onTap});
 
@@ -97,20 +108,21 @@ class Pill extends StatelessWidget {
     final c = context.gym;
     return Material(
       color: color ?? c.surface2,
-      borderRadius: BorderRadius.circular(GymRadius.pill),
+      borderRadius: BorderRadius.circular(8),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(GymRadius.pill),
+        borderRadius: BorderRadius.circular(8),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
           child: DefaultTextStyle.merge(
             style: TextStyle(
-              fontSize: 12,
+              fontSize: 10.5,
               fontWeight: FontWeight.w700,
-              color: textColor ?? c.text,
+              color: textColor ?? c.text2,
+              fontFeatures: const [FontFeature.tabularFigures()],
             ),
             child: IconTheme.merge(
-              data: IconThemeData(size: 14, color: textColor ?? c.text),
+              data: IconThemeData(size: 12, color: textColor ?? c.text2),
               child: child,
             ),
           ),
@@ -120,8 +132,52 @@ class Pill extends StatelessWidget {
   }
 }
 
-/// Ikon di dalam cakram bulat berwarna — "My Fitness Profile", kategori,
-/// baris setelan. [color] mewarnai ikon; latarnya [color] yang ditipiskan.
+/// Tag kapital kecil di atas latar aksen lembut — "HARI INI", "BESOK".
+class TagPill extends StatelessWidget {
+  const TagPill(this.text, {super.key});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gym;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(color: c.accentSoft, borderRadius: BorderRadius.circular(10)),
+      child: Text(
+        text.toUpperCase(),
+        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 0.6, color: c.accent),
+      ),
+    );
+  }
+}
+
+/// Tile ikon berwarna: latar hue lembut, ikon hue pekat. 44/14 untuk baris
+/// rutinitas dan sesi, 36/12 untuk statistik ringkasan, 30/10 untuk KPI.
+class HueTile extends StatelessWidget {
+  const HueTile({super.key, required this.icon, required this.hue, this.size = 44, this.radius = 14, this.iconSize});
+
+  final IconData icon;
+  final Color hue;
+  final double size;
+  final double radius;
+  final double? iconSize;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gym;
+    return Container(
+      width: size,
+      height: size,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(color: c.hues.soft(hue, c), borderRadius: BorderRadius.circular(radius)),
+      child: Icon(icon, size: iconSize ?? (size * 0.45).roundToDouble(), color: hue),
+    );
+  }
+}
+
+/// Ikon di dalam cakram bulat berwarna — kategori Library, baris pilihan.
+/// [color] mewarnai ikon; latarnya pasangan lembutnya.
 class IconDisc extends StatelessWidget {
   const IconDisc(this.icon, {super.key, this.color, this.size = 44, this.iconSize, this.filled = false});
 
@@ -141,15 +197,15 @@ class IconDisc extends StatelessWidget {
       width: size,
       height: size,
       alignment: Alignment.center,
-      decoration: BoxDecoration(color: filled ? c.accentFill : c.tint(hue), shape: BoxShape.circle),
+      decoration: BoxDecoration(color: filled ? c.accentFill : c.hues.soft(hue, c), shape: BoxShape.circle),
       child: Icon(icon, size: iconSize ?? size * 0.5, color: filled ? c.accentInk : hue),
     );
   }
 }
 
-/// Avatar bulat berisi inisial — di pojok kanan header, seperti referensi.
+/// Avatar bulat berisi inisial — pojok kanan header Beranda, kartu akun.
 class AvatarCircle extends StatelessWidget {
-  const AvatarCircle({super.key, required this.text, this.onTap, this.size = 40, this.tooltip});
+  const AvatarCircle({super.key, required this.text, this.onTap, this.size = 36, this.tooltip});
 
   final String text;
   final VoidCallback? onTap;
@@ -163,23 +219,27 @@ class AvatarCircle extends StatelessWidget {
       width: size,
       height: size,
       alignment: Alignment.center,
-      decoration: BoxDecoration(color: c.tint(c.accent), shape: BoxShape.circle),
-      child: Text(text, style: TextStyle(fontSize: size * 0.34, fontWeight: FontWeight.w800, color: c.accent)),
+      decoration: BoxDecoration(color: c.accentSoft, shape: BoxShape.circle),
+      child: Text(text, style: TextStyle(fontSize: size * 0.36, fontWeight: FontWeight.w700, color: c.accent)),
     );
     if (onTap == null) return body;
     return Tooltip(
       message: tooltip ?? '',
-      child: Material(
-        type: MaterialType.transparency,
-        shape: const CircleBorder(),
-        child: InkWell(customBorder: const CircleBorder(), onTap: onTap, child: body),
+      child: Semantics(
+        button: true,
+        label: tooltip,
+        child: Material(
+          type: MaterialType.transparency,
+          shape: const CircleBorder(),
+          child: InkWell(customBorder: const CircleBorder(), onTap: onTap, child: body),
+        ),
       ),
     );
   }
 }
 
-/// Blok statistik berwarna penuh — kartu "Weight / Calories / BPM" di
-/// referensi: judul kecil di atas, angka besar di bawah, keterangan di bawahnya.
+/// Blok statistik berwarna lembut — masih dipakai Beranda lama sampai layar
+/// itu ditulis ulang (Task 8 rencana v3); setelah itu dihapus.
 class StatBlock extends StatelessWidget {
   const StatBlock({
     super.key,
@@ -200,17 +260,9 @@ class StatBlock extends StatelessWidget {
   final Color color;
   final VoidCallback? onTap;
   final double? height;
-
-  /// Menggantikan teks [value] — untuk angka yang menghitung naik
-  /// ([CountUp]) atau nilai yang butuh lebih dari satu gaya. [value] tetap
-  /// wajib supaya pemanggil lama tidak berubah; di sini ia diabaikan.
   final Widget? valueWidget;
 
-  /// Gaya angka besar, dibuka supaya [valueWidget] bisa memakai gaya yang
-  /// sama persis dengan teks bawaan. Angka tabular: "1.2 t" yang berganti ke
-  /// "1.3 t" tidak boleh bergeser ke kiri-kanan selagi menghitung.
   static TextStyle valueStyle(BuildContext context) => TextStyle(
-        fontFamily: 'Manrope',
         fontSize: 28,
         fontWeight: FontWeight.w800,
         height: 1.05,
@@ -231,22 +283,15 @@ class StatBlock extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           if (icon != null || tappable) ...[
-            // spaceBetween, bukan Spacer: blok ini juga dipakai di tempat
-            // yang lebarnya tak terbatas, dan Spacer di sana melempar error.
             Row(
               mainAxisAlignment: icon == null ? MainAxisAlignment.end : MainAxisAlignment.spaceBetween,
               children: [
                 if (icon != null) Icon(icon, size: 18, color: color),
-                // Blok yang bisa diketuk diberi chevron kecil: di kolom sempit
-                // tidak ada ruang untuk teks "ketuk untuk…", dan tanpa tanda
-                // apa pun blok berwarna terbaca sebagai angka mati.
                 if (tappable) Icon(GymIcons.chevronRight, size: 16, color: c.text3),
               ],
             ),
             const SizedBox(height: 8),
           ],
-          // Dua baris: "Volume 7 hari" di ubin sepertiga lebar HP 360 dp tidak
-          // muat satu baris, dan "Volum…" bukan label.
           Text(label,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
@@ -270,9 +315,6 @@ class StatBlock extends StatelessWidget {
         child: content,
       );
     }
-    // Material-nya yang berwarna, bukan Container di dalamnya: riak InkWell
-    // digambar di Material terdekat, dan Container berwarna di atasnya akan
-    // menutupi riak itu.
     return PressScale(
       child: Material(
         color: c.hues.soft(color, c),
@@ -291,8 +333,11 @@ class StatBlock extends StatelessWidget {
   }
 }
 
-/// Tombol utama violet berbentuk pil. Tinggi 52 supaya nyaman ditekan dengan
-/// tangan berkeringat sambil berdiri (NFR-12: target sentuh ≥ 48 dp).
+/// Tombol kaca. Utama = kaca berwarna dengan label putih; netral = kaca
+/// bening; bahaya = kaca bening dengan tinta merah. Tinggi 52 supaya nyaman
+/// ditekan dengan tangan berkeringat sambil berdiri (NFR-12: target ≥ 48 dp).
+///
+/// Labelnya kalimat biasa — tidak ada lagi KAPITAL berspasi lebar.
 class GymButton extends StatelessWidget {
   const GymButton({
     super.key,
@@ -312,80 +357,77 @@ class GymButton extends StatelessWidget {
   final double height;
   final bool expand;
 
-  /// Referensi memakai pil untuk tombol utama ("Next", "Play") dan sudut
-  /// membulat untuk tombol sekunder di dalam kartu.
+  /// Dipertahankan untuk pemanggil lama; di v3 semua tombol berbentuk pil.
   final GymButtonShape shape;
-
-  double get _radius => switch (shape) {
-        GymButtonShape.pill => GymRadius.pill,
-        GymButtonShape.rounded => tone == GymButtonTone.primary ? GymRadius.pill : GymRadius.control,
-      };
 
   @override
   Widget build(BuildContext context) {
     final c = context.gym;
-    final (bg, fg) = switch (tone) {
-      GymButtonTone.primary => (c.accentFill, c.accentInk),
-      GymButtonTone.neutral => (c.surface2, c.text),
-      GymButtonTone.danger => (c.danger.withValues(alpha: 0.16), c.danger),
+    final glass = tone == GymButtonTone.primary ? GlassTone.tinted : GlassTone.clear;
+    final fg = switch (tone) {
+      GymButtonTone.primary => Colors.white,
+      GymButtonTone.danger => c.danger,
+      GymButtonTone.neutral => c.text,
     };
-
+    final big = height >= 48;
+    final radius = height / 2;
     final text = Text(
       label,
       maxLines: 1,
       style: TextStyle(
-        fontSize: 14,
-        fontWeight: FontWeight.w800,
-        letterSpacing: 0.4,
+        fontSize: big ? 15 : 13.5,
+        fontWeight: big ? FontWeight.w700 : FontWeight.w600,
         color: fg,
       ),
     );
 
     return PressScale(
       enabled: onPressed != null,
-      child: SizedBox(
-        width: expand ? double.infinity : null,
-        height: height,
-        // AnimatedContainer, bukan Material berwarna: warna mati/hidupnya
-        // berubah lembut saat form jadi valid, tidak melompat.
-        child: AnimatedContainer(
-          duration: GymMotion.of(context, GymMotion.quick),
-          decoration: BoxDecoration(
-            color: onPressed == null ? bg.withValues(alpha: 0.4) : bg,
-            borderRadius: BorderRadius.circular(_radius),
-          ),
-          child: Material(
-            type: MaterialType.transparency,
-            child: InkWell(
-              onTap: onPressed == null
-                  ? null
-                  : () {
-                      if (tone == GymButtonTone.primary) GymHaptics.confirm();
-                      onPressed!();
-                    },
-              borderRadius: BorderRadius.circular(_radius),
-              child: Padding(
-                // Tanpa padding ini tombol yang tidak melebar menyusut persis
-                // selebar teksnya dan hurufnya menyentuh tepi pil.
-                padding: EdgeInsets.symmetric(horizontal: expand ? 0 : 20),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (icon != null) ...[Icon(icon, size: 18, color: fg), const SizedBox(width: 8)],
-                    // Label yang lebih panjang dari tombolnya mengecil, tidak
-                    // meluber keluar: tombol setengah lebar di HP 360 dp dan
-                    // terjemahan yang lebih panjang dari bahasa Inggrisnya.
-                    // Hanya untuk tombol yang melebar — tombol selebar isinya
-                    // bisa duduk di Row tanpa batas lebar, dan Flexible di sana
-                    // error.
-                    if (expand)
-                      Flexible(child: FittedBox(fit: BoxFit.scaleDown, child: text))
-                    else
-                      text,
-                  ],
+      child: AnimatedOpacity(
+        duration: GymMotion.of(context, GymMotion.quick),
+        opacity: onPressed == null ? 0.45 : 1,
+        child: SizedBox(
+          width: expand ? double.infinity : null,
+          height: height,
+          child: GlassSurface(
+            tone: glass,
+            radius: radius,
+            child: Stack(
+              fit: StackFit.passthrough,
+              children: [
+                if (tone == GymButtonTone.danger)
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(radius),
+                      color: c.danger.withValues(alpha: 0.12),
+                    ),
+                  ),
+                Material(
+                  type: MaterialType.transparency,
+                  child: InkWell(
+                    onTap: onPressed == null
+                        ? null
+                        : () {
+                            if (tone == GymButtonTone.primary) GymHaptics.confirm();
+                            onPressed!();
+                          },
+                    borderRadius: BorderRadius.circular(radius),
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(horizontal: expand ? 12 : 18),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (icon != null) ...[Icon(icon, size: big ? 17 : 15, color: fg), const SizedBox(width: 8)],
+                          // Label yang lebih panjang dari tombolnya mengecil,
+                          // tidak meluber: tombol setengah lebar di HP 360 dp.
+                          if (expand) Flexible(child: FittedBox(fit: BoxFit.scaleDown, child: text)) else text,
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
           ),
         ),
@@ -398,7 +440,8 @@ enum GymButtonTone { primary, neutral, danger }
 
 enum GymButtonShape { rounded, pill }
 
-/// Tab segmented bergaya pil — "Tracker / My Plan", "Balance / Fatigue / Strength".
+/// Tab segmented: lintasan surface2 dengan thumb putih/abu yang bergeser —
+/// "Keseimbangan / Kelelahan / Kekuatan".
 class SegmentedTabs extends StatelessWidget {
   const SegmentedTabs({
     super.key,
@@ -415,14 +458,14 @@ class SegmentedTabs extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.gym;
     return Container(
-      height: 46,
+      height: 44,
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(GymRadius.pill),
+        color: c.surface2,
+        borderRadius: BorderRadius.circular(GymRadius.segTrack),
       ),
-      // Satu pil yang bergeser ke segmen terpilih. Mata mengikuti benda yang
-      // pindah lebih mudah daripada dua kotak yang bertukar warna.
+      // Satu thumb yang bergeser ke segmen terpilih. Mata mengikuti benda
+      // yang pindah lebih mudah daripada dua kotak yang bertukar warna.
       child: LayoutBuilder(builder: (context, box) {
         final w = box.maxWidth / labels.length;
         return Stack(
@@ -435,9 +478,11 @@ class SegmentedTabs extends StatelessWidget {
               bottom: 0,
               width: w,
               child: DecoratedBox(
+                key: const ValueKey('seg-thumb'),
                 decoration: BoxDecoration(
-                  color: c.accentFill,
-                  borderRadius: BorderRadius.circular(GymRadius.pill),
+                  color: c.segThumb,
+                  borderRadius: BorderRadius.circular(GymRadius.segment),
+                  boxShadow: const [BoxShadow(color: Color(0x1A14142B), offset: Offset(0, 2), blurRadius: 8)],
                 ),
               ),
             ),
@@ -453,17 +498,17 @@ class SegmentedTabs extends StatelessWidget {
                           GymHaptics.tap();
                           onChanged(i);
                         },
-                        borderRadius: BorderRadius.circular(GymRadius.pill),
+                        borderRadius: BorderRadius.circular(GymRadius.segment),
                         child: Center(
                           child: AnimatedDefaultTextStyle(
                             duration: GymMotion.of(context, GymMotion.normal),
                             curve: GymMotion.curve,
                             style: TextStyle(
-                              fontSize: 13.5,
-                              fontWeight: FontWeight.w700,
-                              color: i == index ? c.accentInk : c.text2,
+                              fontSize: 13,
+                              fontWeight: i == index ? FontWeight.w700 : FontWeight.w600,
+                              color: i == index ? c.text : c.text2,
                             ),
-                            child: Text(label),
+                            child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
                           ),
                         ),
                       ),
@@ -478,7 +523,8 @@ class SegmentedTabs extends StatelessWidget {
   }
 }
 
-/// Deretan chip filter yang bisa digulir — "All · Push · Pull · Legs".
+/// Deretan chip filter yang bisa digulir — "Semua · Push · Pull · Legs".
+/// Yang terpilih kaca berwarna; yang lain putih bergaris rambut.
 class FilterChips extends StatelessWidget {
   const FilterChips({super.key, required this.labels, required this.index, required this.onChanged});
 
@@ -490,42 +536,52 @@ class FilterChips extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.gym;
     return SizedBox(
-      height: 36,
+      height: 32,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: labels.length,
         separatorBuilder: (_, _) => const SizedBox(width: 8),
         itemBuilder: (context, i) {
           final on = i == index;
-          return AnimatedContainer(
-            duration: GymMotion.of(context, GymMotion.quick),
-            curve: GymMotion.curve,
-            decoration: BoxDecoration(
-              color: on ? c.accentFill : c.surface2,
-              borderRadius: BorderRadius.circular(GymRadius.pill),
-            ),
-            child: Material(
-              type: MaterialType.transparency,
-              child: InkWell(
-                onTap: () {
-                  if (on) return;
-                  GymHaptics.tap();
-                  onChanged(i);
-                },
-                borderRadius: BorderRadius.circular(GymRadius.pill),
-                child: Container(
-                  alignment: Alignment.center,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: AnimatedDefaultTextStyle(
-                    duration: GymMotion.of(context, GymMotion.quick),
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: on ? c.accentInk : c.text,
-                    ),
-                    child: Text(labels[i]),
+          final label = Text(
+            labels[i],
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: on ? Colors.white : c.text),
+          );
+          void tap() {
+            if (on) return;
+            GymHaptics.tap();
+            onChanged(i);
+          }
+
+          if (on) {
+            return GlassSurface(
+              tone: GlassTone.tinted,
+              radius: GymRadius.chip,
+              child: Material(
+                type: MaterialType.transparency,
+                child: InkWell(
+                  onTap: tap,
+                  borderRadius: BorderRadius.circular(GymRadius.chip),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    child: Center(child: label),
                   ),
                 ),
+              ),
+            );
+          }
+          return Material(
+            color: c.surface,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(GymRadius.chip),
+              side: BorderSide(color: c.border),
+            ),
+            child: InkWell(
+              onTap: tap,
+              borderRadius: BorderRadius.circular(GymRadius.chip),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                child: Center(child: label),
               ),
             ),
           );
@@ -535,7 +591,8 @@ class FilterChips extends StatelessWidget {
   }
 }
 
-/// Satu baris pengaturan: cakram ikon · label · nilai · chevron.
+/// Satu baris pengaturan: ikon garis · label · nilai · chevron. Tanpa cakram
+/// berwarna — daftar panjang lebih tenang dibaca.
 class SettingsTile extends StatelessWidget {
   const SettingsTile({
     super.key,
@@ -556,26 +613,26 @@ class SettingsTile extends StatelessWidget {
   final Widget? trailing;
   final VoidCallback? onTap;
 
-  /// Warna label, untuk baris berbahaya (keluar akun).
+  /// Warna ikon dan label, untuk baris berbahaya (keluar akun).
   final Color? tone;
 
-  /// Warna cakram ikon. Referensi memberi tiap baris warnanya sendiri supaya
-  /// daftar panjang mudah dipindai; null = aksen.
+  /// Dipertahankan untuk pemanggil lama; v3 tidak mewarnai ikon per baris.
   final Color? hue;
 
   @override
   Widget build(BuildContext context) {
     final c = context.gym;
-    final ink = tone ?? c.text;
     return InkWell(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
         child: Row(
           children: [
-            IconDisc(icon, color: tone ?? hue, size: 38, iconSize: 19),
-            const SizedBox(width: 13),
-            Expanded(child: Text(label, style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, color: ink))),
+            Icon(icon, size: 18, color: tone ?? c.text2),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(label, style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w500, color: tone ?? c.text)),
+            ),
             if (trailing != null)
               trailing!
             else ...[
@@ -587,8 +644,10 @@ class SettingsTile extends StatelessWidget {
                       textAlign: TextAlign.end,
                       style: TextStyle(fontSize: 13.5, color: c.text2)),
                 ),
-              const SizedBox(width: 6),
-              Icon(GymIcons.chevronRight, size: 18, color: c.text3),
+              if (onTap != null) ...[
+                const SizedBox(width: 10),
+                Icon(GymIcons.chevronRight, size: 16, color: c.text3),
+              ],
             ],
           ],
         ),
@@ -609,13 +668,13 @@ class SettingsGroup extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: c.surface,
-        borderRadius: BorderRadius.circular(GymRadius.card),
+        borderRadius: BorderRadius.circular(GymRadius.group),
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
           for (final (i, child) in children.indexed) ...[
-            if (i > 0) Divider(height: 1, thickness: 1, color: c.border, indent: 65),
+            if (i > 0) Divider(height: 1, thickness: 1, color: c.border, indent: 46),
             child,
           ],
         ],
@@ -625,7 +684,7 @@ class SettingsGroup extends StatelessWidget {
 }
 
 /// Baris yang bisa dipilih dengan lingkaran centang di kanan — dipakai
-/// onboarding program dan daftar peralatan.
+/// onboarding program, pemilih di Profil, dan daftar peralatan.
 class SelectRow extends StatelessWidget {
   const SelectRow({
     super.key,
@@ -648,12 +707,10 @@ class SelectRow extends StatelessWidget {
   /// Ikon di kiri judul, misalnya gambar alat di pemilih alat gym.
   final IconData? icon;
 
-  /// Kotak untuk pilihan ganda, lingkaran untuk pilihan tunggal — bedanya
-  /// memberi tahu "boleh pilih banyak" tanpa satu kata pun.
+  /// Kotak untuk pilihan ganda, lingkaran untuk pilihan tunggal.
   final bool square;
 
-  /// Baris yang mati ditulis redup — daftar peralatan panjang, dan yang tidak
-  /// kamu punya sebaiknya mundur ke belakang.
+  /// Baris yang mati ditulis redup — daftar peralatan panjang.
   final bool dimWhenOff;
 
   @override
@@ -665,6 +722,7 @@ class SelectRow extends StatelessWidget {
         GymHaptics.tap();
         onTap();
       },
+      borderRadius: BorderRadius.circular(GymRadius.control),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         child: Row(
@@ -675,10 +733,10 @@ class SelectRow extends StatelessWidget {
                       width: 42,
                       height: 42,
                       alignment: Alignment.center,
-                      decoration: BoxDecoration(color: c.bgNested, shape: BoxShape.circle),
+                      decoration: BoxDecoration(color: c.surface2, borderRadius: BorderRadius.circular(GymRadius.control)),
                       child: Icon(icon, size: 22, color: c.text3),
                     )
-                  : IconDisc(icon!, size: 42, iconSize: 22),
+                  : HueTile(icon: icon!, hue: c.accent, size: 42, radius: GymRadius.control, iconSize: 22),
               const SizedBox(width: 12),
             ],
             Expanded(
@@ -687,16 +745,11 @@ class SelectRow extends StatelessWidget {
                 children: [
                   Text(
                     title,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: off ? c.text3 : c.text,
-                    ),
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: off ? c.text3 : c.text),
                   ),
                   if (subtitle != null) ...[
                     const SizedBox(height: 3),
-                    Text(subtitle!,
-                        style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: c.accent)),
+                    Text(subtitle!, style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: c.accent)),
                   ],
                   if (detail != null) ...[
                     const SizedBox(height: 3),
@@ -738,29 +791,26 @@ class _Tick extends StatelessWidget {
         scale: selected ? 1 : 0,
         duration: GymMotion.of(context, GymMotion.quick),
         curve: GymMotion.curve,
-        // Centang Barudak Lier memenuhi kotak glyph, jadi 13 sudah selebar
-        // centang Material 17 yang dulu di sini.
         child: Icon(GymIcons.check, size: 13, color: c.accentInk),
       ),
     );
   }
 }
 
-/// Header layar tingkat atas: judul plus aksi bulat di kanan, seperti
-/// "Diet Adviser · 🔔 · avatar" di referensi.
+/// Header layar tab: judul 28/800 di kiri, aksi kaca di kanan.
 class ScreenHeader extends StatelessWidget {
   const ScreenHeader({super.key, required this.title, this.subtitle, this.actions = const []});
 
   final String title;
 
-  /// Baris kecil di atas judul — tanggal di Home.
+  /// Baris kecil di atas judul.
   final String? subtitle;
   final List<Widget> actions;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(0, 6, 0, 16),
+      padding: const EdgeInsets.fromLTRB(0, 4, 0, 16),
       child: Row(
         children: [
           Expanded(
@@ -779,7 +829,7 @@ class ScreenHeader extends StatelessWidget {
   }
 }
 
-/// Tombol ikon bulat di header — dulu kotak, referensi memakai lingkaran.
+/// Tombol ikon bulat di header — kaca bening 38 dp.
 class SquareIconButton extends StatelessWidget {
   const SquareIconButton({super.key, required this.icon, this.onPressed, this.tone, this.tooltip});
 
@@ -789,60 +839,183 @@ class SquareIconButton extends StatelessWidget {
   final String? tooltip;
 
   @override
-  Widget build(BuildContext context) {
-    final c = context.gym;
-    final button = PressScale(
-      enabled: onPressed != null,
-      scale: 0.92,
-      child: Material(
-        color: c.surface,
-        shape: const CircleBorder(),
-        child: InkWell(
-          onTap: onPressed,
-          customBorder: const CircleBorder(),
-          child: SizedBox(
-            // Lingkaran yang terlihat 42; area sentuhnya 44 lewat padding di
-            // pembungkusnya — tangan berkeringat di gym adalah kasus pakai yang
-            // sebenarnya, bukan teori.
-            width: 42,
-            height: 42,
-            child: Icon(icon, size: 20, color: tone ?? c.text),
-          ),
-        ),
-      ),
-    );
-    return tooltip == null ? button : Tooltip(message: tooltip!, child: button);
-  }
+  Widget build(BuildContext context) =>
+      GlassIconButton(icon: icon, onPressed: onPressed, tooltip: tooltip, color: tone);
 }
 
-/// Baris info bernada — oranye untuk peringatan lembut, aksen untuk keterangan.
+/// Baris info bernada: peringatan (warnSoft/warn), keterangan aksen
+/// (accentSoft/accent), atau netral (surface2/text2).
 class NoteBanner extends StatelessWidget {
   const NoteBanner({super.key, required this.text, required this.icon, required this.tone});
 
   final String text;
   final IconData icon;
+
+  /// Warna tinta yang diminta: [GymColors.warn], [GymColors.accent],
+  /// [GymColors.doneInk], atau warna teks biasa.
   final Color tone;
 
   @override
   Widget build(BuildContext context) {
     final c = context.gym;
+    final (bg, ink) = tone == c.warn
+        ? (c.warnSoft, c.warn)
+        : tone == c.accent
+            ? (c.accentSoft, c.accent)
+            : tone == c.doneInk
+                ? (c.doneBg, c.doneInk)
+                : (c.surface2, c.text2);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: c.tint(tone),
-        borderRadius: BorderRadius.circular(GymRadius.control),
-      ),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(GymRadius.control)),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 16, color: tone),
+          Padding(padding: const EdgeInsets.only(top: 1), child: Icon(icon, size: 16, color: ink)),
           const SizedBox(width: 9),
           Expanded(
-            child: Text(text, style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: tone)),
+            child: Text(text, style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, height: 1.3, color: ink)),
           ),
         ],
       ),
     );
   }
+}
+
+/// Angka ber-digit dalam kotak kecil — volume rencana di kartu rutinitas.
+class Odometer extends StatelessWidget {
+  const Odometer({super.key, required this.value, required this.unit});
+
+  final double value;
+  final String unit;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gym;
+    final digits = value.round().toString();
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (final (i, d) in digits.split('').indexed) ...[
+          if (i > 0) const SizedBox(width: 2),
+          Container(
+            width: 18,
+            height: 26,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(color: c.surface2, borderRadius: BorderRadius.circular(6)),
+            child: Text(d,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: c.text,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                )),
+          ),
+        ],
+        const SizedBox(width: 5),
+        Text(unit, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: c.text2)),
+      ],
+    );
+  }
+}
+
+/// Cincin ukuran dengan angka di tengah dan label di bawah — tiga cincin di
+/// kartu Beranda. Busurnya tumbuh ke nilainya saat pertama tampil.
+class RingGauge extends StatelessWidget {
+  const RingGauge({
+    super.key,
+    required this.fraction,
+    required this.color,
+    required this.value,
+    required this.label,
+    this.delay = Duration.zero,
+    this.size = 86,
+  });
+
+  final double fraction;
+  final Color color;
+  final String value;
+  final String label;
+  final Duration delay;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gym;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width: size,
+          height: size,
+          child: AnimatedValue(
+            value: fraction.clamp(0.0, 1.0),
+            delay: delay,
+            builder: (context, v) => CustomPaint(
+              painter: _RingPainter(fraction: v, track: c.ringTrack, ink: color),
+              child: Center(
+                child: Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: value.length > 4 ? 17 : 19,
+                    fontWeight: FontWeight.w700,
+                    color: c.text,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          label,
+          textAlign: TextAlign.center,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: c.text2),
+        ),
+      ],
+    );
+  }
+}
+
+class _RingPainter extends CustomPainter {
+  _RingPainter({required this.fraction, required this.track, required this.ink});
+
+  final double fraction;
+  final Color track;
+  final Color ink;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const stroke = 8.0;
+    final r = size.width / 2 - stroke / 2;
+    final centre = size.center(Offset.zero);
+    canvas.drawCircle(
+      centre,
+      r,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = stroke
+        ..color = track,
+    );
+    if (fraction > 0) {
+      canvas.drawArc(
+        Rect.fromCircle(center: centre, radius: r),
+        -math.pi / 2,
+        2 * math.pi * fraction,
+        false,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = stroke
+          ..strokeCap = StrokeCap.round
+          ..color = ink,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_RingPainter old) => old.fraction != fraction || old.track != track || old.ink != ink;
 }

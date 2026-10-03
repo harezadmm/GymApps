@@ -27,7 +27,7 @@ extension HomeStrings on Strings {
   // ── Sheet satu hari dari strip minggu ──
   String get noSessionsThatDay => _h('No sessions', 'Tidak ada sesi');
   String plannedRoutine(String name) => _h('Planned: $name', 'Rencana: $name');
-  String get viewHistory => _h('VIEW HISTORY', 'LIHAT RIWAYAT');
+  String get viewHistory => _h('View history', 'Lihat riwayat');
 
   // ── Tarik untuk sinkron ──
   String get syncedShort => _h('Synced', 'Tersinkron');

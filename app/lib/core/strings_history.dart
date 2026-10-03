@@ -20,7 +20,7 @@ extension HistoryStrings on Strings {
   String get sessionLogged => _h('Session logged.', 'Sesi dicatat.');
 
   // ── Lanjutkan sesi ─────────────────────────────────────────────────────
-  String get resumeSession => _h('RESUME SESSION', 'LANJUTKAN SESI');
+  String get resumeSession => _h('Resume session', 'Lanjutkan sesi');
   String get resumeSessionTitle => _h('Resume this session?', 'Lanjutkan sesi ini?');
   String get resumeSessionHint => _h(
         'Reopens as a live session with its logged sets. The history entry is replaced only when you finish it again; leaving without finishing keeps the original.',
@@ -33,7 +33,7 @@ extension HistoryStrings on Strings {
   String get undo => _h('UNDO', 'URUNGKAN');
 
   // ── Pakai susunan sesi untuk rutinitas (v2.5) ──────────────────────────
-  String get useLayoutForRoutine => _h('USE THIS LAYOUT FOR A ROUTINE', 'PAKAI SUSUNAN INI UNTUK RUTINITAS');
+  String get useLayoutForRoutine => _h('Use this layout for a routine', 'Pakai susunan ini untuk rutinitas');
   String get useLayoutHint => _h(
         'The routine takes these exercises and set counts. Weights keep progressing from your history.',
         'Rutinitasnya memakai gerakan dan jumlah set ini. Beban tetap naik dari riwayatmu.',

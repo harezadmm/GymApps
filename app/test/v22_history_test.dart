@@ -91,7 +91,7 @@ Widget _launcher(Widget page, void Function(Workout?) onResult) => Scaffold(
           onPressed: () async => onResult(
             await Navigator.of(context).push<Workout>(MaterialPageRoute(builder: (_) => page)),
           ),
-          child: const Text('GO'),
+          child: const Text('Go'),
         ),
       ),
     );
@@ -236,12 +236,12 @@ void main() {
           body: Builder(
             builder: (context) => TextButton(
               onPressed: () => reopenWorkoutSession(context, w),
-              child: const Text('GO'),
+              child: const Text('Go'),
             ),
           ),
         ),
       ));
-      await tester.tap(find.text('GO'));
+      await tester.tap(find.text('Go'));
       await _settle(tester);
 
       // Catatan asli dan rotasi tidak disentuh sampai sesi diselesaikan lagi:
@@ -279,12 +279,12 @@ void main() {
           body: Builder(
             builder: (context) => TextButton(
               onPressed: () => reopenWorkoutSession(context, mid),
-              child: const Text('GO'),
+              child: const Text('Go'),
             ),
           ),
         ),
       ));
-      await tester.tap(find.text('GO'));
+      await tester.tap(find.text('Go'));
       await _settle(tester);
 
       final screen = tester.widget<SessionScreen>(find.byType(SessionScreen));
@@ -314,12 +314,12 @@ void main() {
           body: Builder(
             builder: (context) => TextButton(
               onPressed: () => resumeDraftSession(context),
-              child: const Text('GO'),
+              child: const Text('Go'),
             ),
           ),
         ),
       ));
-      await tester.tap(find.text('GO'));
+      await tester.tap(find.text('Go'));
       await _settle(tester);
 
       final screen = tester.widget<SessionScreen>(find.byType(SessionScreen));
@@ -341,12 +341,12 @@ void main() {
 
       await tester.tap(find.descendant(of: find.byType(Dismissible), matching: find.text('Push')));
       await _settle(tester);
-      expect(find.text('RESUME SESSION'), findsOneWidget);
-      expect(find.text('EDIT'), findsOneWidget);
-      expect(find.text('DELETE'), findsOneWidget);
+      expect(find.text('Resume session'), findsOneWidget);
+      expect(find.text('Edit'), findsOneWidget);
+      expect(find.text('Delete'), findsOneWidget);
 
       // Konfirmasi sebelum dibuka ulang.
-      await tester.tap(find.text('RESUME SESSION'));
+      await tester.tap(find.text('Resume session'));
       await _settle(tester);
       expect(find.text('Resume this session?'), findsOneWidget);
       await tester.tap(find.text('Cancel'));
@@ -373,9 +373,9 @@ void main() {
 
       await tester.tap(find.descendant(of: find.byType(Dismissible), matching: find.text(push.name)));
       await _settle(tester);
-      await tester.tap(find.text('RESUME SESSION'));
+      await tester.tap(find.text('Resume session'));
       await _settle(tester);
-      await tester.tap(find.descendant(of: find.byType(AlertDialog), matching: find.text('RESUME')));
+      await tester.tap(find.descendant(of: find.byType(AlertDialog), matching: find.text('Resume')));
       await _settle(tester);
 
       expect(find.byType(SessionScreen), findsOneWidget);
@@ -393,10 +393,10 @@ void main() {
 
       await tester.tap(find.descendant(of: find.byType(Dismissible), matching: find.text('Push')));
       await _settle(tester);
-      await tester.tap(find.text('DELETE'));
+      await tester.tap(find.text('Delete'));
       await _settle(tester);
       expect(find.text('Delete this session?'), findsOneWidget);
-      await tester.tap(find.descendant(of: find.byType(AlertDialog), matching: find.text('DELETE')));
+      await tester.tap(find.descendant(of: find.byType(AlertDialog), matching: find.text('Delete')));
       await _settle(tester);
 
       // Baris hilang seketika, tapi store belum menghapus apa pun: tidak ada
@@ -427,9 +427,9 @@ void main() {
 
       await tester.tap(find.descendant(of: find.byType(Dismissible), matching: find.text('Push')));
       await _settle(tester);
-      await tester.tap(find.text('DELETE'));
+      await tester.tap(find.text('Delete'));
       await _settle(tester);
-      await tester.tap(find.descendant(of: find.byType(AlertDialog), matching: find.text('DELETE')));
+      await tester.tap(find.descendant(of: find.byType(AlertDialog), matching: find.text('Delete')));
       await _settle(tester);
       expect(store.workouts.length, 1);
 
@@ -450,7 +450,7 @@ void main() {
       await tester.drag(_row('Push'), const Offset(-500, 0));
       await _settle(tester);
       expect(find.text('Delete this session?'), findsOneWidget);
-      await tester.tap(find.descendant(of: find.byType(AlertDialog), matching: find.text('DELETE')));
+      await tester.tap(find.descendant(of: find.byType(AlertDialog), matching: find.text('Delete')));
       await _settle(tester);
 
       expect(tester.takeException(), isNull);
@@ -484,7 +484,7 @@ void main() {
 
       await tester.drag(_row('Push'), const Offset(-500, 0));
       await _settle(tester);
-      await tester.tap(find.descendant(of: find.byType(AlertDialog), matching: find.text('DELETE')));
+      await tester.tap(find.descendant(of: find.byType(AlertDialog), matching: find.text('Delete')));
       await _settle(tester);
 
       // Pindah tab selagi SnackBar masih tampil.
@@ -521,7 +521,7 @@ void main() {
       await _settle(tester);
       await tester.drag(_row('Pull'), const Offset(-500, 0));
       await _settle(tester);
-      await tester.tap(find.descendant(of: find.byType(AlertDialog), matching: find.text('DELETE')));
+      await tester.tap(find.descendant(of: find.byType(AlertDialog), matching: find.text('Delete')));
       await _settle(tester);
 
       expect(store.workouts.length, 2, reason: 'belum dihapus dari store');
@@ -553,7 +553,7 @@ void main() {
 
       await tester.drag(_row('Push'), const Offset(-500, 0));
       await _settle(tester);
-      await tester.tap(find.descendant(of: find.byType(AlertDialog), matching: find.text('DELETE')));
+      await tester.tap(find.descendant(of: find.byType(AlertDialog), matching: find.text('Delete')));
       await tester.pump(); // dialog tertutup, baris mulai menyusut
       await tester.pump(const Duration(milliseconds: 300)); // susut selesai → onDismissed
       await tester.pump(const Duration(milliseconds: 50)); // daftar sedang memudar
@@ -595,9 +595,9 @@ void main() {
       ));
       await _settle(tester);
       expect(find.text('Log a session'), findsOneWidget);
-      expect(find.text('ADD EXERCISE'), findsOneWidget);
+      expect(find.text('Add exercise'), findsOneWidget);
 
-      await tester.tap(find.text('SAVE'));
+      await tester.tap(find.text('Save'));
       await _settle(tester);
       expect(find.text('No working sets logged.'), findsOneWidget);
       expect(find.byType(WorkoutEditScreen), findsOneWidget, reason: 'layar tidak ditutup');
@@ -617,7 +617,7 @@ void main() {
       ));
       await _settle(tester);
 
-      await tester.tap(find.text('SAVE'));
+      await tester.tap(find.text('Save'));
       await _settle(tester);
       expect(find.text('No working sets logged.'), findsOneWidget);
       expect(find.byType(WorkoutEditScreen), findsOneWidget);
@@ -636,7 +636,7 @@ void main() {
       ));
       await _settle(tester);
 
-      await tester.tap(find.text('ADD EXERCISE'));
+      await tester.tap(find.text('Add exercise'));
       await _settle(tester);
       await tester.enterText(find.byType(TextField), 'Barbell Bench Press');
       await _settle(tester);
@@ -647,7 +647,7 @@ void main() {
       expect(find.byIcon(GymIcons.circle), findsOneWidget);
       expect(find.byIcon(GymIcons.checkCircle), findsNothing, reason: '0 × 0 tidak boleh diklaim sudah dilakukan');
 
-      await tester.tap(find.text('SAVE'));
+      await tester.tap(find.text('Save'));
       await _settle(tester);
       expect(find.text('No working sets logged.'), findsOneWidget);
     });
@@ -669,7 +669,7 @@ void main() {
 
       await tester.tap(find.byIcon(GymIcons.trash));
       await _settle(tester);
-      await tester.tap(find.descendant(of: find.byType(AlertDialog), matching: find.text('DELETE')));
+      await tester.tap(find.descendant(of: find.byType(AlertDialog), matching: find.text('Delete')));
       await _settle(tester);
       expect(find.text('Barbell Bench Press'), findsNothing);
     });
@@ -682,7 +682,7 @@ void main() {
         store,
         _launcher(WorkoutEditScreen(workout: _sesi('2026-09-20', routine: 'Push'), catalog: catalog), (r) => result = r),
       ));
-      await tester.tap(find.text('GO'));
+      await tester.tap(find.text('Go'));
       await _settle(tester);
 
       // Satuan bawaan di test adalah kg, jadi angka yang diketik = kg.
@@ -691,7 +691,7 @@ void main() {
       await tester.enterText(find.widgetWithText(TextFormField, '8'), '9');
       await tester.pump();
 
-      await tester.tap(find.text('SAVE'));
+      await tester.tap(find.text('Save'));
       await _settle(tester);
       expect(result, isNotNull);
       final sets = result!.entries.single.sets;
@@ -712,7 +712,7 @@ void main() {
       await tester.pumpWidget(_wrap(store, _launcher(editor(), results.add)));
 
       // Belum ada yang diubah: tombol tutup langsung keluar.
-      await tester.tap(find.text('GO'));
+      await tester.tap(find.text('Go'));
       await _settle(tester);
       await tester.tap(find.byTooltip('Cancel'));
       await _settle(tester);
@@ -721,7 +721,7 @@ void main() {
       expect(results, [null]);
 
       // Sudah diketik: tombol tutup bertanya dulu.
-      await tester.tap(find.text('GO'));
+      await tester.tap(find.text('Go'));
       await _settle(tester);
       await tester.enterText(find.byType(TextField), 'Latihan di gym kantor');
       await tester.pump();
@@ -737,7 +737,7 @@ void main() {
       await tester.binding.handlePopRoute();
       await _settle(tester);
       expect(find.text('Discard this session?'), findsOneWidget);
-      await tester.tap(find.descendant(of: find.byType(AlertDialog), matching: find.text('DISCARD')));
+      await tester.tap(find.descendant(of: find.byType(AlertDialog), matching: find.text('Discard')));
       await _settle(tester);
       expect(find.byType(WorkoutEditScreen), findsNothing);
       expect(results, [null, null]);
@@ -752,7 +752,7 @@ void main() {
         store,
         _launcher(WorkoutEditScreen(workout: _sesi('2026-09-20', routine: 'Push'), catalog: catalog), (r) => result = r),
       ));
-      await tester.tap(find.text('GO'));
+      await tester.tap(find.text('Go'));
       await _settle(tester);
       expect(find.text('Edit session'), findsOneWidget);
 
@@ -771,7 +771,7 @@ void main() {
       await _settle(tester);
       expect(find.text('2026-09-18'), findsOneWidget, reason: 'nilai tile berganti');
 
-      await tester.tap(find.text('SAVE'));
+      await tester.tap(find.text('Save'));
       await _settle(tester);
       expect(result, isNotNull);
       expect(result!.routine, 'Pull');

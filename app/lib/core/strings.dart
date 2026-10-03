@@ -34,7 +34,7 @@ class Strings {
       );
   String get email => _('Email', 'Email');
   String get password => _('Password', 'Kata sandi');
-  String get signIn => _('SIGN IN', 'MASUK');
+  String get signIn => _('Sign in', 'Masuk');
   String get forgotPassword => _('Forgot password?', 'Lupa kata sandi?');
 
   // ── Daftar akun ─────────────────────────────────────────────────────
@@ -44,7 +44,7 @@ class Strings {
         'Satu akun menjaga sesimu ada di semua perangkat yang kamu pakai.',
       );
   String get confirmPassword => _('Confirm password', 'Ulangi kata sandi');
-  String get signUp => _('CREATE ACCOUNT', 'BUAT AKUN');
+  String get signUp => _('Create account', 'Buat akun');
   String get haveAccount => _('Already have an account? Sign in', 'Sudah punya akun? Masuk');
   String get noAccount => _("Don't have an account? Create one", 'Belum punya akun? Buat sekarang');
   String get emailRequired => _('Enter your email address.', 'Masukkan alamat emailmu.');
@@ -111,7 +111,7 @@ class Strings {
         'You can edit every routine later. Nothing is locked.',
         'Semua rutinitas bisa diubah nanti. Tidak ada yang dikunci.',
       );
-  String get buildMyOwn => _('BUILD MY OWN', 'SUSUN SENDIRI');
+  String get buildMyOwn => _('Build my own', 'Susun sendiri');
   String get whatsInYourGym => _("What's in your gym?", 'Ada apa saja di gym-mu?');
   String gymFilterNote(String gym) => _(
         '$gym · used to filter the exercise library. Change it any time.',
@@ -125,20 +125,20 @@ class Strings {
   String get equipmentHint => _('e.g. Trap bar', 'mis. Trap bar');
   String get skip => _('Skip', 'Lewati');
   String get back => _('Back', 'Kembali');
-  String get cont => _('CONTINUE', 'LANJUT');
+  String get cont => _('Continue', 'Lanjut');
 
   // ── Umum ────────────────────────────────────────────────────────────────
   String get cancel => _('Cancel', 'Batal');
-  String get save => _('SAVE', 'SIMPAN');
-  String get add => _('ADD', 'TAMBAH');
-  String get delete => _('DELETE', 'HAPUS');
-  String get done => _('DONE', 'SELESAI');
+  String get save => _('Save', 'Simpan');
+  String get add => _('Add', 'Tambah');
+  String get delete => _('Delete', 'Hapus');
+  String get done => _('Done', 'Selesai');
 
   // ── Home ────────────────────────────────────────────────────────────────
   String get nextUp => _('Next up', 'Berikutnya');
   String get nextSession => _('Next session', 'Sesi berikutnya');
-  String get dueToday => _('DUE TODAY', 'HARI INI');
-  String get startSession => _('START SESSION', 'MULAI SESI');
+  String get dueToday => _('Today', 'Hari ini');
+  String get startSession => _('Start session', 'Mulai sesi');
   String get freestyle => _('Freestyle', 'Bebas');
   String get otherSession => _('Other session', 'Pilih sesi lain');
   String get otherSessionTitle => _('What are you training today?', 'Hari ini latihan apa?');
@@ -150,7 +150,7 @@ class Strings {
         'Your weekly schedule stays the same — this only changes today.',
         'Jadwal mingguanmu tetap — ini hanya mengganti latihan hari ini.',
       );
-  String get upNext => _('UP NEXT', 'BERIKUTNYA');
+  String get upNext => _('Up next', 'Berikutnya');
   String get notInProgram => _('Not in the rotation', 'Di luar rotasi');
   String get thisWeek => _('This week', 'Minggu ini');
   String plannedOf(int done, int total) =>
@@ -173,7 +173,7 @@ class Strings {
   String isNext(String name) => _('$name is next', '$name berikutnya');
   String get routines => _('Routines', 'Rutinitas');
   String get editProgram => _('Edit program', 'Ubah program');
-  String get newRoutine => _('NEW ROUTINE', 'RUTINITAS BARU');
+  String get newRoutine => _('New routine', 'Rutinitas baru');
   String get noRoutines => _(
         'No routines yet — add one to get started.',
         'Belum ada rutinitas — tambah satu untuk mulai.',
@@ -205,8 +205,8 @@ class Strings {
   String get rest => _('Rest', 'Istirahat');
   String get progressionPolicy => _('Progression policy', 'Policy progresi');
   String get intensifiers => _('Intensifiers', 'Penambah intensitas');
-  String get addExercise => _('ADD EXERCISE', 'TAMBAH GERAKAN');
-  String get deleteRoutine => _('DELETE ROUTINE', 'HAPUS RUTINITAS');
+  String get addExercise => _('Add exercise', 'Tambah gerakan');
+  String get deleteRoutine => _('Delete routine', 'Hapus rutinitas');
   String get keptInMemory => _(
         'Routine changes are kept in memory until sync is on.',
         'Perubahan rutinitas hanya disimpan di memori sampai sync aktif.',
@@ -214,10 +214,10 @@ class Strings {
 
   // ── Sesi ────────────────────────────────────────────────────────────────
   String get sessionNotes => _('Session notes...', 'Catatan sesi...');
-  String get finish => _('FINISH', 'SELESAI');
+  String get finish => _('Finish', 'Selesai');
   String get restTimer => _('Rest timer', 'Timer istirahat');
-  String get start => _('START', 'MULAI');
-  String get addSet => _('ADD SET', 'TAMBAH SET');
+  String get start => _('Start', 'Mulai');
+  String get addSet => _('Add set', 'Tambah set');
   String get setCol => _('Set', 'Set');
   String get prevCol => _('Prev', 'Sblm');
   String weightCol(String unit) => unit == 'lb' ? 'Lb' : 'Kg';
@@ -240,7 +240,7 @@ class Strings {
   String get resting => _('Resting', 'Istirahat');
   String ofDuration(String d) => _('of $d', 'dari $d');
   String get changeDuration => _('Change duration', 'Ubah durasi');
-  String get skipRest => _('SKIP REST', 'LEWATI ISTIRAHAT');
+  String get skipRest => _('Skip rest', 'Lewati istirahat');
   String get backToSession => _('Back to session', 'Kembali ke sesi');
   String get restDuration => _('Rest duration', 'Durasi istirahat');
   String get minutes => _('Minutes', 'Menit');
@@ -425,7 +425,7 @@ class Strings {
   String get themeSystem => _('Match system', 'Ikuti sistem');
   String get language => _('Language', 'Bahasa');
   String get aboutApp => _('About GymApps', 'Tentang GymApps');
-  String get logOut => _('LOG OUT', 'KELUAR');
+  String get logOut => _('Log out', 'Keluar');
   String notWired(String what) =>
       _('$what is not wired up yet.', '$what belum tersambung.');
   String get home => _('Home', 'Beranda');
@@ -474,7 +474,7 @@ class Strings {
         '$count exercises · filtered by $gym',
         '$count gerakan · disaring untuk $gym',
       );
-  String get next => _('NEXT', 'BERIKUT');
+  String get next => _('Next', 'Berikutnya');
   String get activeProgram => _('Active program', 'Program aktif');
   String get rotationNote => _(
         'Rotation · min 1 rest day between the same routine',
@@ -482,7 +482,7 @@ class Strings {
       );
   String get routineActions => _('Routine actions', 'Aksi rutinitas');
   String elapsedOf(String time) => _('$time elapsed', '$time berjalan');
-  String get cancelUpper => _('CANCEL', 'BATAL');
+  String get cancelUpper => _('Cancel', 'Batal');
   String daysShort(int n) => _('${n}d', '${n}h');
   String get catalogueUnreadable => _(
         'Could not read the exercise catalogue.',
@@ -556,7 +556,7 @@ class Strings {
   String get trainingDays => _('Training days', 'Hari latihan');
   String get days => _('Days', 'Hari');
   String dayName(int i) => _('Day $i', 'Hari $i');
-  String get addDay => _('ADD DAY', 'TAMBAH HARI');
+  String get addDay => _('Add day', 'Tambah hari');
   String get tapToAddExercises => _('Tap to add exercises', 'Ketuk untuk isi gerakan');
   String get needOneDay => _('Add at least one training day.', 'Tambahkan minimal satu hari latihan.');
   String get needOneWeekday => _('Pick at least one training day.', 'Pilih minimal satu hari latihan.');
@@ -577,7 +577,7 @@ class Strings {
         const ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][m - 1],
         const ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'][m - 1],
       );
-  String get dueTomorrow => _('TOMORROW', 'BESOK');
+  String get dueTomorrow => _('Tomorrow', 'Besok');
   String dueOn(String day) => _('DUE $day', day.toUpperCase());
   String recoverUntil(String day) => _('Recover first — due $day', 'Pulih dulu — jatuh tempo $day');
   String nextTrainingDay(String day) => _('Next training day: $day', 'Hari latihan berikutnya: $day');
@@ -591,7 +591,7 @@ class Strings {
         'This routine has no exercises yet. Add some before starting.',
         'Rutinitas ini belum punya gerakan. Isi dulu sebelum mulai.',
       );
-  String get choosePlan => _('CHOOSE PROGRAM', 'PILIH PROGRAM');
+  String get choosePlan => _('Choose program', 'Pilih program');
   String routineOverview(int exercises, int sets) => _(
         '${exercises == 1 ? '1 exercise' : '$exercises exercises'} · ${sets == 1 ? '1 working set' : '$sets working sets'}',
         '$exercises gerakan · $sets set kerja',
@@ -607,7 +607,7 @@ class Strings {
         'Your routines are replaced by the new program. Logged sessions stay in your history.',
         'Rutinitasmu diganti dengan program baru. Sesi yang sudah tercatat tetap ada di riwayat.',
       );
-  String get replace => _('REPLACE', 'GANTI');
+  String get replace => _('Replace', 'Ganti');
   String restRule(int n) => n == 0
       ? _('No minimum rest between sessions', 'Tanpa istirahat minimum antar sesi')
       : _(n == 1 ? 'At least 1 rest day between sessions' : 'At least $n rest days between sessions',
@@ -630,9 +630,9 @@ class Strings {
         'Finish saves it to your history. Discard throws away everything logged in this session.',
         'Selesai menyimpannya ke riwayat. Buang menghapus semua yang tercatat di sesi ini.',
       );
-  String get keepTraining => _('KEEP TRAINING', 'LANJUT LATIHAN');
-  String get discard => _('DISCARD', 'BUANG');
-  String get finishAndSave => _('FINISH & SAVE', 'SELESAI & SIMPAN');
+  String get keepTraining => _('Keep training', 'Lanjut latihan');
+  String get discard => _('Discard', 'Buang');
+  String get finishAndSave => _('Finish & save', 'Selesai & simpan');
   String get emptySessionHint => _(
         'No exercises yet — add the first one below.',
         'Belum ada gerakan — tambah yang pertama di bawah.',
@@ -655,7 +655,7 @@ class Strings {
   String get mainMuscle => _('Main muscle', 'Otot utama');
   String get needExerciseName => _('Give the exercise a name.', 'Beri nama gerakannya.');
   String get needMuscle => _('Pick the main muscle.', 'Pilih otot utamanya.');
-  String get customTag => _('CUSTOM', 'SENDIRI');
+  String get customTag => _('Custom', 'Sendiri');
   String customSaved(String name) =>
       _('$name added to your exercises.', '$name masuk ke daftar gerakanmu.');
   String sessionsCount(int n) => n == 1 ? _('1 session', '1 sesi') : _('$n sessions', '$n sesi');
@@ -705,7 +705,7 @@ class Strings {
   String get resumeTitle => _('Unfinished session', 'Sesi belum selesai');
   String resumeDetail(String name, int sets, int minutes) => _(
       '$name · $sets set${sets == 1 ? '' : 's'} logged · $minutes min', '$name · $sets set tercatat · $minutes menit');
-  String get resume => _('RESUME', 'LANJUTKAN');
+  String get resume => _('Resume', 'Lanjutkan');
   String get discardDraft => _('Discard', 'Buang');
   String get discardDraftConfirm => _('Discard the unfinished session? Its logged sets will be lost.',
       'Buang sesi yang belum selesai? Set yang sudah dicentang akan hilang.');
@@ -714,7 +714,7 @@ class Strings {
   String get prBestVolume => _('Best session', 'Sesi terbaik');
   String get noExerciseHistory => _('No sessions logged for this exercise yet.', 'Belum ada sesi untuk gerakan ini.');
   String get editSession => _('Edit session', 'Edit sesi');
-  String get edit => _('EDIT', 'EDIT');
+  String get edit => _('Edit', 'Edit');
   String get sessionUpdated => _('Session updated.', 'Sesi diperbarui.');
   String get notesLabel => _('Notes', 'Catatan');
   String get on => _('On', 'Nyala');
@@ -747,7 +747,7 @@ class Strings {
         'Sessions and custom exercises are merged into this account. Nothing here is deleted.',
         'Sesi dan gerakan custom digabung ke akun ini. Tidak ada yang dihapus.',
       );
-  String get importAction => _('IMPORT', 'IMPOR');
+  String get importAction => _('Import', 'Impor');
   String get accentBlue => _('Sky blue', 'Biru langit');
   String get accentGreen => _('Green', 'Hijau');
   String get accentOrange => _('Orange', 'Oranye');
@@ -797,7 +797,7 @@ class Strings {
         "We'll email you a link to set a new password. Open it, set the new password, then sign in here with it.",
         'Link untuk kata sandi baru akan dikirim ke email-mu. Buka link-nya, setel kata sandi baru, lalu masuk di sini dengannya.',
       );
-  String get sendLink => _('SEND LINK', 'KIRIM LINK');
+  String get sendLink => _('Send link', 'Kirim link');
   String get forgotSent => _('If that email has an account, a reset link is on its way.',
       'Kalau email itu punya akun, link reset sedang dikirim.');
   String get forgotNoServer => _('Password reset needs the server, and this build has none.',

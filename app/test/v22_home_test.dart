@@ -138,7 +138,7 @@ void main() {
     expect(find.descendant(of: sheet, matching: find.text('2 sets · 960 kg')), findsOneWidget);
     expect(find.descendant(of: sheet, matching: find.text('2 sets · 640 kg')), findsOneWidget);
 
-    await tester.tap(find.text('VIEW HISTORY'));
+    await tester.tap(find.text('View history'));
     await tester.pumpAndSettle();
     expect(opened, 3);
     expect(find.byType(BottomSheet), findsNothing);
@@ -164,7 +164,7 @@ void main() {
 
     expect(find.descendant(of: find.byType(BottomSheet), matching: find.text('No sessions')), findsOneWidget);
     // Tanpa onOpenTab tidak ada tombol yang menjanjikan tab yang tak bisa dibuka.
-    expect(find.text('VIEW HISTORY'), findsNothing);
+    expect(find.text('View history'), findsNothing);
   });
 
   testWidgets('ketuk blok statistik membuka tab yang menjelaskannya', (tester) async {

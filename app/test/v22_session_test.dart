@@ -62,7 +62,7 @@ void _phone(WidgetTester tester) {
 
 /// Buka lembar konfirmasi lewat tombol FINISH.
 Future<void> _openFinishSheet(WidgetTester tester) async {
-  await tester.tap(find.text('FINISH'));
+  await tester.tap(find.text('Finish'));
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 400));
 }
@@ -164,7 +164,7 @@ void main() {
       expect(store.workouts, isEmpty);
 
       // Kembali ke sesi: tidak ada yang tersimpan, layar sesi masih di depan.
-      await tester.tap(find.text('BACK TO SESSION'));
+      await tester.tap(find.text('Back to session'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
       expect(find.text('Finish this session?'), findsNothing);
@@ -172,7 +172,7 @@ void main() {
       expect(find.byType(SessionScreen), findsOneWidget);
 
       await _openFinishSheet(tester);
-      await tester.tap(find.text('FINISH & SAVE'));
+      await tester.tap(find.text('Finish & save'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 600));
       expect(store.workouts.length, 1);
@@ -218,7 +218,7 @@ void main() {
       final sw = tester.widget<Switch>(find.descendant(of: find.byType(BottomSheet), matching: find.byType(Switch)));
       expect(sw.value, isTrue);
 
-      await tester.tap(find.text('FINISH & SAVE'));
+      await tester.tap(find.text('Finish & save'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 600));
 
@@ -262,15 +262,15 @@ void main() {
       await _openFinishSheet(tester);
       await tester.tap(find.descendant(of: find.byType(BottomSheet), matching: find.byType(Switch)));
       await tester.pump();
-      await tester.tap(find.text('FINISH & SAVE'));
+      await tester.tap(find.text('Finish & save'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 600));
 
       expect(store.routineById('r1')!.exercises.length, 1);
       expect(store.workouts.length, 1);
-      await tester.scrollUntilVisible(find.text('SAVE TO ROUTINE'), 200);
+      await tester.scrollUntilVisible(find.text('Save to routine'), 200);
       await tester.pump(const Duration(milliseconds: 400));
-      await tester.tap(find.text('SAVE TO ROUTINE'));
+      await tester.tap(find.text('Save to routine'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
       expect(store.routineById('r1')!.exercises.map((e) => e.exerciseId), ['0025', 'fly']);
@@ -288,21 +288,21 @@ void main() {
       await tester.pump(const Duration(milliseconds: 500));
       tester.state<NavigatorState>(find.byType(Navigator)).pop();
       await tester.pump(const Duration(milliseconds: 500));
-      expect(find.byTooltip('SKIP REST'), findsOneWidget);
+      expect(find.byTooltip('Skip rest'), findsOneWidget);
       expect(find.byType(RestTimerCard), findsOneWidget);
 
       // Lembar konfirmasi menyebut istirahat yang masih berjalan — dan
       // "kembali ke sesi" tidak menghentikannya.
       await _openFinishSheet(tester);
       expect(find.textContaining('ends the SESSION, not the timer'), findsOneWidget);
-      await tester.tap(find.text('BACK TO SESSION'));
+      await tester.tap(find.text('Back to session'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
-      expect(find.byTooltip('SKIP REST'), findsOneWidget);
+      expect(find.byTooltip('Skip rest'), findsOneWidget);
 
-      await tester.tap(find.byTooltip('SKIP REST'));
+      await tester.tap(find.byTooltip('Skip rest'));
       await tester.pump();
-      expect(find.byTooltip('SKIP REST'), findsNothing);
+      expect(find.byTooltip('Skip rest'), findsNothing);
       await tester.pump(const Duration(milliseconds: 600));
       expect(find.byType(RestTimerCard), findsNothing);
       expect(store.workouts, isEmpty);
@@ -347,7 +347,7 @@ void main() {
       tester.state<NavigatorState>(find.byType(Navigator)).pop();
       await tester.pump(const Duration(milliseconds: 500));
       expect(find.byType(RestTimerCard), findsOneWidget);
-      await tester.tap(find.byTooltip('SKIP REST'));
+      await tester.tap(find.byTooltip('Skip rest'));
       await tester.pump();
       expect(find.byType(RestTimerCard), findsNothing);
     });
@@ -389,8 +389,8 @@ void main() {
     // luapan RenderFlex di bilah itu membuat test ini gagal dengan sendirinya.
     tester.state<NavigatorState>(find.byType(Navigator)).pop();
     await tester.pump(const Duration(milliseconds: 500));
-    expect(find.byTooltip('LEWATI ISTIRAHAT'), findsWidgets);
-    final bar = tester.getRect(find.byTooltip('LEWATI ISTIRAHAT').first);
+    expect(find.byTooltip('Lewati istirahat'), findsWidgets);
+    final bar = tester.getRect(find.byTooltip('Lewati istirahat').first);
     expect(bar.height, greaterThanOrEqualTo(44), reason: 'target sentuh kapsul di sebelah SELESAI');
     await tester.pumpWidget(const SizedBox());
   });
