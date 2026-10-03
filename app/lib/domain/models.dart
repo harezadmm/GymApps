@@ -436,6 +436,7 @@ class Program {
     this.minRestDays = 0,
     this.days = const [],
     this.skippedOn,
+    this.aligned = true,
   });
 
   final String name;
@@ -462,6 +463,13 @@ class Program {
   /// Tanggal `YYYY-MM-DD` yang dilewati lewat tombol Skip di mode weekday.
   final String? skippedOn;
 
+  /// Rutinitasnya sudah pernah diselaraskan dengan sesi terakhir masing-masing
+  /// (`alignRoutinesWithLatestSessions`). Rencana yang ditulis sebelum v2.5
+  /// tidak membawa kolom ini: sebelum v2.2, menyelesaikan sesi tidak pernah
+  /// menulis susunannya ke rutinitas, jadi rutinitasnya bisa masih isi
+  /// template. Rencana yang dibuat di versi ini sudah selaras sejak lahir.
+  final bool aligned;
+
   Program copyWith({
     String? name,
     ProgramMode? mode,
@@ -471,6 +479,7 @@ class Program {
     List<int>? days,
     String? skippedOn,
     bool clearSkip = false,
+    bool? aligned,
   }) =>
       Program(
         name: name ?? this.name,
@@ -481,6 +490,7 @@ class Program {
         minRestDays: minRestDays ?? this.minRestDays,
         days: days ?? this.days,
         skippedOn: clearSkip ? null : (skippedOn ?? this.skippedOn),
+        aligned: aligned ?? this.aligned,
       );
 
   Map<String, dynamic> toJson() => {
@@ -492,6 +502,7 @@ class Program {
         if (minRestDays != 0) 'rest': minRestDays,
         if (days.isNotEmpty) 'days': days,
         if (skippedOn != null) 'skip': skippedOn,
+        if (aligned) 'aligned': true,
       };
 
   factory Program.fromJson(Map<String, dynamic> j) => Program(
@@ -503,5 +514,7 @@ class Program {
         minRestDays: (j['rest'] as num?)?.toInt() ?? 0,
         days: (j['days'] as List?)?.map((d) => (d as num).toInt()).toList() ?? const [],
         skippedOn: j['skip'] as String?,
+        // Tidak ada = ditulis versi lama.
+        aligned: j['aligned'] == true,
       );
 }

@@ -32,6 +32,21 @@ extension HistoryStrings on Strings {
   String get sessionDeleted => _h('Session deleted.', 'Sesi dihapus.');
   String get undo => _h('UNDO', 'URUNGKAN');
 
+  // ── Pakai susunan sesi untuk rutinitas (v2.5) ──────────────────────────
+  String get useLayoutForRoutine => _h('USE THIS LAYOUT FOR A ROUTINE', 'PAKAI SUSUNAN INI UNTUK RUTINITAS');
+  String get useLayoutHint => _h(
+        'The routine takes these exercises and set counts. Weights keep progressing from your history.',
+        'Rutinitasnya memakai gerakan dan jumlah set ini. Beban tetap naik dari riwayatmu.',
+      );
+  String get pickRoutineTitle => _h('Use for which routine?', 'Pakai untuk rutinitas yang mana?');
+  /// Nilai di kanan baris pilihan: isi rutinitas sekarang, atau "sudah sama".
+  String routineExerciseCount(int n) => _h(n == 1 ? '1 exercise' : '$n exercises', '$n gerakan');
+  String get sameAsThisSession => _h('Matches', 'Sudah sama');
+  String routineFollowsSession(String routine) =>
+      _h('$routine now follows this session.', '$routine sekarang mengikuti sesi ini.');
+  String routineAlreadyMatches(String routine) =>
+      _h('$routine already matches this session.', '$routine sudah sama dengan sesi ini.');
+
   // ── Editor sesi ────────────────────────────────────────────────────────
   String get routineLabel => _h('Routine', 'Rutinitas');
   String get dateLabel => _h('Date', 'Tanggal');

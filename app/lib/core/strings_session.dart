@@ -37,6 +37,20 @@ extension SessionStrings on Strings {
   String get continueUpper => _id ? 'LANJUTKAN' : 'CONTINUE';
   String get discardAndStart => _id ? 'BUANG & MULAI BARU' : 'DISCARD & START NEW';
 
+  // ── Rutinitas mengikuti sesi terakhirnya (v2.5) ─────────────────────────
+  /// Diumumkan sekali, saat rencana lama mengambil susunan sesi terakhir tiap
+  /// rutinitas — susunan yang berubah sendiri tanpa disebut terasa seperti
+  /// sulap.
+  String routinesFollowLastSession(List<String> names) {
+    final list = names.join(', ');
+    if (names.length == 1) {
+      return _id ? '$list sekarang memakai susunan sesi terakhirmu.' : '$list now uses the layout of your last session.';
+    }
+    return _id
+        ? '$list sekarang memakai susunan sesi terakhir masing-masing.'
+        : '$list now use the layouts of their last sessions.';
+  }
+
   // ── Kartu status rutinitas di ringkasan ─────────────────────────────────
   String routineUpdatedTitle(String routine) => _id ? 'Rutinitas $routine diperbarui' : 'Routine $routine updated';
   String routineRevertedTitle(String routine) => _id ? 'Rutinitas $routine dikembalikan' : 'Routine $routine reverted';

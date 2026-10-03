@@ -603,7 +603,20 @@ class _HomeShellState extends State<HomeShell> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _resumeUnfinished());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _resumeUnfinished();
+      unawaited(_announceAligned());
+    });
+  }
+
+  /// Rencana lama yang baru saja mengikuti sesi terakhir tiap rutinitasnya
+  /// (sesudah sinkron pertama) disebut sekali di sini.
+  Future<void> _announceAligned() async {
+    if (!mounted) return;
+    final store = WorkoutScope.read(context);
+    await store.initialSync;
+    if (!mounted) return;
+    announceAlignedRoutines(ScaffoldMessenger.maybeOf(context), context.t, store);
   }
 
   /// Sesi yang tertinggal karena aplikasi dimatikan (sistem mematikannya di
