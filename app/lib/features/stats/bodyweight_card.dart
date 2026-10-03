@@ -50,7 +50,7 @@ class BodyweightCard extends StatelessWidget {
     }
     return GymCard(
       radius: GymRadius.large,
-      color: c.block(c.hues.pink),
+      color: c.hues.soft(c.hues.pink, c),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
