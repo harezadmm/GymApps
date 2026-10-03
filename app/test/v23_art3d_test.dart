@@ -253,7 +253,7 @@ void main() {
           final lastIcon = find.byWidgetPredicate((w) => w is Gym3dIcon && w.art == last.art);
           await tester.tap(lastIcon);
           await tester.pumpAndSettle();
-          await tester.tap(find.text('CONTINUE'));
+          await tester.tap(find.text('Continue'));
           expect(picked?.id, last.id);
           expect(tester.takeException(), isNull);
         });

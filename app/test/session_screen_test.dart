@@ -94,7 +94,7 @@ void main() {
     await tester.pumpWidget(_wrap(store, const SessionScreen(routineName: 'Freestyle', exercises: [])));
     await tester.pump();
 
-    await tester.tap(find.text('ADD EXERCISE'));
+    await tester.tap(find.text('Add exercise'));
     // Bukan pumpAndSettle: library menampilkan spinner selama katalog dibaca,
     // dan spinner tidak pernah "tenang".
     await tester.pump();
@@ -161,8 +161,8 @@ void main() {
       store,
       ProgramPickerScreen(onContinue: (_) {}, onBuildOwn: () => called = true),
     ));
-    await tester.scrollUntilVisible(find.text('BUILD MY OWN'), 200);
-    await tester.tap(find.text('BUILD MY OWN'));
+    await tester.scrollUntilVisible(find.text('Build my own'), 200);
+    await tester.tap(find.text('Build my own'));
     expect(called, isTrue);
   });
 
@@ -183,11 +183,11 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byType(TextField).first, 'Upper Lower Arms');
-    await tester.scrollUntilVisible(find.text('ADD DAY'), 200,
+    await tester.scrollUntilVisible(find.text('Add day'), 200,
         scrollable: find.descendant(of: find.byType(ListView), matching: find.byType(Scrollable)).first);
-    await tester.tap(find.text('ADD DAY'));
+    await tester.tap(find.text('Add day'));
     await tester.pump();
-    await tester.tap(find.text('CONTINUE'));
+    await tester.tap(find.text('Continue'));
     await tester.pumpAndSettle();
 
     expect(result, isNotNull);

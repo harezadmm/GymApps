@@ -82,7 +82,7 @@ Future<ExerciseCatalog> _catalog(WidgetTester tester) async => (await tester.run
 
 /// Tombol yang menjalankan [run] dengan context di bawah Navigator.
 Widget _launcher(void Function(BuildContext) run) => Scaffold(
-      body: Builder(builder: (context) => TextButton(onPressed: () => run(context), child: const Text('GO'))),
+      body: Builder(builder: (context) => TextButton(onPressed: () => run(context), child: const Text('Go'))),
     );
 
 void main() {
@@ -150,7 +150,7 @@ void main() {
       rest: {'end': now.add(const Duration(seconds: 50)).millisecondsSinceEpoch, 'total': 90, 'on': 0, 'next': 'Next: set 2'},
     ));
     await tester.pumpWidget(_wrap(store, _launcher((c) => resumeDraftSession(c))));
-    await tester.tap(find.text('GO'));
+    await tester.tap(find.text('Go'));
     await _settle(tester);
 
     final screen = tester.widget<SessionScreen>(find.byType(SessionScreen));
@@ -167,12 +167,12 @@ void main() {
       await _catalog(tester);
       await store.saveDraft(_draft(saved: DateTime.now()));
       await tester.pumpWidget(_wrap(store, _launcher((c) => openFreestyleSession(c, 'Freestyle'))));
-      await tester.tap(find.text('GO'));
+      await tester.tap(find.text('Go'));
       await _settle(tester);
 
       expect(find.text('Unfinished session'), findsOneWidget);
       expect(find.byType(SessionScreen), findsNothing, reason: 'belum ada yang ditimpa');
-      await tester.tap(find.text('DISCARD & START NEW'));
+      await tester.tap(find.text('Discard & start new'));
       await _settle(tester);
       expect(store.draft, isNull);
       expect(tester.widget<SessionScreen>(find.byType(SessionScreen)).routineName, 'Freestyle');
@@ -184,9 +184,9 @@ void main() {
       await _catalog(tester);
       await store.saveDraft(_draft(saved: DateTime.now()));
       await tester.pumpWidget(_wrap(store, _launcher((c) => openFreestyleSession(c, 'Freestyle'))));
-      await tester.tap(find.text('GO'));
+      await tester.tap(find.text('Go'));
       await _settle(tester);
-      await tester.tap(find.text('CONTINUE'));
+      await tester.tap(find.text('Continue'));
       await _settle(tester);
       expect(tester.widget<SessionScreen>(find.byType(SessionScreen)).routineName, 'Push');
       expect(store.draft, isNotNull);
@@ -239,9 +239,9 @@ void main() {
       SessionScreen(routineName: 'Push', exercises: [ex], initialDate: '2026-09-20', replacesKey: workoutKey(old)),
     ));
     await tester.pump();
-    await tester.tap(find.text('FINISH'));
+    await tester.tap(find.text('Finish'));
     await _settle(tester);
-    await tester.tap(find.text('FINISH & SAVE'));
+    await tester.tap(find.text('Finish & save'));
     await _settle(tester);
     expect(store.workouts.length, 1, reason: 'diganti, bukan ditambah');
     expect(store.workouts.single.date, '2026-09-20');

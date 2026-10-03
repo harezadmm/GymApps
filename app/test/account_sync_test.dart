@@ -576,7 +576,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 400));
 
       expect(find.text('WHAT ARE YOU TRAINING TODAY?'), findsOneWidget);
-      expect(find.text('UP NEXT'), findsOneWidget);
+      expect(find.text('Up next'), findsOneWidget);
       await tester.tap(find.descendant(of: find.byType(BottomSheet), matching: find.text('Legs')));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));

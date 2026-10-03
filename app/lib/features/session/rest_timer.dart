@@ -310,7 +310,7 @@ class RestTimerCard extends StatelessWidget {
                   const SizedBox(width: 10),
                   Expanded(
                     child: GymButton(
-                      label: context.t.skip.toUpperCase(),
+                      label: context.t.skip,
                       height: 46,
                       onPressed: () {
                         // Getar kecil: kapsul timer di atas melakukan hal yang

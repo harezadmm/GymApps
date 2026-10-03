@@ -74,7 +74,7 @@ void main() {
     final fields = find.byType(TextField);
     await tester.enterText(fields.at(0), email);
     await tester.enterText(fields.at(1), password);
-    await tester.tap(find.text('SIGN IN'));
+    await tester.tap(find.text('Sign in'));
     // PBKDF2 50 ribu putaran; pump sekali tidak cukup menunggunya selesai.
     await tester.pumpAndSettle();
   }

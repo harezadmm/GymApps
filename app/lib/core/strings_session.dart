@@ -24,7 +24,7 @@ extension SessionStrings on Strings {
       ? 'Istirahat masih berjalan. Tombol ini menutup SESI, bukan timer. Untuk melewati istirahat, ketuk ✕ di kapsul timer.'
       : 'Rest is still running. This button ends the SESSION, not the timer. To skip the rest, tap ✕ on the timer capsule.';
   String saveLayoutTo(String routine) => _id ? 'Simpan susunan ini ke rutinitas $routine' : 'Save this layout to $routine';
-  String get backToSessionUpper => _id ? 'KEMBALI KE SESI' : 'BACK TO SESSION';
+  String get backToSessionUpper => _id ? 'Kembali ke sesi' : 'Back to session';
 
   // ── Sesi yang tertinggal (draft) ───────────────────────────────────────
   String get draftRestored => _id
@@ -34,8 +34,8 @@ extension SessionStrings on Strings {
   String draftExistsBody(String name, int sets, int minutes) => _id
       ? 'Sesi "$name" masih berjalan ($sets set tercatat, $minutes menit). Lanjutkan sesi itu, atau buang lalu mulai yang baru?'
       : '"$name" is still in progress ($sets sets logged, $minutes min). Continue it, or discard it and start a new one?';
-  String get continueUpper => _id ? 'LANJUTKAN' : 'CONTINUE';
-  String get discardAndStart => _id ? 'BUANG & MULAI BARU' : 'DISCARD & START NEW';
+  String get continueUpper => _id ? 'Lanjutkan' : 'Continue';
+  String get discardAndStart => _id ? 'Buang & mulai baru' : 'Discard & start new';
 
   // ── Rutinitas mengikuti sesi terakhirnya (v2.5) ─────────────────────────
   /// Diumumkan sekali, saat rencana lama mengambil susunan sesi terakhir tiap
@@ -56,7 +56,7 @@ extension SessionStrings on Strings {
   String routineRevertedTitle(String routine) => _id ? 'Rutinitas $routine dikembalikan' : 'Routine $routine reverted';
   String get layoutNotSaved =>
       _id ? 'Susunan sesi ini tidak disimpan ke rutinitas' : "This session's layout was not saved to the routine";
-  String get saveToRoutine => _id ? 'SIMPAN KE RUTINITAS' : 'SAVE TO ROUTINE';
+  String get saveToRoutine => _id ? 'Simpan ke rutinitas' : 'Save to routine';
   String get revertUpper => _id ? 'BATALKAN' : 'UNDO';
   String get reverted => _id ? 'Dikembalikan' : 'Reverted';
 

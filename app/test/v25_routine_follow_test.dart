@@ -340,7 +340,7 @@ void main() {
       await settle();
 
       // Daftar sheet dibangun malas: tombolnya baru ada setelah digulir.
-      final use = find.text('USE THIS LAYOUT FOR A ROUTINE');
+      final use = find.text('Use this layout for a routine');
       await tester.scrollUntilVisible(use, 300, scrollable: find.byType(Scrollable).last);
       await settle();
       await tester.tap(use);

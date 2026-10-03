@@ -331,7 +331,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
               ),
               const SizedBox(height: 14),
               GymButton(
-                label: t.changeProgram.toUpperCase(),
+                label: t.changeProgram,
                 icon: GymIcons.dataTransfer,
                 tone: GymButtonTone.neutral,
                 height: 44,
