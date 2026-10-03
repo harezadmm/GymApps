@@ -171,23 +171,45 @@ Future<bool> ensureNoDraft(BuildContext context) async {
   }
 }
 
+/// Sebut sekali rutinitas yang baru saja mengikuti sesi terakhirnya
+/// ([WorkoutStore.takeAlignedRoutines]). Tidak melakukan apa-apa kalau tidak
+/// ada.
+void announceAlignedRoutines(ScaffoldMessengerState? messenger, Strings t, WorkoutStore store) {
+  final names = store.takeAlignedRoutines();
+  if (names.isEmpty || messenger == null) return;
+  messenger.showSnackBar(SnackBar(
+    content: Text(t.routinesFollowLastSession(names)),
+    duration: const Duration(seconds: 6),
+  ));
+}
+
 /// Buka layar sesi untuk satu rutinitas.
+///
+/// Gerakannya diambil dari rutinitas seperti tersimpan sekarang — yang sejak
+/// v2.2 mengikuti susunan sesi terakhirnya — dan bebannya dari riwayat tiap
+/// gerakan lewat mesin progresi.
 Future<void> openRoutineSession(BuildContext context, Routine routine) async {
   if (!await ensureNoDraft(context) || !context.mounted) return;
   final store = WorkoutScope.read(context);
   final navigator = Navigator.of(context);
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  final t = context.t;
+  // Rencana dari sebelum v2.2 diselaraskan dulu: rutinitasnya bisa masih isi
+  // template padahal sesi terakhirnya sudah disusun ulang.
+  final current = await store.alignBeforeSession(routine.id) ?? routine;
   final catalog = await ExerciseCatalog.load();
   final unit = store.settings.unit;
   final history = historyIn(store.chronological, unit);
   final exercises = [
-    for (final (i, cfg) in routine.exercises.indexed)
+    for (final (i, cfg) in current.exercises.indexed)
       buildSessionExercise(catalog, configIn(cfg, unit), history,
-          routineDefault: routine.policy, settings: store.settings, expanded: i == 0),
+          routineDefault: current.policy, settings: store.settings, expanded: i == 0),
   ];
+  announceAlignedRoutines(messenger, t, store);
   await navigator.push(MaterialPageRoute(
     builder: (_) => SessionScreen(
-      routineName: routine.name,
-      routineId: routine.id,
+      routineName: current.name,
+      routineId: current.id,
       exercises: exercises,
       history: history,
     ),

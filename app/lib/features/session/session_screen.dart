@@ -760,11 +760,8 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
   ExerciseConfig _routineConfigFor(SessionExercise e, Routine original) {
     final kg = configToKg(e.config, _unit);
     if (original.exercises.any((c) => c.exerciseId == kg.exerciseId)) return kg;
-    final json = kg.toJson();
-    if (json['pol'] == original.policy?.name) json.remove('pol');
-    if (kg.deloadFactor != null && kg.deloadFactor == _store?.settings.deloadFactor) json.remove('dl');
-    json['rest'] = e.restDuration.inSeconds;
-    return ExerciseConfig.fromJson(json);
+    return routineConfigForNew(kg, original,
+        profileDeload: _store?.settings.deloadFactor, restSeconds: e.restDuration.inSeconds);
   }
 
   /// Keluar dari sesi selalu ditanyakan. Tombol panah di kiri atas dulu

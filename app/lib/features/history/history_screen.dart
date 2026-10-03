@@ -27,6 +27,7 @@ import '../../core/widgets.dart';
 import '../../data/exercise_catalog.dart';
 import '../../data/workout_store.dart';
 import '../../domain/models.dart';
+import '../../domain/routine_sync.dart';
 import '../session/session_launcher.dart';
 import 'workout_edit_screen.dart';
 
@@ -344,6 +345,74 @@ class _HistoryScreenState extends State<HistoryScreen> {
     }));
   }
 
+  /// Pilih rutinitas yang akan memakai susunan [workout]. Rutinitas yang
+  /// isinya sudah sama ditandai, supaya tidak ada yang menunggu perubahan
+  /// yang tidak akan datang.
+  Future<Routine?> _pickRoutine(BuildContext context, Workout workout) {
+    final store = WorkoutScope.read(context);
+    final layout = workoutLayout(workout);
+    return showModalBottomSheet<Routine>(
+      context: context,
+      backgroundColor: context.gym.surface,
+      showDragHandle: true,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(GymRadius.sheet))),
+      builder: (sheet) {
+        final c = sheet.gym;
+        final t = sheet.t;
+        return SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(t.pickRoutineTitle, style: Theme.of(sheet).textTheme.titleLarge),
+                const SizedBox(height: 12),
+                SettingsGroup(children: [
+                  for (final r in store.routines)
+                    SettingsTile(
+                      icon: GymIcons.dumbbell,
+                      // Warna yang sama dengan baris sesi rutinitas itu di
+                      // daftar riwayat.
+                      hue: c.hues.at(r.name.hashCode.abs()),
+                      label: r.name,
+                      value: diffRoutine(r, layout).isEmpty
+                          ? t.sameAsThisSession
+                          : t.routineExerciseCount(r.exercises.length),
+                      onTap: () => Navigator.of(sheet).pop(r),
+                    ),
+                ]),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// [routine] memakai gerakan dan jumlah set [workout]; bebannya tetap dari
+  /// riwayat lewat mesin progresi. Bisa diurungkan.
+  Future<void> _useLayoutFor(Routine routine, Workout workout) async {
+    final store = WorkoutScope.read(context);
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    final c = context.gym;
+    final t = context.t;
+    final next = routineFollowingWorkout(routine, workout, profileDeload: store.settings.deloadFactor);
+    messenger?.hideCurrentSnackBar();
+    if (next == null) {
+      messenger?.showSnackBar(SnackBar(content: Text(t.routineAlreadyMatches(routine.name))));
+      return;
+    }
+    await store.saveRoutine(next);
+    messenger?.showSnackBar(SnackBar(
+      content: Text(t.routineFollowsSession(routine.name)),
+      persist: false,
+      duration: const Duration(seconds: 6),
+      action: SnackBarAction(label: t.undo, textColor: c.accent, onPressed: () => store.saveRoutine(routine)),
+    ));
+  }
+
   /// Detail satu sesi: gerakan dan setnya, lanjutkan, edit, hapus (FR-F1).
   Future<void> _showDetail(Workout workout) async {
     final store = WorkoutScope.read(context);
@@ -463,6 +532,27 @@ class _HistoryScreenState extends State<HistoryScreen> {
               Text(t.resumeSessionHint,
                   textAlign: TextAlign.center, style: TextStyle(fontSize: 11.5, height: 1.35, color: c.text2)),
               const SizedBox(height: 14),
+              // Susunan sesi ini jadi isi rutinitas: untuk sesi bebas, atau
+              // sesi lama yang selesai sebelum rutinitas ikut tersimpan (v2.2).
+              if (store.routines.isNotEmpty) ...[
+                GymButton(
+                  label: t.useLayoutForRoutine,
+                  icon: GymIcons.copy,
+                  tone: GymButtonTone.neutral,
+                  height: 44,
+                  onPressed: () async {
+                    final routine = await _pickRoutine(sheetContext, workout);
+                    if (routine == null || !sheetContext.mounted) return;
+                    Navigator.of(sheetContext).pop();
+                    if (!mounted) return;
+                    await _useLayoutFor(routine, workout);
+                  },
+                ),
+                const SizedBox(height: 6),
+                Text(t.useLayoutHint,
+                    textAlign: TextAlign.center, style: TextStyle(fontSize: 11.5, height: 1.35, color: c.text2)),
+                const SizedBox(height: 14),
+              ],
               GymButton(
                 label: t.edit,
                 icon: GymIcons.edit,

@@ -128,3 +128,93 @@ Routine syncRoutineWithSession(Routine original, List<(ExerciseConfig configKg, 
   }
   return original.copyWith(exercises: next);
 }
+
+/// Konfigurasi gerakan baru (belum ada di [original]) untuk ditulis ke
+/// rutinitas, dalam kg.
+///
+/// Target sesi membawa hal yang tidak pernah dipilih orangnya: policy
+/// rutinitas dan faktor deload Profil yang sudah "dibekukan" ke dalamnya.
+/// Kalau ikut tertulis, keduanya jadi pengaturan khusus gerakan itu —
+/// mengganti policy rutinitas atau deload di Profil nanti tidak lagi berlaku
+/// untuknya. [restSeconds]: istirahat yang dipilih di tengah sesi, yang
+/// memang pilihan orangnya.
+ExerciseConfig routineConfigForNew(
+  ExerciseConfig configKg,
+  Routine original, {
+  double? profileDeload,
+  int? restSeconds,
+}) {
+  final json = configKg.toJson();
+  if (json['pol'] == original.policy?.name) json.remove('pol');
+  if (configKg.deloadFactor != null && configKg.deloadFactor == profileDeload) json.remove('dl');
+  if (restSeconds != null) json['rest'] = restSeconds;
+  return ExerciseConfig.fromJson(json);
+}
+
+/// Susunan (id gerakan, set kerja) sesi yang sudah tersimpan — dihitung sama
+/// dengan layar sesi: warm-up, drop set, dan rest-pause bukan set kerja.
+List<(String, int)> workoutLayout(Workout w) => [
+      for (final e in w.entries) (e.exerciseId, e.sets.where((s) => s.isWork).length),
+    ];
+
+/// [routine] dengan susunan sesi tersimpan [w], atau null kalau susunannya
+/// sudah sama (atau sesinya kosong — rutinitas tanpa gerakan tidak bisa
+/// dimulai).
+///
+/// Sama dengan penyelarasan saat sesi selesai ([syncRoutineWithSession]):
+/// gerakan yang sudah ada mempertahankan konfigurasinya, gerakan baru membawa
+/// target sesinya tanpa policy dan deload yang hanya dibekukan.
+Routine? routineFollowingWorkout(Routine routine, Workout w, {double? profileDeload}) {
+  if (w.entries.isEmpty) return null;
+  final layout = workoutLayout(w);
+  if (diffRoutine(routine, layout).isEmpty) return null;
+  final known = {for (final c in routine.exercises) c.exerciseId};
+  return syncRoutineWithSession(routine, [
+    for (final (i, e) in w.entries.indexed)
+      (
+        known.contains(e.exerciseId)
+            ? (e.target ?? ExerciseConfig(exerciseId: e.exerciseId))
+            : routineConfigForNew(
+                // Riwayat yang sangat lama tidak menyimpan target: rentang
+                // yang sama dengan gerakan yang ditambah di sesi bebas.
+                e.target ?? ExerciseConfig(exerciseId: e.exerciseId, reps: 12, repsMin: 8),
+                routine,
+                profileDeload: profileDeload,
+              ),
+        layout[i].$2,
+      ),
+  ]);
+}
+
+/// Setiap rutinitas mengikuti sesi terbarunya (menurut tanggal) yang dicatat
+/// dengan nama rutinitas itu. Sesi bebas dan nama lain tidak dihitung.
+///
+/// Untuk rencana yang dibuat sebelum v2.2: waktu itu menyelesaikan sesi tidak
+/// pernah menulis susunannya ke rutinitas, jadi rutinitas masih isi template
+/// sementara orangnya sudah lama berlatih dengan susunan sendiri. Dijalankan
+/// sekali per rencana ([Program.aligned]); sesudahnya rutinitas hanya berubah
+/// karena keputusan orangnya — editor, atau saat sesi selesai.
+({List<Routine> routines, List<String> changed}) alignRoutinesWithLatestSessions(
+  List<Routine> routines,
+  List<Workout> workouts, {
+  double? profileDeload,
+}) {
+  final latest = <String, Workout>{};
+  for (final w in workouts) {
+    final name = w.routine;
+    if (name == null || w.entries.isEmpty) continue;
+    final seen = latest[name];
+    // Tanggal sama: yang lebih dulu di daftar dipertahankan — daftar store
+    // terbaru dulu.
+    if (seen == null || w.date.compareTo(seen.date) > 0) latest[name] = w;
+  }
+  final out = <Routine>[];
+  final changed = <String>[];
+  for (final r in routines) {
+    final w = latest[r.name];
+    final next = w == null ? null : routineFollowingWorkout(r, w, profileDeload: profileDeload);
+    out.add(next ?? r);
+    if (next != null) changed.add(r.name);
+  }
+  return (routines: out, changed: changed);
+}

@@ -26,6 +26,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../domain/models.dart';
 import '../domain/program.dart';
+import '../domain/routine_sync.dart';
 import '../domain/settings.dart';
 import '../domain/templates.dart';
 import 'backend.dart';
@@ -171,6 +172,10 @@ class WorkoutStore extends ChangeNotifier {
 
   bool _loaded = false;
   final _ready = Completer<void>();
+
+  /// Rutinitas yang baru saja mengikuti sesi terakhirnya ([_alignOnce]),
+  /// menunggu diumumkan sekali ([takeAlignedRoutines]).
+  List<String> _alignedNames = const [];
   SyncStatus _sync = SyncStatus.idle;
   DateTime? _lastSyncedAt;
 
@@ -292,7 +297,7 @@ class WorkoutStore extends ChangeNotifier {
     _loaded = true;
     if (!_ready.isCompleted) _ready.complete();
     notifyListeners();
-    _initialSync = syncNow();
+    _initialSync = syncNow().then((_) => _alignAfterLoad(gen));
     unawaited(_initialSync);
   }
 
@@ -324,6 +329,7 @@ class WorkoutStore extends ChangeNotifier {
     _settingsBase = null;
     _bodyweight = const [];
     _draft = null;
+    _alignedNames = const [];
     ExerciseCatalog.registerCustom(const []);
   }
 
@@ -380,6 +386,56 @@ class WorkoutStore extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(_kPlanLocal(account), true);
     }
+    await _commit();
+  }
+
+  /// Nama rutinitas yang baru saja mengikuti sesi terakhirnya, sekali saja:
+  /// panggilan berikutnya kosong. Untuk pemberitahuan di layar — susunan
+  /// yang berubah sendiri tanpa disebut terasa seperti sulap.
+  List<String> takeAlignedRoutines() {
+    final names = _alignedNames;
+    _alignedNames = const [];
+    return names;
+  }
+
+  /// Rutinitas [routineId] seperti yang akan dimulai: rencana lama
+  /// diselaraskan dulu dengan sesi terakhir tiap rutinitas ([_alignOnce]).
+  ///
+  /// Dipanggil saat sesi dibuka. Kalau sinkron saat aplikasi dibuka gagal —
+  /// gym di basement tanpa sinyal — penyelarasan menunggu sampai di sini,
+  /// dan sesi yang dibuka tetap memakai susunan yang dipakai terakhir kali di
+  /// HP ini, bukan isi template.
+  Future<Routine?> alignBeforeSession(String routineId) async {
+    await _alignOnce();
+    return routineById(routineId);
+  }
+
+  /// Sesudah sinkron pertama dokumen yang baru dibuka.
+  ///
+  /// Rencana yang diubah di HP ini menang utuh saat bentrok dengan server
+  /// ([_absorb]). Menyelaraskan dengan riwayat yang tertinggal dari server bisa
+  /// menimpa rencana yang lebih baru dari HP lain, jadi hanya dilakukan
+  /// sesudah sinkron berhasil, atau tanpa server sama sekali.
+  Future<void> _alignAfterLoad(int gen) async {
+    if (gen != _generation || !_loaded) return;
+    if (_backend != null && _sync != SyncStatus.synced) return;
+    await _alignOnce();
+  }
+
+  /// Sekali per rencana: setiap rutinitas mengikuti sesi terbarunya
+  /// ([alignRoutinesWithLatestSessions]). Rencana yang sudah selaras tidak
+  /// disentuh lagi — sesudahnya rutinitas hanya berubah karena keputusan
+  /// orangnya, di editor atau saat sesi selesai.
+  Future<void> _alignOnce() async {
+    final p = _program;
+    if (p == null || p.aligned) return;
+    final result = alignRoutinesWithLatestSessions(_routines, _workouts, profileDeload: _settings.deloadFactor);
+    // Ditulis sebelum menunggu apa pun: panggilan kedua yang datang selagi ini
+    // menyimpan sudah melihat rencana yang selaras dan berhenti.
+    _routines = result.routines;
+    _program = p.copyWith(aligned: true);
+    if (result.changed.isNotEmpty) _alignedNames = [..._alignedNames, ...result.changed];
+    await _markPlan();
     await _commit();
   }
 
