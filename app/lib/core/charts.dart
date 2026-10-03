@@ -33,13 +33,15 @@ class BarSeries extends StatefulWidget {
     required this.midLabel,
     required this.rightLabel,
     this.highlightColor,
-    this.height = 132,
+    this.height = 126,
     this.baselineFraction = 0,
     this.labels,
     this.valueFormat,
     this.selected,
     this.onTap,
     this.animate = true,
+    this.average,
+    this.averageFormat,
   });
 
   /// Tinggi batang relatif. Untuk data yang diambil dari Pen, angka ini adalah
@@ -49,8 +51,16 @@ class BarSeries extends StatefulWidget {
   final String leftLabel;
   final String midLabel;
   final String rightLabel;
+
+  /// Warna pekat untuk batang sorotan. null = gradien kaca aksen.
   final Color? highlightColor;
+
+  /// Tinggi seluruh grafik; 22 dp teratas disisakan untuk gelembung nilai.
   final double height;
+
+  /// Garis rata-rata mendatar dengan label kecil di kirinya. null = tanpa.
+  final double? average;
+  final String Function(double value)? averageFormat;
 
   /// Seberapa jauh dasar grafik ditarik ke bawah nilai terendah, sebagai
   /// pecahan dari rentang data.
@@ -176,9 +186,18 @@ class _BarSeriesState extends State<BarSeries> with SingleTickerProviderStateMix
               // Semua nilai sama (mis. semuanya nol) → hi == floor. Tanpa
               // penjaga ini tingginya NaN dan layarnya gagal digambar.
               double fraction(double v) => hi <= floor ? 0.0 : ((v - floor) / (hi - floor)).clamp(0.0, 1.0);
-              double heightOf(double frac) => math.max(6, frac * box.maxHeight);
+              // 22 dp teratas milik gelembung nilai, supaya gelembung batang
+              // tertinggi tidak terpotong tepi kartu.
+              const top = 22.0;
+              final plotH = math.max(0.0, box.maxHeight - top);
+              double heightOf(double frac) => math.max(6, frac * plotH);
               final picked = _selected != null && _selected! >= 0 && _selected! < n ? _selected : null;
+              // Gelembung selalu ada: di batang terakhir ("sekarang berapa?")
+              // sampai ada batang lain yang diketuk.
+              final shown = picked ?? n - 1;
               final interactive = widget.onTap != null || widget.labels != null || widget.valueFormat != null;
+              final avg = widget.average;
+              final hl = widget.highlightColor;
 
               return AnimatedBuilder(
                 animation: _enter,
@@ -186,6 +205,14 @@ class _BarSeriesState extends State<BarSeries> with SingleTickerProviderStateMix
                   return Stack(
                     clipBehavior: Clip.none,
                     children: [
+                      for (final g in const [0.0, 0.5, 1.0])
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          top: top + plotH * (1 - g),
+                          height: 1,
+                          child: ColoredBox(color: c.border),
+                        ),
                       for (var i = 0; i < n; i++)
                         Positioned(
                           // Kolom sentuh menjangkau setengah celah ke kiri dan
@@ -193,13 +220,17 @@ class _BarSeriesState extends State<BarSeries> with SingleTickerProviderStateMix
                           // di antara dua batang harus tetap memilih salah satu.
                           left: i * (w + gap) - (i == 0 ? 0 : gap / 2),
                           width: w + (i == 0 ? 0 : gap / 2) + (i == n - 1 ? 0 : gap / 2),
+                          // Kolom sentuhnya setinggi grafik, termasuk pita
+                          // gelembung di atas: yang digambar saja yang
+                          // berhenti di bawah pita itu.
                           top: 0,
                           bottom: 0,
                           child: GestureDetector(
                             behavior: HitTestBehavior.opaque,
                             onTap: interactive ? () => _tap(i) : null,
                             child: Padding(
-                              padding: EdgeInsets.only(left: i == 0 ? 0 : gap / 2, right: i == n - 1 ? 0 : gap / 2),
+                              padding: EdgeInsets.only(
+                                  top: top, left: i == 0 ? 0 : gap / 2, right: i == n - 1 ? 0 : gap / 2),
                               child: Align(
                                 alignment: Alignment.bottomCenter,
                                 child: AnimatedValue(
@@ -207,24 +238,30 @@ class _BarSeriesState extends State<BarSeries> with SingleTickerProviderStateMix
                                   begin: fraction(values[i]),
                                   duration: widget.animate ? null : Duration.zero,
                                   builder: (context, frac) {
-                                    final on = picked == null ? i == n - 1 : i == picked;
+                                    final on = i == shown;
                                     // Tingginya sudah digerakkan dua sumber —
                                     // animasi masuk dan AnimatedValue saat data
-                                    // berganti — jadi kotaknya polos. Kalau
-                                    // tinggi juga lewat AnimatedContainer, ia
-                                    // mengejar target yang pindah tiap frame:
-                                    // batang tertinggal dan puluhan animasi
-                                    // implisit dimulai ulang setiap frame.
-                                    // Yang dianimasikan di sini hanya warna,
-                                    // saat pilihan berpindah.
+                                    // berganti — jadi kotaknya polos; yang
+                                    // dianimasikan hanya warna saat pilihan
+                                    // berpindah.
                                     return SizedBox(
                                       width: w,
                                       height: heightOf(frac) * _enterFor(i, n),
                                       child: AnimatedContainer(
                                         duration: GymMotion.of(context, GymMotion.quick),
                                         decoration: BoxDecoration(
-                                          color: on ? highlight : c.chartIdle,
-                                          borderRadius: BorderRadius.circular(GymRadius.bar),
+                                          color: on ? hl : c.chartIdle,
+                                          gradient: on && hl == null
+                                              ? LinearGradient(
+                                                  begin: Alignment.topCenter,
+                                                  end: Alignment.bottomCenter,
+                                                  colors: [c.glass.tintA.withValues(alpha: 1), c.glass.tintB.withValues(alpha: 1)],
+                                                )
+                                              : null,
+                                          borderRadius: const BorderRadius.vertical(
+                                            top: Radius.circular(GymRadius.bar),
+                                            bottom: Radius.circular(3),
+                                          ),
                                         ),
                                       ),
                                     );
@@ -234,22 +271,33 @@ class _BarSeriesState extends State<BarSeries> with SingleTickerProviderStateMix
                             ),
                           ),
                         ),
-                      if (picked != null)
-                        Positioned.fill(
-                          child: IgnorePointer(
-                            child: CustomSingleChildLayout(
-                              delegate: _BubbleLayout(
-                                anchorX: picked * (w + gap) + w / 2,
-                                barTop: box.maxHeight - heightOf(fraction(values[picked])),
-                              ),
-                              child: _Bubble(
-                                key: ValueKey(picked),
-                                value: widget.valueFormat?.call(values[picked]) ?? formatDelta(values[picked]),
-                                label: widget.labels != null && picked < widget.labels!.length ? widget.labels![picked] : null,
-                              ),
+                      if (avg != null && hi > floor)
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          top: top + plotH * (1 - fraction(avg)),
+                          height: 1,
+                          child: _AverageLine(label: widget.averageFormat?.call(avg) ?? formatDelta(avg)),
+                        ),
+                      Positioned.fill(
+                        child: IgnorePointer(
+                          child: CustomSingleChildLayout(
+                            delegate: _BubbleLayout(
+                              anchorX: shown * (w + gap) + w / 2,
+                              barTop: top + plotH - heightOf(fraction(values[shown])),
+                            ),
+                            child: _Bubble(
+                              key: ValueKey(shown),
+                              value: widget.valueFormat?.call(values[shown]) ?? formatDelta(values[shown]),
+                              // Label hanya untuk batang yang diketuk; batang
+                              // "sekarang" sudah berlabel di sumbu.
+                              label: widget.labels != null && picked != null && picked < widget.labels!.length
+                                  ? widget.labels![picked]
+                                  : null,
                             ),
                           ),
                         ),
+                      ),
                     ],
                   );
                 },
@@ -260,9 +308,14 @@ class _BarSeriesState extends State<BarSeries> with SingleTickerProviderStateMix
         const SizedBox(height: 8),
         Row(
           children: [
-            Text(widget.leftLabel, style: TextStyle(fontSize: 11, color: c.text3)),
-            Expanded(child: Center(child: Text(widget.midLabel, style: TextStyle(fontSize: 11, color: c.text3)))),
-            Text(widget.rightLabel, style: TextStyle(fontSize: 11, color: c.text3)),
+            Text(widget.leftLabel, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w500, color: c.text2)),
+            Expanded(
+              child: Center(
+                child: Text(widget.midLabel, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w500, color: c.text2)),
+              ),
+            ),
+            // "Sekarang" beraksen: itu batang yang disorot.
+            Text(widget.rightLabel, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: highlight)),
           ],
         ),
       ],
@@ -321,28 +374,54 @@ class _Bubble extends StatelessWidget {
           scale: 0.85 + 0.15 * t,
           alignment: Alignment.bottomCenter,
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              color: c.surface2,
-              borderRadius: BorderRadius.circular(GymRadius.small),
-              border: Border.all(color: c.border),
+              color: c.accent,
+              borderRadius: BorderRadius.circular(8),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(value,
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w700,
-                      color: c.text,
-                      fontFeatures: const [FontFeature.tabularFigures()],
+                    style: const TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                      fontFeatures: [FontFeature.tabularFigures()],
                     )),
-                if (label != null) Text(label!, style: TextStyle(fontSize: 10.5, color: c.text2)),
+                if (label != null) Text(label!, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xB3FFFFFF))),
               ],
             ),
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Garis rata-rata mendatar dengan pil label kecil di atas ujung kirinya.
+class _AverageLine extends StatelessWidget {
+  const _AverageLine({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gym;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Positioned(left: 0, right: 0, top: 0, height: 1, child: ColoredBox(color: c.text3)),
+        Positioned(
+          left: 4,
+          top: -24,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+            decoration: BoxDecoration(color: c.surface2, borderRadius: BorderRadius.circular(8)),
+            child: Text(label, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: c.text2)),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -422,8 +501,10 @@ class _RadarChartState extends State<RadarChart> {
               axes: _shown,
               grid: c.border,
               now: c.accent,
+              nowFill: c.sparkTop,
               previous: c.text3,
               label: c.text2,
+              dotEdge: c.surface,
             ),
             child: const SizedBox.expand(),
           );
@@ -438,15 +519,23 @@ class _RadarPainter extends CustomPainter {
     required this.axes,
     required this.grid,
     required this.now,
+    required this.nowFill,
     required this.previous,
     required this.label,
+    required this.dotEdge,
   });
 
   final List<RadarAxis> axes;
   final Color grid;
   final Color now;
+
+  /// Isian poligon periode ini (sudah bertransparansi).
+  final Color nowFill;
   final Color previous;
   final Color label;
+
+  /// Garis tepi titik sudut — warna kartu, supaya titiknya "duduk" di atas garis.
+  final Color dotEdge;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -477,35 +566,59 @@ class _RadarPainter extends CustomPainter {
       canvas.drawLine(centre, at(i, 1), gridPaint);
     }
 
-    void polygon(double Function(RadarAxis) pick, Color colour, {required bool filled}) {
+    Path polygon(double Function(RadarAxis) pick) {
       final p = Path();
       for (var i = 0; i < axes.length; i++) {
         final o = at(i, pick(axes[i]).clamp(0.05, 1.0));
         i == 0 ? p.moveTo(o.dx, o.dy) : p.lineTo(o.dx, o.dy);
       }
-      p.close();
-      canvas.drawPath(p, Paint()..color = colour.withValues(alpha: filled ? 0.22 : 0.10));
-      canvas.drawPath(
-        p,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = filled ? 2 : 1.5
-          ..color = colour,
-      );
+      return p..close();
     }
 
-    polygon((a) => a.previous, previous, filled: false);
-    polygon((a) => a.value, now, filled: true);
+    // Periode sebelumnya: garis tipis abu, isian samar.
+    final before = polygon((a) => a.previous);
+    canvas.drawPath(before, Paint()..color = previous.withValues(alpha: 0.10));
+    canvas.drawPath(
+      before,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5
+        ..color = previous,
+    );
+
+    // Periode ini: isian aksen lembut, garis aksen, titik di tiap sudut.
+    final current = polygon((a) => a.value);
+    canvas.drawPath(current, Paint()..color = nowFill);
+    canvas.drawPath(
+      current,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2
+        ..strokeJoin = StrokeJoin.round
+        ..color = now,
+    );
+    for (var i = 0; i < axes.length; i++) {
+      final o = at(i, axes[i].value.clamp(0.05, 1.0));
+      canvas.drawCircle(o, 4, Paint()..color = now);
+      canvas.drawCircle(
+        o,
+        4,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2
+          ..color = dotEdge,
+      );
+    }
 
     for (var i = 0; i < axes.length; i++) {
       final tp = TextPainter(
         text: TextSpan(
           text: axes[i].label,
-          style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: label),
+          style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: label),
         ),
         textDirection: TextDirection.ltr,
       )..layout();
-      final o = at(i, 1.22);
+      final o = at(i, 1.24);
       tp.paint(canvas, o - Offset(tp.width / 2, tp.height / 2));
     }
   }
@@ -513,7 +626,9 @@ class _RadarPainter extends CustomPainter {
   @override
   bool shouldRepaint(_RadarPainter old) {
     if (old.axes.length != axes.length) return true;
-    if (old.grid != grid || old.now != now || old.previous != previous || old.label != label) return true;
+    if (old.grid != grid || old.now != now || old.nowFill != nowFill || old.previous != previous || old.label != label) {
+      return true;
+    }
     for (var i = 0; i < axes.length; i++) {
       if (old.axes[i].value != axes[i].value ||
           old.axes[i].previous != axes[i].previous ||
@@ -622,7 +737,26 @@ class ActivityHeatmap extends StatelessWidget {
   Color _tint(GymColors c, int level) => c.activityRamp[level.clamp(0, c.activityRamp.length - 1)];
 }
 
-/// Garis kecil tanpa sumbu — tren e1RM di samping nama gerakan.
+/// Kurva mulus melalui semua [points] (Catmull-Rom → kubik, tegangan 1/6).
+/// Dipakai sparkline supaya tren terbaca sebagai garis tangan, bukan patahan.
+Path smoothPath(List<Offset> points) {
+  final path = Path();
+  if (points.isEmpty) return path;
+  path.moveTo(points.first.dx, points.first.dy);
+  for (var i = 0; i < points.length - 1; i++) {
+    final p0 = points[math.max(i - 1, 0)];
+    final p1 = points[i];
+    final p2 = points[i + 1];
+    final p3 = points[math.min(i + 2, points.length - 1)];
+    final c1 = p1 + (p2 - p0) / 6;
+    final c2 = p2 - (p3 - p1) / 6;
+    path.cubicTo(c1.dx, c1.dy, c2.dx, c2.dy, p2.dx, p2.dy);
+  }
+  return path;
+}
+
+/// Garis kecil tanpa sumbu — tren e1RM di samping nama gerakan: kurva halus
+/// beraksen, isian gradien di bawahnya, dan titik di ujung terakhir.
 ///
 /// Garisnya ditarik dari kiri ke kanan saat pertama dibangun, seperti pena
 /// yang menggambar tren itu: mata langsung tahu ke mana arahnya.
@@ -630,11 +764,12 @@ class Sparkline extends StatelessWidget {
   const Sparkline({
     super.key,
     required this.values,
-    this.width,
-    this.height = 22,
+    this.width = 94,
+    this.height = 36,
     this.color,
     this.fill = true,
-    this.strokeWidth = 1.6,
+    this.strokeWidth = 2.2,
+    this.endDot = true,
   });
 
   final List<double> values;
@@ -644,9 +779,12 @@ class Sparkline extends StatelessWidget {
   final double height;
   final Color? color;
 
-  /// Isi tipis di bawah garis.
+  /// Isian gradien di bawah garis (sparkTop → sparkBottom).
   final bool fill;
   final double strokeWidth;
+
+  /// Titik di ujung terakhir — "nilai sekarang".
+  final bool endDot;
 
   @override
   Widget build(BuildContext context) {
@@ -660,7 +798,11 @@ class Sparkline extends StatelessWidget {
           painter: _SparkPainter(
             values: values,
             color: color ?? c.accent,
+            fillTop: color == null ? c.sparkTop : color!.withValues(alpha: 0.28),
+            fillBottom: color == null ? c.sparkBottom : color!.withValues(alpha: 0),
+            dotEdge: c.surface,
             fill: fill,
+            endDot: endDot,
             strokeWidth: strokeWidth,
             progress: t.clamp(0.0, 1.0),
           ),
@@ -675,14 +817,22 @@ class _SparkPainter extends CustomPainter {
   _SparkPainter({
     required this.values,
     required this.color,
+    required this.fillTop,
+    required this.fillBottom,
+    required this.dotEdge,
     required this.fill,
+    required this.endDot,
     required this.strokeWidth,
     required this.progress,
   });
 
   final List<double> values;
   final Color color;
+  final Color fillTop;
+  final Color fillBottom;
+  final Color dotEdge;
   final bool fill;
+  final bool endDot;
   final double strokeWidth;
   final double progress;
 
@@ -691,27 +841,33 @@ class _SparkPainter extends CustomPainter {
     if (values.length < 2 || progress <= 0) return;
     final lo = values.reduce(math.min);
     final hi = values.reduce(math.max);
-    final pad = strokeWidth;
+    // Sisakan ruang untuk titik ujung (r 4 + tepi 2) di kiri-kanan-atas-bawah.
+    final pad = endDot ? 5.0 : strokeWidth;
     final span = hi - lo;
     // Deret datar (semua nilai sama) digambar di tengah, bukan dibagi nol.
     double y(double v) => span <= 0 ? size.height / 2 : size.height - pad - (v - lo) / span * (size.height - pad * 2);
-    final step = size.width / (values.length - 1);
-
-    final line = Path()..moveTo(0, y(values[0]));
-    for (var i = 1; i < values.length; i++) {
-      line.lineTo(i * step, y(values[i]));
-    }
+    final step = (size.width - pad * 2) / (values.length - 1);
+    final points = [for (var i = 0; i < values.length; i++) Offset(pad + i * step, y(values[i]))];
+    final line = smoothPath(points);
 
     for (final metric in line.computeMetrics()) {
       final part = metric.extractPath(0, metric.length * progress);
+      final tangent = metric.getTangentForOffset(metric.length * progress);
+      final end = tangent?.position ?? points.last;
       if (fill) {
-        final tangent = metric.getTangentForOffset(metric.length * progress);
-        final endX = tangent?.position.dx ?? size.width * progress;
         final area = Path.from(part)
-          ..lineTo(endX, size.height)
-          ..lineTo(0, size.height)
+          ..lineTo(end.dx, size.height)
+          ..lineTo(points.first.dx, size.height)
           ..close();
-        canvas.drawPath(area, Paint()..color = color.withValues(alpha: 0.12));
+        canvas.drawPath(
+          area,
+          Paint()
+            ..shader = LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [fillTop, fillBottom],
+            ).createShader(Offset.zero & size),
+        );
       }
       canvas.drawPath(
         part,
@@ -722,6 +878,18 @@ class _SparkPainter extends CustomPainter {
           ..strokeJoin = StrokeJoin.round
           ..color = color,
       );
+      if (endDot && progress >= 1) {
+        canvas.drawCircle(end, 7, Paint()..color = fillTop);
+        canvas.drawCircle(end, 4, Paint()..color = color);
+        canvas.drawCircle(
+          end,
+          4,
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2
+            ..color = dotEdge,
+        );
+      }
     }
   }
 
@@ -729,7 +897,9 @@ class _SparkPainter extends CustomPainter {
   bool shouldRepaint(_SparkPainter old) =>
       old.progress != progress ||
       old.color != color ||
+      old.fillTop != fillTop ||
       old.fill != fill ||
+      old.endDot != endDot ||
       old.strokeWidth != strokeWidth ||
       old.values.length != values.length ||
       Iterable.generate(values.length).any((i) => old.values[i] != values[i]);
