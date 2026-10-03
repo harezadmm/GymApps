@@ -4,6 +4,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gymapps/core/glass.dart';
 import 'package:gymapps/core/theme.dart';
 
 double _contrast(Color a, Color b) {
@@ -69,6 +70,43 @@ void main() {
       expect(theme.textTheme.headlineMedium!.fontSize, 28);
       expect(theme.textTheme.headlineMedium!.fontWeight, FontWeight.w800);
       expect(theme.textTheme.titleLarge!.fontSize, 17);
+    });
+  });
+
+  group('GlassSurface', () {
+    testWidgets('tinted memakai gradien aksen dan tinta putih; blur hanya kalau diminta', (tester) async {
+      await tester.pumpWidget(MaterialApp(
+        theme: buildGymTheme(),
+        home: const Scaffold(
+          body: Column(children: [
+            GlassSurface(tone: GlassTone.tinted, child: SizedBox(width: 100, height: 40)),
+            GlassSurface(tone: GlassTone.clear, blur: true, child: SizedBox(width: 100, height: 40)),
+          ]),
+        ),
+      ));
+      final decorated = tester.widgetList<DecoratedBox>(find.byType(DecoratedBox)).toList();
+      final tinted = decorated.firstWhere((d) {
+        final deco = d.decoration;
+        return deco is BoxDecoration && deco.gradient is LinearGradient && (deco.gradient as LinearGradient).colors.first == GlassTokens.darkBase.tintA;
+      });
+      expect(tinted, isNotNull);
+      expect(find.byType(BackdropFilter), findsOneWidget, reason: 'blur hanya kalau diminta');
+      final ctx = tester.element(find.byType(Scaffold));
+      expect(glassInk(ctx, GlassTone.tinted), Colors.white);
+      expect(glassInk(ctx, GlassTone.clear), GymColors.dark.text);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('GlassIconButton: target sentuh 44, tooltip, dan ketukan', (tester) async {
+      var taps = 0;
+      await tester.pumpWidget(MaterialApp(
+        theme: buildGymTheme(),
+        home: Scaffold(body: Center(child: GlassIconButton(icon: Icons.add, tooltip: 'Tambah', onPressed: () => taps++))),
+      ));
+      expect(tester.getSize(find.byType(GlassIconButton)), const Size(44, 44));
+      await tester.tap(find.byTooltip('Tambah'));
+      await tester.pump();
+      expect(taps, 1);
     });
   });
 }
