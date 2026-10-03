@@ -735,7 +735,7 @@ class _Kpi extends StatelessWidget {
     return Container(
       constraints: const BoxConstraints(minHeight: 104),
       padding: const EdgeInsets.fromLTRB(12, 11, 12, 12),
-      decoration: BoxDecoration(color: c.block(color), borderRadius: BorderRadius.circular(GymRadius.card)),
+      decoration: BoxDecoration(color: c.hues.soft(color, c), borderRadius: BorderRadius.circular(GymRadius.card)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,

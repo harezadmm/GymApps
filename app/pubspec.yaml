@@ -87,16 +87,7 @@ flutter:
     - family: GymIcons
       fonts:
         - asset: assets/fonts/GymIcons.ttf
-    # Judul dan angka besar: Manrope, sans membulat geometris seperti di
-    # referensi. OFL, di-bundle (tiga berat statis dari font variabelnya).
-    - family: Manrope
-      fonts:
-        - asset: assets/fonts/Manrope-SemiBold.ttf
-          weight: 600
-        - asset: assets/fonts/Manrope-Bold.ttf
-          weight: 700
-        - asset: assets/fonts/Manrope-ExtraBold.ttf
-          weight: 800
+    # Satu keluarga huruf untuk semuanya (UI v3): Inter, lima berat 400–800.
     - family: Inter
       fonts:
         - asset: assets/fonts/Inter-Regular.ttf

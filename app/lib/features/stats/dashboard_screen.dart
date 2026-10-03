@@ -460,7 +460,7 @@ class _Metric extends StatelessWidget {
     final c = context.gym;
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 11),
-      decoration: BoxDecoration(color: c.block(color), borderRadius: BorderRadius.circular(GymRadius.control)),
+      decoration: BoxDecoration(color: c.hues.soft(color, c), borderRadius: BorderRadius.circular(GymRadius.control)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

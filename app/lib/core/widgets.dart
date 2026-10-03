@@ -266,7 +266,7 @@ class StatBlock extends StatelessWidget {
     );
     if (!tappable) {
       return DecoratedBox(
-        decoration: BoxDecoration(color: c.block(color), borderRadius: BorderRadius.circular(GymRadius.card)),
+        decoration: BoxDecoration(color: c.hues.soft(color, c), borderRadius: BorderRadius.circular(GymRadius.card)),
         child: content,
       );
     }
@@ -275,7 +275,7 @@ class StatBlock extends StatelessWidget {
     // menutupi riak itu.
     return PressScale(
       child: Material(
-        color: c.block(color),
+        color: c.hues.soft(color, c),
         borderRadius: BorderRadius.circular(GymRadius.card),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
