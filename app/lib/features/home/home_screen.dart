@@ -1,67 +1,62 @@
-/// Tab Home — artboard `04 Home`.
+/// Tab Beranda — UI v3 (`design/UI-V3.md` §7.1).
 ///
 /// Satu pertanyaan yang dijawab layar ini: **hari ini latihan apa?** Semua yang
-/// lain di bawahnya hanya konteks — dan semuanya dihitung dari program dan
-/// riwayat yang tersimpan, bukan angka contoh.
-///
-/// Sejak v2.2 konteks itu bisa disentuh: blok statistik membuka tab yang
-/// menjelaskannya, kotak hari membuka sesi hari itu, dan tarik ke bawah
-/// menyinkronkan. Kartu-kartunya datang bertingkat saat tab terbuka — gerak
-/// yang memberi tahu mata mana yang baru, bukan hiasan.
+/// lain hanya konteks — dan semuanya dihitung dari program dan riwayat yang
+/// tersimpan, bukan angka contoh: pil status, tiga cincin minggu ini dengan
+/// satu kalimat insight, kartu sesi berikutnya, strip minggu, dan tiga
+/// gerakan dengan progres kekuatan terbesar.
 library;
 
 import 'package:flutter/material.dart';
-import '../../core/illustration.dart';
-import '../../core/gym_icons.dart';
-import '../library/library_screen.dart';
-import '../stats/dashboard_screen.dart';
-import '../../core/weights.dart';
-import '../../domain/units.dart';
 
 import '../../core/format.dart';
+import '../../core/gym_icons.dart';
 import '../../core/motion.dart';
 import '../../core/strings.dart';
+import '../../core/strings_history.dart';
 import '../../core/strings_home.dart';
+import '../../core/strings_v3.dart';
 import '../../core/theme.dart';
+import '../../core/weights.dart';
 import '../../core/widgets.dart';
 import '../../data/exercise_catalog.dart';
 import '../../data/workout_store.dart';
 import '../../domain/models.dart';
-import '../../domain/onerm.dart';
 import '../../domain/program.dart';
+import '../../domain/progression.dart';
 import '../../domain/session_plan.dart';
+import '../../domain/stats.dart';
+import '../../domain/units.dart';
 import '../onboarding/program_flow.dart';
+import '../session/exercise_history_sheet.dart';
 import '../session/session_launcher.dart';
+import '../stats/dashboard_screen.dart' show carried, weeklyBest;
 import '../workout/routine_editor_screen.dart';
+import 'home_cards.dart';
+import 'home_insight.dart';
 
-/// Ringkasan tujuh hari terakhir, dihitung dari riwayat.
+/// Ringkasan tujuh hari terakhir (dan tujuh hari sebelumnya), dihitung dari
+/// riwayat.
 class _Recent {
   _Recent(List<Workout> newestFirst, DateTime today) {
     final day = dateOnly(today);
     final weekAgo = isoDate(day.subtract(const Duration(days: 6)));
-    final recent = newestFirst.where((w) => w.date.compareTo(weekAgo) >= 0).toList();
-    final older = newestFirst.where((w) => w.date.compareTo(weekAgo) < 0).toList().reversed.toList();
-
+    final twoWeeksAgo = isoDate(day.subtract(const Duration(days: 13)));
     volume = 0;
-    for (final w in recent) {
-      volume += _volumeOf(w);
+    volumeBefore = 0;
+    for (final w in newestFirst) {
+      if (w.date.compareTo(weekAgo) >= 0) {
+        volume += _volumeOf(w);
+      } else if (w.date.compareTo(twoWeeksAgo) >= 0) {
+        volumeBefore += _volumeOf(w);
+      }
     }
-
-    // Gerakan yang e1RM-nya minggu ini melewati semua sesi sebelumnya.
-    final ids = {for (final w in recent) for (final e in w.entries) e.exerciseId};
-    final all = newestFirst.reversed.toList();
-    e1rmUp = ids.where((id) {
-      final now = best1RM(all, id);
-      final before = best1RM(older, id);
-      return now != null && before != null && now.est > before.est;
-    }).length;
-
     final last = lastTrainingDay(newestFirst);
     daysSince = last == null ? null : day.difference(last).inDays;
   }
 
   late double volume;
-  late int e1rmUp;
+  late double volumeBefore;
   late int? daysSince;
 }
 
@@ -86,40 +81,51 @@ int _workingSetsOf(Workout w) {
 }
 
 /// Volume dalam satuan tampilan sebagai teks: di bawah 1000 ditulis utuh
-/// ("960 kg"), di atasnya diringkas ("1.2 t"). Satu fungsi supaya blok
-/// statistik dan sheet per hari menulis angka yang sama untuk sesi yang sama.
+/// ("960 kg"), di atasnya diringkas ("1.2 t"). Satu fungsi supaya sheet per
+/// hari dan kartu lain menulis angka yang sama untuk sesi yang sama.
 String _volumeLabel(BuildContext context, double shownVolume) => shownVolume >= 1000
     ? volumeText(shownVolume, context.unit)
     : '${formatDelta(shownVolume.roundToDouble())} ${context.unitLabel}';
 
-/// Lebar mulai dari mana tata letaknya berubah: kisi jalan pintas jadi satu
-/// baris empat kolom. Sama dengan ambang "phone width" di `main.dart`.
-const _wideBreakpoint = 600.0;
+/// Hari pertama minggu yang memuat [day], menurut [weekStartsOn] (1 = Senin).
+DateTime weekStart(DateTime day, int weekStartsOn) {
+  final d = dateOnly(day);
+  final back = (d.weekday - weekStartsOn + 7) % 7;
+  return d.subtract(Duration(days: back));
+}
 
-/// Kolom statistik selebar ini baru muat teks "ketuk untuk statistik" tanpa
-/// terpotong; di bawahnya, chevron di blok yang jadi petunjuknya.
-// Blok statistik punya padding 14 di kiri-kanan, dan "Ketuk untuk statistik"
-// selebar ±125 dp di Inter 11. Di bawah ini hint terpotong jadi "Ketuk untuk
-// stati…", yang lebih buruk daripada tidak ada hint.
-const _hintMinColumn = 165.0;
+/// Set kerja yang direncanakan program dalam seminggu: rotasi = satu putaran
+/// penuh, hari tetap = jumlah set rutinitas tiap hari latihannya.
+int _plannedSets(Program program, List<Routine> routines) {
+  final list = programRoutines(program, routines);
+  if (list.isEmpty) return 0;
+  if (program.mode == ProgramMode.weekday) {
+    final days = [...program.days]..sort();
+    var n = 0;
+    for (var i = 0; i < days.length; i++) {
+      n += list[i % list.length].setCount;
+    }
+    return n;
+  }
+  return list.fold(0, (a, r) => a + r.setCount);
+}
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key, this.email, this.onOpenProfile, this.onOpenTab});
 
-  /// Email akun, untuk inisial avatar di pojok header (seperti referensi).
+  /// Email akun, untuk inisial avatar di pojok header.
   final String? email;
 
-  /// Avatar diketuk → tab Profil.
+  /// Avatar diketuk → halaman Profil.
   final VoidCallback? onOpenProfile;
 
-  /// Pindah tab: 0 Workout · 1 Home · 2 Stats · 3 History · 4 Profile.
-  /// Blok statistik dan sheet hari memakainya supaya angka yang dilihat di
-  /// sini bisa langsung ditelusuri, bukan cuma dibaca.
+  /// Pindah tab: 1 Riwayat · 2 Program · 3 Statistik. Tautan seksi dan sheet
+  /// hari memakainya supaya angka yang dilihat di sini bisa ditelusuri.
   final ValueChanged<int>? onOpenTab;
 
-  /// Tarik ke bawah = sinkron sekarang, lalu satu kalimat hasilnya. Tanpa
-  /// server pun tarikannya tetap "berhasil" — yang dikatakan cuma bahwa
-  /// tidak ada server, bukan error.
+  /// Tarik ke bawah (atau ketuk pil sinkron) = sinkron sekarang, lalu satu
+  /// kalimat hasilnya. Tanpa server pun tarikannya tetap "berhasil" — yang
+  /// dikatakan cuma bahwa tidak ada server, bukan error.
   Future<void> _refresh(BuildContext context) async {
     final store = WorkoutScope.read(context);
     final messenger = ScaffoldMessenger.maybeOf(context);
@@ -138,6 +144,37 @@ class HomeScreen extends StatelessWidget {
       ..showSnackBar(SnackBar(content: Text(msg), duration: const Duration(seconds: 2)));
   }
 
+  /// "2 menit lalu" dari waktu sinkron terakhir; kosong kalau belum pernah.
+  static String _ago(Strings t, DateTime? at) {
+    if (at == null) return '';
+    final d = DateTime.now().difference(at);
+    if (d.inMinutes < 1) return t.justNow;
+    if (d.inHours < 1) return t.minutesAgo(d.inMinutes);
+    if (d.inDays < 1) return t.hoursAgo(d.inHours);
+    return t.daysAgoShort(d.inDays);
+  }
+
+  Future<void> _start(BuildContext context, Routine routine) async {
+    if (routine.exercises.isNotEmpty) {
+      await openRoutineSession(context, routine);
+      return;
+    }
+    // Rutinitas kosong tidak bisa dimulai — buka editornya dulu.
+    final store = context.workouts;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.t.emptyRoutineHint)));
+    final result = await Navigator.of(context).push<RoutineEditorResult>(
+      MaterialPageRoute(builder: (_) => RoutineEditorScreen(routine: routine)),
+    );
+    switch (result) {
+      case RoutineSaved(:final routine):
+        await store.saveRoutine(routine);
+      case RoutineDeleted():
+        await store.deleteRoutine(routine.id);
+      case null:
+        break;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = context.gym;
@@ -145,41 +182,9 @@ class HomeScreen extends StatelessWidget {
     final store = context.workouts;
     final now = DateTime.now();
     final recent = _Recent(store.workouts, now);
-    final hasProgram = store.program != null;
     final program = store.program;
     final next = store.nextSessionOn(now);
-
-    // Kisi 2×2 seperti "My Fitness Profile / My Nutrition Goals": jalan
-    // pintas ke hal yang dulu tersembunyi di dalam kartu atau tab lain.
-    final tiles = <Widget>[
-      _QuickTile(
-        label: t.otherSession,
-        // Kalender: memilih sesi hari lain dari program, bukan yang dijadwalkan.
-        icon: GymIcons.calendar,
-        onTap: !hasProgram || next == null
-            ? null
-            : () async {
-                final picked = await pickOtherRoutine(context, program: store.program!, current: next.routine);
-                if (picked != null && context.mounted) await openRoutineSession(context, picked);
-              },
-      ),
-      _QuickTile(
-        label: t.freestyle,
-        // Stopwatch: sesi tanpa rencana — cukup mulai jam lalu angkat.
-        icon: GymIcons.alarm,
-        onTap: () => openFreestyleSession(context, t.freestyle),
-      ),
-      _QuickTile(
-        label: t.exerciseLibrary,
-        icon: GymIcons.dumbbell,
-        onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ExerciseLibraryScreen())),
-      ),
-      _QuickTile(
-        label: t.dashboard,
-        icon: GymIcons.chart,
-        onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DashboardScreen())),
-      ),
-    ];
+    final unit = context.unit;
 
     // Pembilang dan penyebut harus menghitung hal yang sama: sesi dari
     // program. Sesi bebas tetap tercatat di strip hari, tapi bukan bagian
@@ -187,227 +192,347 @@ class HomeScreen extends StatelessWidget {
     final programNames = program == null
         ? const <String>{}
         : {for (final r in programRoutines(program, store.routines)) r.name};
-    final weekDone = program == null
-        ? _thisWeek(store.workouts, now, store.settings.weekStartsOn)
-        : _thisWeek([for (final w in store.workouts) if (programNames.contains(w.routine)) w], now,
-            store.settings.weekStartsOn);
+    final thisWeek = _thisWeek(store.workouts, now, store.settings.weekStartsOn);
+    final weekDone = program == null ? thisWeek.length : thisWeek.where((w) => programNames.contains(w.routine)).length;
     // Rencana seminggu: hari tetap = jumlah hari latihannya; rotasi = satu
-    // putaran penuh. Minimal satu supaya bilahnya tidak membagi dengan nol.
+    // putaran penuh. Minimal satu supaya cincinnya tidak membagi dengan nol.
     final weekPlanned = program == null
         ? 0
         : (program.mode == ProgramMode.weekday ? program.days.length : program.order.length).clamp(1, 99);
-
-    final shownVolume = kgTo(recent.volume, context.unit);
+    final setsDone = thisWeek.fold(0, (a, w) => a + _workingSetsOf(w));
+    final setsPlanned = program == null ? 0 : _plannedSets(program, store.routines);
 
     return RefreshIndicator(
       color: c.accent,
       backgroundColor: c.surface,
       onRefresh: () => _refresh(context),
-      child: LayoutBuilder(builder: (context, box) {
-        final wide = box.maxWidth >= _wideBreakpoint;
-        // Lebar satu blok statistik: lebar layar dikurangi padding tepi dan
-        // dua celah, dibagi tiga.
-        final statColumn = (box.maxWidth - 32 - 20) / 3;
-        final showHint = statColumn >= _hintMinColumn;
-        final statHeight = showHint ? 148.0 : 138.0;
-
-        return ListView(
-          // Selalu bisa ditarik, walau isinya lebih pendek dari layar —
-          // tanpa ini tarik-untuk-sinkron mati di HP yang layarnya tinggi.
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-          children: [
-            ScreenHeader(
-              subtitle: '${t.weekdayLong(now.weekday)} · ${now.day} ${t.monthShort(now.month)}',
-              title: t.nextUp,
-              actions: [
-                if (email != null)
-                  AvatarCircle(text: initialsOf(email!), tooltip: t.openProfile, onTap: onOpenProfile),
-              ],
-            ),
-            if (store.loaded && store.draft != null) ...[
-              Reveal(scale: true, child: _ResumeCard(draft: store.draft!)),
-              const SizedBox(height: 12),
-            ],
-            if (!store.loaded)
-              const SizedBox(height: 200)
-            else if (program == null || next == null)
-              Reveal(child: _NoProgramCard(hasProgram: hasProgram))
-            else
-              Reveal(child: _NextSessionCard(next: next, program: program)),
-            const SizedBox(height: 18),
-            if (wide)
-              // Layar lebar: keempat jalan pintas muat satu baris, dan dua
-              // baris ubin gemuk di tablet hanya membuang tinggi.
-              Row(children: [
-                for (final (i, tile) in tiles.indexed) ...[
-                  if (i > 0) const SizedBox(width: 10),
-                  Expanded(child: Reveal(index: i + 1, child: tile)),
-                ],
-              ])
-            else ...[
-              Row(children: [
-                Expanded(child: Reveal(index: 1, child: tiles[0])),
-                const SizedBox(width: 10),
-                Expanded(child: Reveal(index: 2, child: tiles[1])),
-              ]),
-              const SizedBox(height: 10),
-              Row(children: [
-                Expanded(child: Reveal(index: 3, child: tiles[2])),
-                const SizedBox(width: 10),
-                Expanded(child: Reveal(index: 4, child: tiles[3])),
-              ]),
-            ],
-            const SizedBox(height: 22),
-            Reveal(
-              index: 5,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(child: Text(t.thisWeek, style: Theme.of(context).textTheme.titleLarge)),
-                      // Dengan program, angkanya dibanding rencana ("2 dari 3
-                      // sesi"); tanpa program cuma jumlahnya. Satu angka di
-                      // kanan judul, bukan dua yang menyebut hal yang sama.
-                      Text(
-                        program == null ? t.sessionsCount(weekDone) : t.weekProgress(weekDone, weekPlanned),
-                        style: TextStyle(
-                            fontSize: 12.5, color: c.text2, fontFeatures: const [FontFeature.tabularFigures()]),
+      child: FutureBuilder<ExerciseCatalog>(
+        future: ExerciseCatalog.load(),
+        builder: (context, snap) {
+          final catalog = snap.data;
+          final insight = _insight(context, catalog, next, program, unit);
+          return Stack(
+            children: [
+              // Dua wash radial di balik isi — hangat di kiri atas, violet di
+              // kanan atas — supaya latar tidak sekadar abu rata.
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: RadialGradient(
+                        center: const Alignment(-0.7, -1),
+                        radius: 1.1,
+                        colors: [c.washA, c.washA.withValues(alpha: 0)],
                       ),
-                    ],
+                    ),
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: RadialGradient(
+                          center: const Alignment(0.95, -0.95),
+                          radius: 0.9,
+                          colors: [c.washB, c.washB.withValues(alpha: 0)],
+                        ),
+                      ),
+                    ),
                   ),
-                  if (program != null) ...[
-                    const SizedBox(height: 10),
-                    _WeekBar(done: weekDone, planned: weekPlanned),
+                ),
+              ),
+              ListView(
+                // Selalu bisa ditarik, walau isinya lebih pendek dari layar —
+                // tanpa ini tarik-untuk-sinkron mati di HP yang layarnya tinggi.
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+                children: [
+                  _header(context, now),
+                  const SizedBox(height: 18),
+                  Reveal(child: _statusPills(context, program, next)),
+                  const SizedBox(height: 20),
+                  if (store.loaded && store.draft != null) ...[
+                    Reveal(index: 1, scale: true, child: _ResumeCard(draft: store.draft!)),
+                    const SizedBox(height: 20),
                   ],
+                  if (!store.loaded)
+                    const SizedBox(height: 200)
+                  else
+                    Reveal(
+                      index: 1,
+                      child: RingsCard(
+                        sessionsDone: weekDone,
+                        sessionsPlanned: weekPlanned,
+                        setsDone: setsDone,
+                        setsPlanned: setsPlanned,
+                        volumeNow: recent.volume,
+                        volumeBefore: recent.volumeBefore,
+                        insightTitle: insight.title,
+                        insightBody: insight.body,
+                        insightIcon: next == null
+                            ? GymIcons.flag
+                            : next.early
+                                ? GymIcons.moon
+                                : GymIcons.arrowUpRight,
+                      ),
+                    ),
+                  const SizedBox(height: 20),
+                  Reveal(
+                    index: 2,
+                    child: SectionTitle(
+                      t.nextSessionTitle,
+                      action: program == null || next == null ? null : t.pickOther,
+                      onAction: program == null || next == null
+                          ? null
+                          : () async {
+                              final picked = await pickOtherRoutine(context, program: program, current: next.routine);
+                              if (picked != null && context.mounted) await _start(context, picked);
+                            },
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  if (!store.loaded)
+                    const SizedBox.shrink()
+                  else if (program == null || next == null)
+                    Reveal(index: 3, child: _NoProgramCard(hasProgram: program != null))
+                  else
+                    Reveal(index: 3, child: _nextSession(context, catalog, next, program, unit)),
+                  const SizedBox(height: 20),
+                  Reveal(
+                    index: 4,
+                    child: SectionTitle(
+                      t.thisWeek,
+                      // Dengan program, angkanya dibanding rencana ("2 dari 3
+                      // sesi"); tanpa program cuma jumlahnya. Ketuk → Riwayat.
+                      action: program == null ? t.sessionsCount(weekDone) : t.weekProgress(weekDone, weekPlanned),
+                      onAction: onOpenTab == null ? null : () => onOpenTab!(1),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Reveal(
+                    index: 5,
+                    child: _WeekStrip(
+                      history: store.workouts,
+                      today: now,
+                      program: program,
+                      routines: store.routines,
+                      weekStartsOn: store.settings.weekStartsOn,
+                      onViewHistory: onOpenTab == null ? null : () => onOpenTab!(1),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Reveal(
+                    index: 6,
+                    child: SectionTitle(
+                      t.strengthProgress,
+                      action: t.seeAllShort,
+                      onAction: onOpenTab == null ? null : () => onOpenTab!(3),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Reveal(index: 7, child: _strength(context, catalog, unit)),
                 ],
               ),
-            ),
-            const SizedBox(height: 12),
-            _WeekStrip(
-              history: store.workouts,
-              today: now,
-              program: program,
-              routines: store.routines,
-              weekStartsOn: store.settings.weekStartsOn,
-              onViewHistory: onOpenTab == null ? null : () => onOpenTab!(1),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: Reveal(
-                    index: 6,
-                    child: StatBlock(
-                      height: statHeight,
-                      label: t.volume7d,
-                      icon: GymIcons.scale,
-                      color: c.hues.orange,
-                      hint: showHint ? t.tapForStats : null,
-                      value: _volumeLabel(context, shownVolume),
-                      valueWidget: CountUp(
-                        shownVolume,
-                        delay: GymMotion.stagger * 6,
-                        style: StatBlock.valueStyle(context),
-                        format: (v) => _volumeLabel(context, v),
-                      ),
-                      onTap: onOpenTab == null ? null : () => onOpenTab!(3),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Reveal(
-                    index: 7,
-                    child: StatBlock(
-                      height: statHeight,
-                      label: t.e1rmUp,
-                      icon: GymIcons.chart,
-                      color: c.hues.violet,
-                      hint: showHint ? t.tapForStats : null,
-                      value: recent.e1rmUp > 0 ? '+${recent.e1rmUp}' : '0',
-                      valueWidget: CountUp(
-                        recent.e1rmUp.toDouble(),
-                        delay: GymMotion.stagger * 7,
-                        prefix: recent.e1rmUp > 0 ? '+' : '',
-                        style: StatBlock.valueStyle(context),
-                      ),
-                      onTap: onOpenTab == null ? null : () => onOpenTab!(3),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Reveal(
-                    index: 8,
-                    child: StatBlock(
-                      height: statHeight,
-                      label: t.sinceLast,
-                      icon: GymIcons.clock,
-                      color: c.hues.cyan,
-                      hint: showHint ? t.tapForHistory : null,
-                      value: recent.daysSince == null ? '—' : t.daysShort(recent.daysSince!),
-                      onTap: onOpenTab == null ? null : () => onOpenTab!(1),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        );
-      }),
-    );
-  }
-
-  /// Sesi yang tercatat sejak awal minggu ini (setelan "Minggu mulai").
-  static int _thisWeek(List<Workout> history, DateTime today, int weekStartsOn) {
-    final from = isoDate(weekStart(today, weekStartsOn));
-    return history.where((w) => w.date.compareTo(from) >= 0).length;
-  }
-}
-
-/// Hari pertama minggu yang memuat [day], menurut [weekStartsOn] (1 = Senin).
-DateTime weekStart(DateTime day, int weekStartsOn) {
-  final d = dateOnly(day);
-  final back = (d.weekday - weekStartsOn + 7) % 7;
-  return d.subtract(Duration(days: back));
-}
-
-/// Bilah tipis "sekian dari sekian sesi minggu ini". Isinya bergerak ke
-/// posisinya saat pertama tampil dan saat sesi baru tercatat — itulah momen
-/// angkanya berubah, dan gerak menandai perubahan itu.
-class _WeekBar extends StatelessWidget {
-  const _WeekBar({required this.done, required this.planned});
-
-  final int done;
-  final int planned;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.gym;
-    final frac = planned <= 0 ? 0.0 : (done / planned).clamp(0.0, 1.0);
-    return Semantics(
-      label: context.t.weekProgress(done, planned),
-      child: Container(
-        height: 6,
-        alignment: Alignment.centerLeft,
-        clipBehavior: Clip.antiAlias,
-        decoration: BoxDecoration(color: c.surface2, borderRadius: BorderRadius.circular(GymRadius.pill)),
-        child: AnimatedValue(
-          value: frac,
-          // Sejalan dengan Reveal judul "Minggu ini" (indeks 5).
-          delay: GymMotion.stagger * 5,
-          builder: (context, v) => FractionallySizedBox(
-            widthFactor: v,
-            heightFactor: 1,
-            child: DecoratedBox(
-              decoration: BoxDecoration(color: c.accentFill, borderRadius: BorderRadius.circular(GymRadius.pill)),
-            ),
-          ),
-        ),
+            ],
+          );
+        },
       ),
     );
+  }
+
+  Widget _header(BuildContext context, DateTime now) {
+    final c = context.gym;
+    final t = context.t;
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            '${t.weekdayLong(now.weekday)}, ${now.day} ${t.monthLong(now.month)}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 21, fontWeight: FontWeight.w700, letterSpacing: -0.3, color: c.text),
+          ),
+        ),
+        if (email != null)
+          AvatarCircle(text: initialsOf(email!), tooltip: t.openProfile, onTap: onOpenProfile),
+      ],
+    );
+  }
+
+  Widget _statusPills(BuildContext context, Program? program, NextSession? next) {
+    final c = context.gym;
+    final t = context.t;
+    final store = context.workouts;
+    final String programSub;
+    if (program == null) {
+      programSub = '';
+    } else if (program.mode == ProgramMode.weekday) {
+      programSub = t.weekdayCount([for (final d in [...program.days]..sort()) t.weekdayShort(d)].join(', '));
+    } else {
+      programSub = t.rotationCount(programRoutines(program, store.routines).length);
+    }
+    final (syncTitle, syncSub, syncIcon, syncBg) = !store.hasBackend
+        ? (t.syncNoServerPill, '', GymIcons.cloudOff, c.text3)
+        : switch (store.syncStatus) {
+            SyncStatus.synced => (t.syncedPill, _ago(t, store.lastSyncedAt), GymIcons.cloudCheck, c.doneInk),
+            SyncStatus.syncing => (t.syncing, '', GymIcons.sync, c.accentFill),
+            SyncStatus.failed => (t.syncNotYet, t.syncFailed, GymIcons.cloudOff, c.warn),
+            SyncStatus.noSession => (t.syncNotYet, t.syncNoSession, GymIcons.cloudOff, c.warn),
+            SyncStatus.idle => (t.syncNotYet, _ago(t, store.lastSyncedAt), GymIcons.cloud, c.text3),
+          };
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          flex: 3,
+          child: StatusPill(
+            icon: GymIcons.swap,
+            iconBg: c.accentFill,
+            title: program?.name ?? t.pickProgramPill,
+            subtitle: programSub,
+            onTap: program == null ? () => chooseProgram(context) : () => onOpenTab?.call(2),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          flex: 2,
+          child: StatusPill(
+            icon: syncIcon,
+            iconBg: syncBg,
+            title: syncTitle,
+            subtitle: syncSub,
+            spinning: store.hasBackend && store.syncStatus == SyncStatus.syncing,
+            onTap: store.hasBackend ? () => _refresh(context) : null,
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Target tiap gerakan sesi berikutnya — fungsi yang sama dengan yang
+  /// menyusun sesi, supaya angka di sini persis yang akan terbuka nanti.
+  List<(ExerciseConfig cfgIn, PlannedExercise plan)> _plans(BuildContext context, Routine routine, WeightUnit unit) {
+    final history = historyIn(context.workouts.chronological, unit);
+    return [
+      for (final cfg in routine.exercises)
+        (configIn(cfg, unit), planExercise(configIn(cfg, unit), history, routineDefault: routine.policy, unit: unit.label)),
+    ];
+  }
+
+  HomeInsight _insight(BuildContext context, ExerciseCatalog? catalog, NextSession? next, Program? program, WeightUnit unit) {
+    final t = context.t;
+    final store = context.workouts;
+    if (next == null) return homeInsight(t: t, next: null, weekdayMode: false, targets: const [], daysSince: null);
+    final targets = [
+      for (final (cfg, plan) in _plans(context, next.routine, unit))
+        (catalog?.nameOf(cfg.exerciseId) ?? '…', plan.prescription.kind),
+    ];
+    final last = lastTrainingDay([for (final w in store.workouts) if (w.routine == next.routine.name) w]);
+    return homeInsight(
+      t: t,
+      next: next,
+      weekdayMode: program?.mode == ProgramMode.weekday,
+      targets: targets,
+      daysSince: last == null ? null : dateOnly(DateTime.now()).difference(last).inDays,
+    );
+  }
+
+  Widget _nextSession(BuildContext context, ExerciseCatalog? catalog, NextSession next, Program program, WeightUnit unit) {
+    final c = context.gym;
+    final t = context.t;
+    final store = context.workouts;
+    final routine = next.routine;
+    final unitLabel = context.unitLabel;
+    final last = lastTrainingDay([for (final w in store.workouts) if (w.routine == routine.name) w]);
+    final sinceText = last == null ? t.notTrainedYet : t.daysAgoShort(dateOnly(DateTime.now()).difference(last).inDays);
+    final tag = switch (next.daysAway) {
+      0 => t.dueToday,
+      1 => t.dueTomorrow,
+      _ => t.weekdayShort(next.due.weekday),
+    };
+    const shown = 4;
+    final plans = _plans(context, routine, unit);
+    final rows = <NextRow>[];
+    for (final (cfg, plan) in plans.take(shown)) {
+      final work = plan.sets.firstWhere((s) => !s.isWarmup, orElse: () => const SetRow());
+      final target = work.weight > 0
+          ? '${formatWeight(work.weight)} $unitLabel × ${work.reps}'
+          : '${plan.sets.where((s) => !s.isWarmup).length} × ${work.reps}';
+      String? change;
+      var tone = ChangeTone.up;
+      switch (plan.prescription.kind) {
+        case PrescriptionKind.up:
+          if (work.weight > cfg.weight) {
+            change = '+${formatDelta(double.parse((work.weight - cfg.weight).toStringAsFixed(2)))} $unitLabel';
+          } else if (work.reps > cfg.reps) {
+            change = '+${work.reps - cfg.reps} rep';
+          }
+        case PrescriptionKind.deload:
+          change = t.deloadTag;
+          tone = ChangeTone.down;
+        case PrescriptionKind.first || PrescriptionKind.hold || PrescriptionKind.off:
+          break;
+      }
+      rows.add(NextRow(name: catalog?.nameOf(cfg.exerciseId) ?? '…', target: target, change: change, tone: tone));
+    }
+    final dayName = t.weekdayLong(next.due.weekday);
+    return NextSessionCard(
+      routineName: routine.name,
+      meta: '${t.routineOverview(routine.exercises.length, routine.setCount)} · $sinceText',
+      tag: tag,
+      rows: rows,
+      hiddenCount: routine.exercises.length - rows.length,
+      hue: c.hues.at(programRoutines(program, store.routines).indexWhere((r) => r.id == routine.id).clamp(0, 99)),
+      note: next.early
+          ? NoteBanner(
+              text: program.mode == ProgramMode.weekday ? t.nextTrainingDay(dayName) : t.recoverUntil(dayName),
+              icon: GymIcons.moon,
+              tone: c.warn,
+            )
+          : null,
+      onStart: () => _start(context, routine),
+      onSkip: () async {
+        final messenger = ScaffoldMessenger.of(context);
+        final msg = t.skipped;
+        await store.skipNext(DateTime.now());
+        messenger.showSnackBar(SnackBar(content: Text(msg)));
+      },
+    );
+  }
+
+  Widget _strength(BuildContext context, ExerciseCatalog? catalog, WeightUnit unit) {
+    final t = context.t;
+    final now = DateTime.now();
+    final history = historyIn(context.workouts.workouts, unit);
+    final unitLabel = context.unitLabel;
+    final rows = <StrengthRow>[];
+    for (final m in strengthByMovement(history, now, count: 3)) {
+      final ex = catalog?.byId(m.exerciseId);
+      final name = catalog?.nameOf(m.exerciseId) ?? '…';
+      final equipment = ex == null ? null : _capitalise(t.catalogue(ex.equipment));
+      final delta = double.parse(m.delta.toStringAsFixed(1));
+      rows.add(StrengthRow(
+        name: name,
+        meta: [?equipment, 'e1RM ${formatDelta(double.parse(m.best.toStringAsFixed(1)))} $unitLabel'].join(' · '),
+        values: carried(weeklyBest(history, m.exerciseId, now)),
+        delta: delta > 0
+            ? '+${formatDelta(delta)} $unitLabel'
+            : delta < 0
+                ? '${formatDelta(delta)} $unitLabel'
+                : t.holdTag,
+        tone: delta > 0
+            ? ChangeTone.up
+            : delta < 0
+                ? ChangeTone.down
+                : ChangeTone.neutral,
+        onTap: () => showExerciseHistory(context, exerciseId: m.exerciseId, name: name),
+      ));
+    }
+    return StrengthCard(rows: rows);
+  }
+
+  static String _capitalise(String s) => s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
+
+  /// Sesi yang tercatat sejak awal minggu ini (setelan "Minggu mulai").
+  static List<Workout> _thisWeek(List<Workout> history, DateTime today, int weekStartsOn) {
+    final from = isoDate(weekStart(today, weekStartsOn));
+    return [for (final w in history) if (w.date.compareTo(from) >= 0) w];
   }
 }
 
@@ -430,19 +555,17 @@ class _ResumeCard extends StatelessWidget {
     }
     final minutes = (((draft['elapsed'] as num?)?.toInt() ?? 0) / 60).round();
     return GymCard(
-      radius: GymRadius.large,
-      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
             Icon(GymIcons.play, size: 18, color: c.warn),
             const SizedBox(width: 8),
-            Expanded(child: SectionLabel(t.resumeTitle)),
+            Expanded(child: Text(t.resumeTitle, style: Theme.of(context).textTheme.titleMedium)),
           ]),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           Text(t.resumeDetail(draft['name'] as String? ?? '', logged, minutes),
-              style: TextStyle(fontSize: 13.5, color: c.text)),
+              style: TextStyle(fontSize: 13.5, height: 1.35, color: c.text2)),
           const SizedBox(height: 12),
           Row(children: [
             Expanded(
@@ -491,8 +614,6 @@ class _NoProgramCard extends StatelessWidget {
     final c = context.gym;
     final t = context.t;
     return GymCard(
-      radius: GymRadius.hero,
-      padding: const EdgeInsets.all(18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -515,214 +636,6 @@ class _NoProgramCard extends StatelessWidget {
   }
 }
 
-class _NextSessionCard extends StatelessWidget {
-  const _NextSessionCard({required this.next, required this.program});
-
-  final NextSession next;
-  final Program program;
-
-  Future<void> _start(BuildContext context, [Routine? pick]) async {
-    final routine = pick ?? next.routine;
-    if (routine.exercises.isNotEmpty) {
-      await openRoutineSession(context, routine);
-      return;
-    }
-    final store = context.workouts;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.t.emptyRoutineHint)));
-    final result = await Navigator.of(context).push<RoutineEditorResult>(
-      MaterialPageRoute(builder: (_) => RoutineEditorScreen(routine: routine)),
-    );
-    switch (result) {
-      case RoutineSaved(:final routine):
-        await store.saveRoutine(routine);
-      case RoutineDeleted():
-        await store.deleteRoutine(routine.id);
-      case null:
-        break;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.gym;
-    final t = context.t;
-    final store = context.workouts;
-    final routine = next.routine;
-    final history = store.chronological;
-
-    final dueLabel = switch (next.daysAway) {
-      0 => t.dueToday,
-      1 => t.dueTomorrow,
-      _ => t.dueOn(t.weekdayShort(next.due.weekday).toUpperCase()),
-    };
-    final dayName = t.weekdayLong(next.due.weekday);
-
-    // Kapan rutinitas ini terakhir dilatih — dicocokkan lewat nama, karena
-    // itulah yang tersimpan di setiap sesi.
-    final lastOfRoutine = lastTrainingDay([for (final w in store.workouts) if (w.routine == routine.name) w]);
-    final sinceText = lastOfRoutine == null
-        ? t.notTrainedYet
-        : t.lastTrained(dateOnly(DateTime.now()).difference(lastOfRoutine).inDays);
-
-    const shown = 3;
-    final preview = routine.exercises.take(shown).toList();
-    final hidden = routine.exercises.length - preview.length;
-
-    return GymCard(
-      radius: GymRadius.hero,
-      padding: const EdgeInsets.all(18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Tata letak kartu "Body yoga" di referensi: teks dan angka-angka
-          // kecil di kiri, figur yang dipotong tepi kartu di kanan.
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(children: [
-                      Pill(
-                        color: next.early ? c.surface2 : c.accentSoft,
-                        textColor: next.early ? c.text2 : c.accent,
-                        child: Text(dueLabel, style: const TextStyle(fontSize: 10, letterSpacing: 0.8)),
-                      ),
-                    ]),
-                    const SizedBox(height: 10),
-                    Text(routine.name, maxLines: 2, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.displaySmall),
-                    const SizedBox(height: 4),
-                    Text(
-                      program.mode == ProgramMode.weekday ? t.weekdayOf(program.name) : t.rotationOf(program.name),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 13, color: c.text2),
-                    ),
-                    const SizedBox(height: 12),
-                    Builder(builder: (context) {
-                      final parts = t.routineOverview(routine.exercises.length, routine.setCount).split(' · ');
-                      return Wrap(
-                        spacing: 14,
-                        runSpacing: 6,
-                        children: [
-                          _MiniStat(icon: GymIcons.dumbbell, text: parts.first, hue: c.hues.orange),
-                          if (parts.length > 1) _MiniStat(icon: GymIcons.menu, text: parts[1], hue: c.hues.pink),
-                          _MiniStat(icon: GymIcons.clock, text: sinceText, hue: c.hues.cyan),
-                        ],
-                      );
-                    }),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 6),
-              const _HeroFigure(),
-            ],
-          ),
-          if (next.early) ...[
-            const SizedBox(height: 10),
-            NoteBanner(
-              text: program.mode == ProgramMode.weekday ? t.nextTrainingDay(dayName) : t.recoverUntil(dayName),
-              icon: GymIcons.moon,
-              tone: c.warn,
-            ),
-          ],
-          if (preview.isNotEmpty) ...[
-            const SizedBox(height: 14),
-            FutureBuilder<ExerciseCatalog>(
-              future: ExerciseCatalog.load(),
-              builder: (context, snap) {
-                final catalog = snap.data;
-                return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: c.bgNested,
-                    borderRadius: BorderRadius.circular(GymRadius.control),
-                  ),
-                  child: Column(
-                    children: [
-                      for (final cfg in preview)
-                        Builder(builder: (context) {
-                          // Target yang sama persis dengan yang akan terbuka
-                          // di layar sesi — dihitung dengan fungsi yang sama.
-                          final unit = context.unit;
-                          final plan = planExercise(configIn(cfg, unit), historyIn(history, unit),
-                              routineDefault: routine.policy, unit: unit.label);
-                          final work = plan.sets.firstWhere((s) => !s.isWarmup, orElse: () => const SetRow());
-                          final target = work.weight > 0
-                              ? '${formatWeight(work.weight)} ${context.unitLabel} × ${work.reps}'
-                              : '${plan.sets.where((s) => !s.isWarmup).length} × ${work.reps}';
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 8),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Text(catalog?.nameOf(cfg.exerciseId) ?? '…',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: Theme.of(context).textTheme.bodyLarge),
-                                ),
-                                const SizedBox(width: 8),
-                                Text(target,
-                                    style: TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600,
-                                        color: c.text2,
-                                        fontFeatures: const [FontFeature.tabularFigures()])),
-                              ],
-                            ),
-                          );
-                        }),
-                      if (hidden > 0)
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
-                            child: Text(t.moreItems(hidden), style: TextStyle(fontSize: 12, color: c.text3)),
-                          ),
-                        ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ],
-          const SizedBox(height: 16),
-          // "Pilih sesi lain" dan "Bebas" ada di kisi aksi cepat di bawah
-          // kartu; di sini tinggal mulai dan lewati, seperti tombol "Play"
-          // tunggal di kartu referensi. GymButton utama sudah mengecil saat
-          // ditekan dan bergetar (GymHaptics.confirm) — tidak perlu dibungkus
-          // lagi.
-          Row(
-            children: [
-              Expanded(
-                flex: 3,
-                child: GymButton(label: t.startSession, icon: GymIcons.play, onPressed: () => _start(context)),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                flex: 2,
-                child: GymButton(
-                  label: t.skip,
-                  icon: GymIcons.skip,
-                  tone: GymButtonTone.neutral,
-                  shape: GymButtonShape.pill,
-                  onPressed: () async {
-                    final messenger = ScaffoldMessenger.of(context);
-                    final msg = t.skipped;
-                    await store.skipNext(DateTime.now());
-                    messenger.showSnackBar(SnackBar(content: Text(msg)));
-                  },
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 /// Sheet "hari ini latihan apa?": semua rutinitas, urutan rotasi dulu.
 /// null kalau ditutup tanpa memilih.
 Future<Routine?> pickOtherRoutine(BuildContext context, {required Program program, required Routine current}) {
@@ -733,52 +646,64 @@ Future<Routine?> pickOtherRoutine(BuildContext context, {required Program progra
   return showModalBottomSheet<Routine>(
     context: context,
     isScrollControlled: true,
-    backgroundColor: context.gym.surface,
+    backgroundColor: context.gym.bg,
+    showDragHandle: true,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(GymRadius.sheet)),
     ),
     builder: (sheet) {
       final c = sheet.gym;
       final t = sheet.t;
-      Widget tile(Routine r, {String? note}) {
+      Widget tile(Routine r, int hueIndex, {String? note}) {
         final isNext = r.id == current.id;
         return Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: Material(
-            color: isNext ? c.accentSoft : c.bgNested,
-            borderRadius: BorderRadius.circular(GymRadius.control),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(GymRadius.control),
-              onTap: () => Navigator.of(sheet).pop(r),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(r.name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(sheet).textTheme.titleMedium),
-                          const SizedBox(height: 2),
-                          Text(
-                            [t.routineOverview(r.exercises.length, r.setCount), ?note].join(' · '),
-                            style: TextStyle(fontSize: 12.5, color: c.text2),
-                          ),
-                        ],
+          padding: const EdgeInsets.only(bottom: 10),
+          child: Container(
+            decoration: BoxDecoration(
+              color: c.surface,
+              borderRadius: BorderRadius.circular(GymRadius.tile),
+              border: isNext ? Border.all(color: c.accent, width: 1.5) : null,
+              boxShadow: [c.cardShadow],
+            ),
+            child: Material(
+              type: MaterialType.transparency,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(GymRadius.tile),
+                onTap: () => Navigator.of(sheet).pop(r),
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Row(
+                    children: [
+                      HueTile(icon: GymIcons.dumbbell, hue: c.hues.at(hueIndex), iconSize: 20),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(children: [
+                              Flexible(
+                                child: Text(r.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(sheet).textTheme.titleMedium),
+                              ),
+                              if (isNext) ...[
+                                const SizedBox(width: 8),
+                                Pill(color: c.accentSoft, textColor: c.accent, child: Text(t.next)),
+                              ],
+                            ]),
+                            const SizedBox(height: 2),
+                            Text(
+                              [t.routineOverview(r.exercises.length, r.setCount), ?note].join(' · '),
+                              style: TextStyle(fontSize: 12.5, color: c.text2),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                    if (isNext)
-                      Pill(
-                        color: c.accentFill,
-                        textColor: c.accentInk,
-                        child: Text(t.upNext, style: const TextStyle(fontSize: 10, letterSpacing: 0.8)),
-                      )
-                    else
-                      Icon(GymIcons.play, size: 20, color: c.text2),
-                  ],
+                      const SizedBox(width: 8),
+                      Icon(GymIcons.play, size: 20, color: isNext ? c.accent : c.text2),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -793,15 +718,15 @@ Future<Routine?> pickOtherRoutine(BuildContext context, {required Program progra
         builder: (_, scroll) => SafeArea(
           child: ListView(
             controller: scroll,
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
             children: [
-              SectionLabel(t.otherSessionTitle),
+              Text(t.otherSessionTitle, style: Theme.of(sheet).textTheme.titleLarge),
               const SizedBox(height: 4),
               Text(program.mode == ProgramMode.weekday ? t.otherSessionHintWeekday : t.otherSessionHint,
                   style: TextStyle(fontSize: 13, color: c.text2)),
               const SizedBox(height: 14),
-              for (final r in inProgram) tile(r),
-              for (final r in others) tile(r, note: t.notInProgram),
+              for (final (i, r) in inProgram.indexed) tile(r, i),
+              for (final (i, r) in others.indexed) tile(r, inProgram.length + i, note: t.notInProgram),
             ],
           ),
         ),
@@ -810,73 +735,8 @@ Future<Routine?> pickOtherRoutine(BuildContext context, {required Program progra
   );
 }
 
-/// Satu angka kecil berikon di kartu hero — "280 Burn" di referensi.
-class _MiniStat extends StatelessWidget {
-  const _MiniStat({required this.icon, required this.text, required this.hue});
-
-  final IconData icon;
-  final String text;
-  final Color hue;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.gym;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 15, color: hue),
-        const SizedBox(width: 6),
-        // "belum pernah dilatih" di kolom sempit sebelah figur: potong, jangan
-        // meluber.
-        Flexible(
-          child: Text(text,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: c.text)),
-        ),
-      ],
-    );
-  }
-}
-
-/// Figur di sisi kanan kartu hero: ilustrasi di atas lingkaran aksen,
-/// dipotong tepi kartu seperti figur "Body yoga" di referensi.
-class _HeroFigure extends StatelessWidget {
-  const _HeroFigure();
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.gym;
-    return SizedBox(
-      width: 124,
-      height: 160,
-      child: ClipRect(
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Positioned(
-              right: -30,
-              top: 14,
-              child: Container(
-                width: 140,
-                height: 140,
-                decoration: BoxDecoration(color: c.tint(c.accent), shape: BoxShape.circle),
-              ),
-            ),
-            const Positioned(
-              right: 0,
-              bottom: 2,
-              child: GymIllustration(GymArt.heroLift, height: 150),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Tujuh kotak hari minggu ini. Tiap kotak bisa diketuk: sheet kecil berisi
-/// sesi hari itu (atau rencananya), dengan jalan ke tab Riwayat.
+/// Kartu minggu ini: tujuh kolom hari. Tiap titik bisa diketuk: sheet kecil
+/// berisi sesi hari itu (atau rencananya), dengan jalan ke tab Riwayat.
 class _WeekStrip extends StatelessWidget {
   const _WeekStrip({
     required this.history,
@@ -916,7 +776,7 @@ class _WeekStrip extends StatelessWidget {
     final planned = _plannedName(d.weekday);
     return showModalBottomSheet<void>(
       context: context,
-      backgroundColor: context.gym.surface,
+      backgroundColor: context.gym.bg,
       showDragHandle: true,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
@@ -927,12 +787,13 @@ class _WeekStrip extends StatelessWidget {
         final t = sheet.t;
         return SafeArea(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                SectionLabel('${t.weekdayLong(d.weekday)} · ${d.day} ${t.monthShort(d.month)}'),
+                Text('${t.weekdayLong(d.weekday)} · ${d.day} ${t.monthShort(d.month)}',
+                    style: Theme.of(sheet).textTheme.titleLarge),
                 const SizedBox(height: 12),
                 if (sessions.isEmpty)
                   Text(t.noSessionsThatDay, style: TextStyle(fontSize: 13.5, color: c.text2))
@@ -978,96 +839,99 @@ class _WeekStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.gym;
+    final t = context.t;
     final day = dateOnly(today);
-    final monday = weekStart(day, weekStartsOn);
+    final first = weekStart(day, weekStartsOn);
     final trained = {for (final w in history) w.date};
-    final planned = program?.mode == ProgramMode.weekday ? program!.days.toSet() : const <int>{};
+    final plannedDays = program?.mode == ProgramMode.weekday ? program!.days.toSet() : const <int>{};
 
-    return Row(
-      children: [
-        for (var i = 0; i < 7; i++) ...[
-          if (i > 0) const SizedBox(width: 8),
-          Builder(builder: (context) {
-            final d = monday.add(Duration(days: i));
-            final iso = isoDate(d);
-            final done = trained.contains(iso);
-            final isToday = d == day;
-            final plannedDay = planned.contains(d.weekday) && !done;
-            // Warna dan bingkai lewat AnimatedContainer: begitu sesi hari ini
-            // tersimpan, kotaknya berganti warna dengan lembut, tidak
-            // melompat — itulah perubahan keadaan yang layak digerakkan.
-            final cell = AnimatedContainer(
-              key: ValueKey('home-day-$iso'),
-              duration: GymMotion.of(context, GymMotion.normal),
-              curve: GymMotion.curve,
-              height: 62,
-              decoration: BoxDecoration(
-                color: done ? c.accentFill : c.surface,
-                borderRadius: BorderRadius.circular(GymRadius.control),
-                border: Border.all(
-                  color: isToday && !done ? c.accent : Colors.transparent,
-                  width: 1.5,
-                ),
-              ),
-              // Material transparan di *dalam* kotak berwarna: riaknya
-              // tergambar di atas warna kotak, bukan tertutup olehnya.
-              child: Material(
-                type: MaterialType.transparency,
-                child: InkWell(
-                  onTap: () => _showDay(context, d),
-                  borderRadius: BorderRadius.circular(GymRadius.control),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        context.t.weekdayShort(d.weekday).substring(0, 1),
-                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: done ? c.accentInk : c.text2),
+    return GymCard(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 14),
+      child: Row(
+        children: [
+          for (var i = 0; i < 7; i++) ...[
+            if (i > 0) const SizedBox(width: 6),
+            Expanded(
+              child: Builder(builder: (context) {
+                final d = first.add(Duration(days: i));
+                final iso = isoDate(d);
+                final done = trained.contains(iso);
+                final isToday = d == day;
+                final planned = plannedDays.contains(d.weekday) && !done;
+                final Widget dot;
+                if (done) {
+                  // Hari yang sudah dilatih: titik kaca berwarna dengan centang.
+                  dot = GlassSurface(
+                    tone: GlassTone.tinted,
+                    radius: 18,
+                    width: 36,
+                    height: 36,
+                    shadow: false,
+                    child: const Center(child: Icon(GymIcons.check, size: 16, color: Colors.white)),
+                  );
+                } else {
+                  dot = AnimatedContainer(
+                    duration: GymMotion.of(context, GymMotion.normal),
+                    curve: GymMotion.curve,
+                    width: 36,
+                    height: 36,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: isToday ? c.accentSoft : c.surface2,
+                      shape: BoxShape.circle,
+                      border: isToday ? Border.all(color: c.accent, width: 1.5) : null,
+                    ),
+                    child: Text(
+                      '${d.day}',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: isToday ? c.accent : c.text,
+                        fontFeatures: const [FontFeature.tabularFigures()],
                       ),
-                      const SizedBox(height: 3),
-                      Text(
-                        '${d.day}',
-                        style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            color: done ? c.accentInk : c.text,
-                            fontFeatures: const [FontFeature.tabularFigures()]),
+                    ),
+                  );
+                }
+                return Semantics(
+                  button: true,
+                  label: '${t.weekdayLong(d.weekday)} ${d.day}',
+                  child: InkWell(
+                    key: ValueKey('home-day-$iso'),
+                    onTap: () => _showDay(context, d),
+                    borderRadius: BorderRadius.circular(GymRadius.control),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(t.weekdayShort(d.weekday).substring(0, 1),
+                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: c.text2)),
+                          const SizedBox(height: 6),
+                          dot,
+                          // Titik kecil untuk hari latihan yang direncanakan di
+                          // mode hari tetap — "hari ini libur" terlihat tanpa teks.
+                          SizedBox(
+                            height: 8,
+                            child: planned
+                                ? Center(
+                                    child: Container(
+                                      width: 4,
+                                      height: 4,
+                                      decoration: BoxDecoration(color: c.accent, shape: BoxShape.circle),
+                                    ),
+                                  )
+                                : null,
+                          ),
+                        ],
                       ),
-                      // Titik kecil untuk hari latihan yang direncanakan di mode
-                      // hari tetap — supaya "hari ini libur" terlihat tanpa teks.
-                      if (plannedDay)
-                        Container(
-                          margin: const EdgeInsets.only(top: 3),
-                          width: 4,
-                          height: 4,
-                          decoration: BoxDecoration(color: c.accent, shape: BoxShape.circle),
-                        ),
-                    ],
+                    ),
                   ),
-                ),
-              ),
-            );
-            // Hari yang sudah dilatih "muncul" membesar sedikit — hari
-            // kosong cukup ada; yang terisi yang layak diperkenalkan.
-            return Expanded(
-              child: PressScale(
-                scale: 0.94,
-                // Selalu dibungkus Reveal supaya pohonnya tetap sama saat
-                // hari berubah jadi "selesai" (sinkron menarik sesi baru):
-                // AnimatedContainer yang sama lalu menganimasikan warnanya,
-                // bukan kotak baru yang lenyap lalu muncul lagi.
-                child: Reveal(
-                  index: done ? i : 0,
-                  delay: done ? null : Duration.zero,
-                  // Tetap true: mengubahnya menyisipkan ScaleTransition
-                  // dan membangun ulang kotaknya dari nol.
-                  scale: true,
-                  child: cell,
-                ),
-              ),
-            );
-          }),
+                );
+              }),
+            ),
+          ],
         ],
-      ],
+      ),
     );
   }
 }
@@ -1086,10 +950,10 @@ class _DayRow extends StatelessWidget {
     final volume = _volumeLabel(context, kgTo(_volumeOf(workout), context.unit));
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(color: c.bgNested, borderRadius: BorderRadius.circular(GymRadius.control)),
+      decoration: BoxDecoration(color: c.surface, borderRadius: BorderRadius.circular(GymRadius.control)),
       child: Row(
         children: [
-          IconDisc(GymIcons.dumbbell, size: 36, iconSize: 18),
+          HueTile(icon: GymIcons.dumbbell, hue: c.accent, size: 36, radius: GymRadius.small, iconSize: 18),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -1107,54 +971,6 @@ class _DayRow extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-/// Ubin jalan pintas: label di kiri, tile ikon garis di kanan. Sementara —
-/// Beranda v3 (Task 8 rencana) menggantikan kisi ini dengan pil status dan
-/// tautan seksi.
-class _QuickTile extends StatelessWidget {
-  const _QuickTile({required this.label, required this.icon, this.onTap});
-
-  final String label;
-  final IconData icon;
-  final VoidCallback? onTap;
-
-  static const _art = 46.0;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.gym;
-    return PressScale(
-      enabled: onTap != null,
-      child: Material(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(GymRadius.card),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(GymRadius.card),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(label,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                          fontSize: 14, fontWeight: FontWeight.w700, height: 1.2, color: onTap == null ? c.text3 : c.text)),
-                ),
-                const SizedBox(width: 6),
-                Opacity(
-                  opacity: onTap == null ? 0.45 : 1,
-                  child: HueTile(icon: icon, hue: c.accent, size: _art, radius: GymRadius.control, iconSize: 22),
-                ),
-              ],
-            ),
-          ),
-        ),
       ),
     );
   }

@@ -1,17 +1,16 @@
-/// Penjaga Home v2.2: blok statistik yang bisa diketuk, bilah progres minggu,
-/// dan sheet per hari dari strip minggu.
+/// Penjaga Beranda sejak v2.2: sheet per hari dari strip minggu. Blok
+/// statistik yang dulu diuji di sini sudah digantikan kartu cincin (UI v3,
+/// lihat `v30_home_test.dart`).
 ///
-/// Semua dijalankan di HP 360 dp karena tiga blok statistik sejajar plus
-/// kolom "x dari y sesi" adalah tempat luapan paling gampang lolos — luapan
-/// RenderFlex di test langsung gagal, jadi test ini sekaligus penjaga tata
-/// letaknya.
+/// Semua dijalankan di HP 360 dp — tempat luapan paling gampang lolos;
+/// luapan RenderFlex di test langsung gagal, jadi test ini sekaligus penjaga
+/// tata letaknya.
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gymapps/core/strings.dart';
 import 'package:gymapps/core/theme.dart';
-import 'package:gymapps/core/widgets.dart';
 import 'package:gymapps/data/exercise_catalog.dart';
 import 'package:gymapps/data/workout_store.dart';
 import 'package:gymapps/domain/models.dart';
@@ -65,6 +64,12 @@ Future<WorkoutStore> _storeWithWeek(WidgetTester tester) async {
 
 Finder get _scrollable => find.byType(Scrollable).first;
 
+Future<void> _settle(WidgetTester tester) async {
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 700));
+  await tester.pump(const Duration(milliseconds: 700));
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -73,46 +78,16 @@ void main() {
     ExerciseCatalog.registerCustom(const []);
   });
 
-  testWidgets('StatBlock menampilkan valueWidget menggantikan teks nilai', (tester) async {
-    await tester.pumpWidget(MaterialApp(
-      theme: buildGymTheme(),
-      home: Scaffold(
-        body: Center(
-          child: SizedBox(
-            width: 120,
-            child: StatBlock(
-              label: 'Volume',
-              value: 'TEKS-LAMA',
-              color: GymColors.dark.hues.orange,
-              valueWidget: const Text('WIDGET'),
-            ),
-          ),
-        ),
-      ),
-    ));
-    await tester.pump();
-
-    expect(find.text('WIDGET'), findsOneWidget);
-    expect(find.text('TEKS-LAMA'), findsNothing);
-  });
-
   testWidgets('Home dengan program dan dua sesi minggu ini muat di 360 dp dan menampilkan "2 of 3 sessions"',
       (tester) async {
     _phone(tester);
     final store = await _storeWithWeek(tester);
     await tester.pumpWidget(_wrap(store, const HomeScreen()));
-    await tester.pumpAndSettle();
+    await _settle(tester);
 
     // PPL = tiga rutinitas per putaran; dua sesi sudah tercatat.
+    await tester.scrollUntilVisible(find.text('2 of 3 sessions'), 200, scrollable: _scrollable);
     expect(find.text('2 of 3 sessions'), findsOneWidget);
-
-    // Gulir sampai blok statistik ikut dibangun dan diukur — ListView malas,
-    // dan luapan di bawah lipatan tidak akan ketahuan tanpa ini.
-    await tester.scrollUntilVisible(find.text('Volume 7d'), 200, scrollable: _scrollable);
-    await tester.pumpAndSettle();
-    expect(find.text('Volume 7d'), findsOneWidget);
-    expect(find.text('e1RM up'), findsOneWidget);
-    expect(find.text('Since last'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -122,13 +97,13 @@ void main() {
     final store = await _storeWithWeek(tester);
     int? opened;
     await tester.pumpWidget(_wrap(store, HomeScreen(onOpenTab: (i) => opened = i)));
-    await tester.pumpAndSettle();
+    await _settle(tester);
 
     final cell = find.byKey(ValueKey('home-day-${isoDate(DateTime.now())}'));
     await tester.scrollUntilVisible(cell, 200, scrollable: _scrollable);
-    await tester.pumpAndSettle();
+    await _settle(tester);
     await tester.tap(cell);
-    await tester.pumpAndSettle();
+    await _settle(tester);
 
     final sheet = find.byType(BottomSheet);
     expect(sheet, findsOneWidget);
@@ -139,7 +114,7 @@ void main() {
     expect(find.descendant(of: sheet, matching: find.text('2 sets · 640 kg')), findsOneWidget);
 
     await tester.tap(find.text('View history'));
-    await tester.pumpAndSettle();
+    await _settle(tester);
     expect(opened, 1);
     expect(find.byType(BottomSheet), findsNothing);
     expect(tester.takeException(), isNull);
@@ -149,7 +124,7 @@ void main() {
     _phone(tester);
     final store = await _storeWithWeek(tester);
     await tester.pumpWidget(_wrap(store, const HomeScreen()));
-    await tester.pumpAndSettle();
+    await _settle(tester);
 
     // Hari pertama minggu ini, kecuali hari ini memang hari pertama —
     // kalau begitu ambil hari terakhir, yang pasti masih kosong.
@@ -158,48 +133,12 @@ void main() {
     if (isoDate(day) == isoDate(today)) day = day.add(const Duration(days: 6));
     final cell = find.byKey(ValueKey('home-day-${isoDate(day)}'));
     await tester.scrollUntilVisible(cell, 200, scrollable: _scrollable);
-    await tester.pumpAndSettle();
+    await _settle(tester);
     await tester.tap(cell);
-    await tester.pumpAndSettle();
+    await _settle(tester);
 
     expect(find.descendant(of: find.byType(BottomSheet), matching: find.text('No sessions')), findsOneWidget);
     // Tanpa onOpenTab tidak ada tombol yang menjanjikan tab yang tak bisa dibuka.
     expect(find.text('View history'), findsNothing);
-  });
-
-  testWidgets('ketuk blok statistik membuka tab yang menjelaskannya', (tester) async {
-    _phone(tester);
-    final store = await _storeWithWeek(tester);
-    int? opened;
-    await tester.pumpWidget(_wrap(store, HomeScreen(onOpenTab: (i) => opened = i)));
-    await tester.pumpAndSettle();
-
-    await tester.scrollUntilVisible(find.text('Volume 7d'), 200, scrollable: _scrollable);
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Volume 7d'));
-    await tester.pump();
-    expect(opened, 3);
-
-    await tester.tap(find.text('e1RM up'));
-    await tester.pump();
-    expect(opened, 3);
-
-    await tester.tap(find.text('Since last'));
-    await tester.pump();
-    expect(opened, 1);
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('tanpa onOpenTab blok statistik tetap tergambar tanpa error', (tester) async {
-    _phone(tester);
-    final store = await _storeWithWeek(tester);
-    await tester.pumpWidget(_wrap(store, const HomeScreen()));
-    await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(find.text('Volume 7d'), 200, scrollable: _scrollable);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Volume 7d'));
-    await tester.pump();
-    expect(tester.takeException(), isNull);
   });
 }
