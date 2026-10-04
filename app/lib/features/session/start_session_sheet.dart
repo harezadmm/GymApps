@@ -43,6 +43,17 @@ class StartSessionSheet extends StatelessWidget {
     if (host.mounted) action(host);
   }
 
+  /// Penjaga yang sama dengan Program dan Beranda: rutinitas kosong dibawa
+  /// ke editor dengan petunjuk, bukan dibuka sebagai sesi tanpa gerakan.
+  Future<void> _startRoutine(BuildContext h, Routine r) async {
+    if (r.exercises.isEmpty) {
+      ScaffoldMessenger.maybeOf(h)?.showSnackBar(SnackBar(content: Text(h.t.emptyRoutineHint)));
+      await openRoutineEditor(h, r);
+      return;
+    }
+    await openRoutineSession(h, r);
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = context.gym;
@@ -56,14 +67,16 @@ class StartSessionSheet extends StatelessWidget {
     final subtitle = program == null || next == null
         ? t.startSheetNoProgram
         : program.mode == ProgramMode.weekday
-            ? t.startSheetNextToday(next.routine.name)
+            // Hari libur pada mode hari tetap: sebut hari latihan berikutnya,
+            // bukan "dijadwalkan hari ini".
+            ? (next.early ? t.nextTrainingDay(t.weekdayLong(next.due.weekday)) : t.startSheetNextToday(next.routine.name))
             : t.startSheetNextRotation(next.routine.name);
 
     Widget routineRow(Routine r, int hueIndex) => _RoutineRow(
           routine: r,
           hue: c.hues.at(hueIndex),
           isNext: next?.routine.id == r.id,
-          onTap: () => _go(context, (h) => openRoutineSession(h, r)),
+          onTap: () => _go(context, (h) => _startRoutine(h, r)),
           onMore: () => showRoutineActions(context, r),
         );
 
@@ -218,18 +231,25 @@ class _RoutineRow extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
+                // Lingkaran 32 yang terlihat, area ketuk 44 di sekelilingnya.
                 Tooltip(
                   message: t.routineActions,
                   child: Material(
-                    color: c.surface2,
-                    shape: const CircleBorder(),
+                    type: MaterialType.transparency,
                     child: InkWell(
                       customBorder: const CircleBorder(),
                       onTap: onMore,
                       child: SizedBox(
-                        width: 32,
-                        height: 32,
-                        child: Icon(GymIcons.moreVertical, size: 16, color: c.text2),
+                        width: 44,
+                        height: 44,
+                        child: Center(
+                          child: Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(color: c.surface2, shape: BoxShape.circle),
+                            child: Icon(GymIcons.moreVertical, size: 16, color: c.text2),
+                          ),
+                        ),
                       ),
                     ),
                   ),

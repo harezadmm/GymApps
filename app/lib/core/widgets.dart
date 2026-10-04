@@ -299,6 +299,15 @@ class GymButton extends StatelessWidget {
     };
     final big = height >= 48;
     final radius = height / 2;
+    // Sasaran sentuh minimal 44 dp: tombol pendek (34) tetap tampil pendek,
+    // tapi area ketuknya diperluas ke 44 — ketukan di selanya tetap kena.
+    final hit = height < 44 ? 44.0 : height;
+    final VoidCallback? tap = onPressed == null
+        ? null
+        : () {
+            if (tone == GymButtonTone.primary) GymHaptics.confirm();
+            onPressed!();
+          };
     final text = Text(
       label,
       maxLines: 1,
@@ -316,8 +325,20 @@ class GymButton extends StatelessWidget {
         opacity: onPressed == null ? 0.45 : 1,
         child: SizedBox(
           width: expand ? double.infinity : null,
-          height: height,
-          child: GlassSurface(
+          height: hit,
+          child: Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+              onTap: tap,
+              splashFactory: NoSplash.splashFactory,
+              highlightColor: Colors.transparent,
+              hoverColor: Colors.transparent,
+              borderRadius: BorderRadius.circular(hit / 2),
+              child: Center(
+                child: SizedBox(
+                  width: expand ? double.infinity : null,
+                  height: height,
+                  child: GlassSurface(
             tone: glass,
             radius: radius,
             child: Stack(
@@ -333,12 +354,7 @@ class GymButton extends StatelessWidget {
                 Material(
                   type: MaterialType.transparency,
                   child: InkWell(
-                    onTap: onPressed == null
-                        ? null
-                        : () {
-                            if (tone == GymButtonTone.primary) GymHaptics.confirm();
-                            onPressed!();
-                          },
+                    onTap: tap,
                     borderRadius: BorderRadius.circular(radius),
                     child: Padding(
                       padding: EdgeInsets.symmetric(horizontal: expand ? 12 : 18),
@@ -356,6 +372,10 @@ class GymButton extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
+          ),
+                ),
+              ),
             ),
           ),
         ),

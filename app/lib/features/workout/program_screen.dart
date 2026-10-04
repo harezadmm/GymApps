@@ -714,14 +714,15 @@ class _Stepper extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.gym;
     final t = context.t;
+    // Lingkaran 28 yang terlihat; area ketuknya 44×36 (stepper 44 tinggi
+    // bersama padding 4) supaya jari tidak harus tepat di lingkaran.
     Widget button(Key key, IconData icon, bool enabled, VoidCallback onTap, String tooltip) => Tooltip(
           message: tooltip,
           child: Material(
-            color: c.segThumb,
-            shape: const CircleBorder(),
+            type: MaterialType.transparency,
             child: InkWell(
               key: key,
-              customBorder: const CircleBorder(),
+              borderRadius: BorderRadius.circular(18),
               onTap: enabled
                   ? () {
                       GymHaptics.tap();
@@ -729,9 +730,16 @@ class _Stepper extends StatelessWidget {
                     }
                   : null,
               child: SizedBox(
-                width: 28,
-                height: 28,
-                child: Icon(icon, size: 13, color: enabled ? c.text : c.text3),
+                width: 44,
+                height: 36,
+                child: Center(
+                  child: Container(
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(color: c.segThumb, shape: BoxShape.circle),
+                    child: Icon(icon, size: 13, color: enabled ? c.text : c.text3),
+                  ),
+                ),
               ),
             ),
           ),

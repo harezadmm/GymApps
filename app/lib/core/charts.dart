@@ -376,7 +376,9 @@ class _Bubble extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              color: c.accent,
+              // accentFill dijamin ≥ 4,6:1 dengan teks putih; accent mentah di
+              // tema gelap (hijau/cyan/oranye) hanya 1,8–3,2:1.
+              color: c.accentFill,
               borderRadius: BorderRadius.circular(8),
             ),
             child: Column(
@@ -711,7 +713,10 @@ class ActivityHeatmap extends StatelessWidget {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  for (final m in monthLabels) Text(m, style: TextStyle(fontSize: 11, color: c.text3)),
+                  for (final m in monthLabels)
+                    Flexible(
+                      child: Text(m, maxLines: 1, overflow: TextOverflow.clip, style: TextStyle(fontSize: 11, color: c.text3)),
+                    ),
                 ],
               ),
             ),

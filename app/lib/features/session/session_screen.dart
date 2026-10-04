@@ -1640,12 +1640,15 @@ class _ExerciseCard extends StatelessWidget {
                           if (ex.expanded) ...[
                             const SizedBox(width: 6),
                             // Info kecil → riwayat gerakan ini.
-                            InkWell(
-                              onTap: () => onAction(_ExerciseAction.history),
-                              customBorder: const CircleBorder(),
-                              child: Padding(
-                                padding: const EdgeInsets.all(3),
-                                child: Icon(GymIcons.info, size: 14, color: c.text3),
+                            Tooltip(
+                              message: context.t.exerciseHistoryBtn,
+                              child: InkWell(
+                                onTap: () => onAction(_ExerciseAction.history),
+                                customBorder: const CircleBorder(),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(7),
+                                  child: Icon(GymIcons.info, size: 14, color: c.text3),
+                                ),
                               ),
                             ),
                           ],

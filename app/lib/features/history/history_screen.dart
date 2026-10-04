@@ -110,7 +110,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Expanded(child: Text(t.activity, style: Theme.of(context).textTheme.titleMedium)),
-                    Text(t.sessionsThisYearV3(_thisYear(all)), style: TextStyle(fontSize: 12.5, color: c.text2)),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(t.sessionsThisYearV3(_thisYear(all)),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.end,
+                          style: TextStyle(fontSize: 12.5, color: c.text2)),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 12),
@@ -745,8 +752,10 @@ class _SessionRow extends StatelessWidget {
             child: InkWell(
               onTap: onTap,
               borderRadius: BorderRadius.circular(GymRadius.tile),
-              child: SizedBox(
-                height: 72,
+              // Tinggi minimum 72, bukan tetap: pada huruf 1,5× dua baris teks
+              // lebih tinggi dari 48 dan barisnya boleh tumbuh, bukan meluber.
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 72),
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(12, 12, 14, 12),
                   child: Row(

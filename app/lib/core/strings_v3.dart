@@ -73,6 +73,13 @@ extension V3Strings on Strings {
   String sessionsThisYearV3(int n) => _v('$n sessions this year', '$n sesi tahun ini');
   String minutesShort(int n) => _v('$n min', '$n mnt');
 
+  /// "hari ini" / "kemarin" / "3 hari lalu" — meta kartu sesi berikutnya.
+  String sinceShort(int days) => switch (days) {
+        0 => _v('today', 'hari ini'),
+        1 => _v('yesterday', 'kemarin'),
+        _ => daysAgoShort(days),
+      };
+
   // ── Program ──
   String get libraryButton => _v('Exercise library', 'Library gerakan');
   String get activeProgramKicker => _v('ACTIVE PROGRAM', 'PROGRAM AKTIF');

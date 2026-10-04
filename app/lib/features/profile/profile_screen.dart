@@ -686,7 +686,7 @@ class _AccountCard extends StatelessWidget {
 }
 
 /// Lima titik warna aksen 18 dp; yang terpilih bergaris `text` 2 dp. Sasaran
-/// ketuknya 26 dp per titik — titiknya sendiri terlalu kecil untuk jari.
+/// ketuknya 32×44 dp per titik — titiknya sendiri terlalu kecil untuk jari.
 class _AccentDots extends StatelessWidget {
   const _AccentDots({required this.onPick});
 
@@ -702,12 +702,11 @@ class _AccentDots extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         for (final (i, color) in accentChoices.indexed) ...[
-          if (i > 0) const SizedBox(width: 2),
           GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: onPick == null ? null : () => onPick!(color),
             child: Padding(
-              padding: const EdgeInsets.all(4),
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 13),
               child: Container(
                 key: ValueKey('accent-dot-$i'),
                 width: 18,
