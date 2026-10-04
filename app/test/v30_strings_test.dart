@@ -12,7 +12,7 @@ void main() {
 
   List<String> all(Strings t) => [
         t.homeTab, t.historyTab, t.programTab, t.statsTab, t.startTab,
-        t.pickOther, t.strengthProgress, t.seeAll, t.ringSessions, t.ringSets, t.ringVolume,
+        t.pickOther, t.strengthProgress, t.seeAllShort, t.ringSessions, t.ringSets, t.ringVolume,
         t.syncedPill, t.syncNotYet, t.syncNoServerPill, t.minutesAgo(2), t.justNow, t.hoursAgo(3), t.daysAgoShort(5),
         t.rotationCount(3), t.weekdayCount('Sen, Rab'), t.pickProgramPill, t.moreExercises(2),
         t.startSheetTitle, t.startSheetNextRotation('Push'), t.startSheetNextToday('Push'), t.startSheetNoProgram,

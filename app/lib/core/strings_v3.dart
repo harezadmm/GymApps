@@ -19,9 +19,10 @@ extension V3Strings on Strings {
   String get startTab => _v('Start', 'Mulai');
 
   // ── Beranda ──
+  String get nextSessionTitle => _v('Next session', 'Sesi berikutnya');
   String get pickOther => _v('Pick another', 'Pilih lain');
   String get strengthProgress => _v('Strength progress', 'Progres kekuatan');
-  String get seeAll => _v('All', 'Semua');
+  String get seeAllShort => _v('All', 'Semua');
   String get ringSessions => _v('Sessions this week', 'Sesi minggu ini');
   String get ringSets => _v('Working sets', 'Set kerja');
   String get ringVolume => _v('Volume vs last', 'Volume vs lalu');
