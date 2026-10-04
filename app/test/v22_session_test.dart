@@ -17,7 +17,7 @@ import 'package:gymapps/data/workout_store.dart';
 import 'package:gymapps/domain/models.dart';
 import 'package:gymapps/domain/routine_sync.dart';
 import 'package:gymapps/features/session/finish_screen.dart';
-import 'package:gymapps/features/session/rest_timer.dart';
+import 'package:gymapps/features/session/rest_pill.dart';
 import 'package:gymapps/features/session/session_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -289,7 +289,7 @@ void main() {
       tester.state<NavigatorState>(find.byType(Navigator)).pop();
       await tester.pump(const Duration(milliseconds: 500));
       expect(find.byTooltip('Skip rest'), findsOneWidget);
-      expect(find.byType(RestTimerCard), findsOneWidget);
+      expect(find.byType(RestPill), findsOneWidget);
 
       // Lembar konfirmasi menyebut istirahat yang masih berjalan — dan
       // "kembali ke sesi" tidak menghentikannya.
@@ -304,7 +304,7 @@ void main() {
       await tester.pump();
       expect(find.byTooltip('Skip rest'), findsNothing);
       await tester.pump(const Duration(milliseconds: 600));
-      expect(find.byType(RestTimerCard), findsNothing);
+      expect(find.byType(RestPill), findsNothing);
       expect(store.workouts, isEmpty);
       expect(find.byType(SessionScreen), findsOneWidget);
     });
@@ -346,10 +346,10 @@ void main() {
       await tester.pump(const Duration(milliseconds: 500));
       tester.state<NavigatorState>(find.byType(Navigator)).pop();
       await tester.pump(const Duration(milliseconds: 500));
-      expect(find.byType(RestTimerCard), findsOneWidget);
+      expect(find.byType(RestPill), findsOneWidget);
       await tester.tap(find.byTooltip('Skip rest'));
       await tester.pump();
-      expect(find.byType(RestTimerCard), findsNothing);
+      expect(find.byType(RestPill), findsNothing);
     });
   });
 

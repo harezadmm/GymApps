@@ -32,8 +32,10 @@ import '../../domain/program.dart';
 import '../../domain/progression.dart';
 import '../../domain/routine_sync.dart';
 import '../../domain/session_plan.dart';
+import '../../core/strings_v3.dart';
 import 'exercise_history_sheet.dart';
 import 'finish_screen.dart';
+import 'rest_pill.dart';
 import 'rest_screen.dart';
 import 'rest_timer.dart';
 import 'session_launcher.dart';
@@ -448,10 +450,14 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
 
   void _restFinished() {
     if (_foreground) RestAlert.ringNow();
+    // Pil istirahat pergi dan daftar melepas ruang bawahnya.
+    if (mounted) setState(() {});
   }
 
   void _restDeadlineChanged(Duration? remaining) {
     if (!mounted) return;
+    // Mulai/berhenti istirahat mengubah ruang di bawah daftar untuk pil.
+    setState(() {});
     if (remaining == null) {
       RestAlert.cancel();
       return;
@@ -1104,7 +1110,6 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
                 // Termasuk waktu sebelum draft dipulihkan; stopwatch sendiri
                 // mulai dari nol setiap layar ini dibuka.
                 elapsed: () => _elapsedTotal,
-                rest: _rest,
                 onLeave: _confirmLeave,
                 onFinish: _confirmFinish,
               ),
@@ -1121,79 +1126,91 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
                 ),
               ),
               Expanded(
-                child: ListView(
-                  padding: const EdgeInsets.fromLTRB(14, 14, 14, 28),
-                  keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-                  children: [
-                    // Kartu istirahat memudar masuk, dan saat pergi ia
-                    // menyusut sambil memudar supaya daftar di bawahnya naik
-                    // pelan — bukan melompat 150 dp begitu istirahat dilewati.
-                    // Tingginya penuh sejak frame pertama: kartu ini selalu
-                    // muncul di frame yang sama dengan layar istirahat penuh
-                    // yang menutupinya, jadi tinggi yang tumbuh dari nol tidak
-                    // pernah terlihat — hanya membuat kartu belum ada satu
-                    // frame saat sesi kembali di depan.
-                    AnimatedBuilder(
-                      animation: _rest,
-                      builder: (context, _) {
-                        final resting = _restingExercise;
-                        final show = _rest.isRunning && resting != null;
-                        return _ExitCollapse(
-                          show: show,
-                          child: !show
-                              ? const SizedBox.shrink()
-                              : Reveal(
-                                  slide: false,
-                                  child: Padding(
-                                    padding: const EdgeInsets.only(bottom: 12),
-                                    child: RestTimerCard(
-                                      timer: _rest,
-                                      nextLabel: _nextLabel ?? '',
-                                      onEditDuration: () => _editRest(resting),
-                                      onOpen: () => _openRestScreen(resting),
-                                    ),
-                                  ),
-                                ),
-                        );
-                      },
-                    ),
-                    _NotesField(controller: _notes),
-                    const SizedBox(height: 12),
-                    if (_exercises.isEmpty)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 20),
-                        child: Text(
-                          context.t.emptySessionHint,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(fontSize: 13.5, color: c.text2),
+                child: Builder(builder: (context) {
+                  final resting = _restingExercise;
+                  final show = _rest.isRunning && resting != null;
+                  return Stack(
+                    children: [
+                      ListView(
+                        // Ruang di bawah untuk pil istirahat yang mengapung,
+                        // supaya kartu terakhir tetap bisa digulir ke atasnya.
+                        padding: EdgeInsets.fromLTRB(16, 4, 16, show ? 94 : 28),
+                        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                        children: [
+                          _NotesField(controller: _notes),
+                          const SizedBox(height: 14),
+                          if (_exercises.isEmpty)
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 20),
+                              child: Text(
+                                context.t.emptySessionHint,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(fontSize: 13.5, color: c.text2),
+                              ),
+                            ),
+                          for (final (i, ex) in _exercises.indexed) ...[
+                            _ExerciseCard(
+                              key: ObjectKey(ex),
+                              exercise: ex,
+                              isFirst: i == 0,
+                              isLast: i == _exercises.length - 1,
+                              rirRow: _rirFor?.$1 == ex ? _rirFor!.$2 : null,
+                              onRir: (row, v) => _onRir(ex, row, v),
+                              onToggleExpand: () => setState(() => ex.expanded = !ex.expanded),
+                              onSetToggled: (i, v) => _onSetToggled(ex, i, v),
+                              onEdited: (i, {weight, reps, seconds, refresh = false}) =>
+                                  _onEdited(ex, i, weight: weight, reps: reps, seconds: seconds, refresh: refresh),
+                              onEditRest: () => _editRest(ex),
+                              onToggleRest: (v) => setState(() => ex.restEnabled = v),
+                              onStartRest: () => _startRest(ex),
+                              onAction: (a) => _onExerciseAction(ex, a),
+                              onAddSet: () => setState(() {
+                                final last = ex.sets.lastWhere((s) => s.isWork, orElse: () => const SetRow());
+                                ex.addRow(SetRow(weight: last.weight, reps: last.reps, seconds: last.seconds));
+                              }),
+                            ),
+                            const SizedBox(height: 14),
+                          ],
+                          _DashedAction(icon: GymIcons.plus, label: context.t.addExercise, onTap: _addExercise),
+                        ],
+                      ),
+                      // Pil istirahat meluncur dari bawah saat istirahat
+                      // dimulai dan pergi lagi saat habis atau dilewati.
+                      Positioned(
+                        left: 16,
+                        right: 16,
+                        bottom: 0,
+                        child: IgnorePointer(
+                          ignoring: !show,
+                          child: AnimatedSlide(
+                            offset: show ? Offset.zero : const Offset(0, 1.3),
+                            duration: GymMotion.of(context, GymMotion.normal),
+                            curve: GymMotion.curve,
+                            child: AnimatedOpacity(
+                              opacity: show ? 1 : 0,
+                              duration: GymMotion.of(context, GymMotion.normal),
+                              child: Padding(
+                                padding: const EdgeInsets.only(bottom: 18),
+                                child: show
+                                    ? RestPill(
+                                        key: const ValueKey('rest-pill'),
+                                        timer: _rest,
+                                        nextLabel: _nextLabel ?? '',
+                                        onOpen: () => _openRestScreen(resting),
+                                        onSkip: () {
+                                          GymHaptics.tap();
+                                          _rest.skip();
+                                        },
+                                      )
+                                    : const SizedBox(height: 64),
+                              ),
+                            ),
+                          ),
                         ),
                       ),
-                    for (final (i, ex) in _exercises.indexed) ...[
-                      _ExerciseCard(
-                        key: ObjectKey(ex),
-                        exercise: ex,
-                        isFirst: i == 0,
-                        isLast: i == _exercises.length - 1,
-                        rirRow: _rirFor?.$1 == ex ? _rirFor!.$2 : null,
-                        onRir: (row, v) => _onRir(ex, row, v),
-                        onToggleExpand: () => setState(() => ex.expanded = !ex.expanded),
-                        onSetToggled: (i, v) => _onSetToggled(ex, i, v),
-                        onEdited: (i, {weight, reps, seconds, refresh = false}) =>
-                            _onEdited(ex, i, weight: weight, reps: reps, seconds: seconds, refresh: refresh),
-                        onEditRest: () => _editRest(ex),
-                        onToggleRest: (v) => setState(() => ex.restEnabled = v),
-                        onStartRest: () => _startRest(ex),
-                        onAction: (a) => _onExerciseAction(ex, a),
-                        onAddSet: () => setState(() {
-                          final last = ex.sets.lastWhere((s) => s.isWork, orElse: () => const SetRow());
-                          ex.addRow(SetRow(weight: last.weight, reps: last.reps, seconds: last.seconds));
-                        }),
-                      ),
-                      const SizedBox(height: 12),
                     ],
-                    _DashedAction(icon: GymIcons.plus, label: context.t.addExercise, onTap: _addExercise),
-                  ],
-                ),
+                  );
+                }),
               ),
             ],
           ),
@@ -1203,136 +1220,64 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
   }
 }
 
+/// Header sesi (spec §7.3): tombol kaca perkecil, nama rutinitas kecil di
+/// atas waktu berjalan yang besar, tombol Selesai kaca berwarna. Istirahat
+/// tidak lagi di sini — ia punya pil sendiri di bawah layar.
 class _TopBar extends StatelessWidget {
   const _TopBar({
     required this.routineName,
     required this.elapsed,
-    required this.rest,
     required this.onLeave,
     required this.onFinish,
   });
 
   final String routineName;
   final Duration Function() elapsed;
-  final RestTimer rest;
   final VoidCallback onLeave;
   final VoidCallback onFinish;
 
   @override
   Widget build(BuildContext context) {
     final c = context.gym;
-    // Seluruh bilah dibangun ulang mengikuti timer: kapsul istirahat hanya
-    // menjadi anak Row yang lentur selagi tampil. Flexible yang kosong tetap
-    // memakan jatah ruang dan mempersempit judul tanpa alasan.
-    return AnimatedBuilder(
-      animation: rest,
-      builder: (context, _) => Padding(
-        padding: const EdgeInsets.fromLTRB(8, 6, 14, 10),
-        child: Row(
-          children: [
-            IconButton(
-              onPressed: onLeave,
-              icon: Icon(GymIcons.chevronDown, size: 22, color: c.text2),
-              tooltip: context.t.minimise,
-            ),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    routineName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  // Waktu berjalan berdetak sendiri tiap detik. Dulu angkanya
-                  // hanya berubah saat layar kebetulan digambar ulang.
-                  StreamBuilder<int>(
-                    stream: _secondTicks,
-                    builder: (context, _) => Text(
-                      context.t.elapsedOf(_formatElapsed(elapsed())),
-                      style: TextStyle(fontSize: 12, color: c.text2),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 2, 20, 10),
+      child: Row(
+        children: [
+          GlassIconButton(icon: GymIcons.chevronDown, size: 40, tooltip: context.t.minimise, onPressed: onLeave),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  routineName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.text2),
+                ),
+                // Waktu berjalan berdetak sendiri tiap detik. Dulu angkanya
+                // hanya berubah saat layar kebetulan digambar ulang.
+                StreamBuilder<int>(
+                  stream: _secondTicks,
+                  builder: (context, _) => Text(
+                    _formatElapsed(elapsed()),
+                    key: const ValueKey('session-elapsed'),
+                    style: TextStyle(
+                      fontSize: 30,
+                      fontWeight: FontWeight.w800,
+                      height: 1.1,
+                      letterSpacing: -0.6,
+                      color: c.text,
+                      fontFeatures: const [FontFeature.tabularFigures()],
                     ),
                   ),
-                ],
-              ),
-            ),
-            // Kapsul timer adalah tombol "lewati istirahat" — dengan ✕ yang
-            // terlihat. Dulu kapsul ini hanya angka di sebelah FINISH, dan orang
-            // yang ingin menghentikan timer menekan tombol di sebelahnya.
-            // Flexible: berbagi sisa lebar dengan judul, bukan mendorong
-            // tombol SELESAI keluar layar.
-            if (rest.isRunning)
-              Flexible(
-                child: Builder(
-                  builder: (context) {
-                    // Target sentuh setinggi 44 dp: kapsul ini bersebelahan dengan
-                    // SELESAI, dan salah ketuk di sini yang dulu menutup sesi.
-                    // FittedBox mengecilkan isinya di HP 360 dp dengan huruf besar,
-                    // bukan meluber keluar bilah.
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 12),
-                      child: Semantics(
-                        button: true,
-                        label: context.t.skipRest,
-                        child: Tooltip(
-                          message: context.t.skipRest,
-                          child: Material(
-                            color: c.accentSoft,
-                            borderRadius: BorderRadius.circular(GymRadius.pill),
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(GymRadius.pill),
-                              onTap: () {
-                                GymHaptics.tap();
-                                rest.skip();
-                              },
-                              child: ConstrainedBox(
-                                constraints: const BoxConstraints(minHeight: 44),
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                                  child: Center(
-                                    widthFactor: 1,
-                                    child: FittedBox(
-                                      fit: BoxFit.scaleDown,
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(GymIcons.alarm, size: 15, color: c.accent),
-                                          const SizedBox(width: 6),
-                                          Text(
-                                            formatRestWide(rest.remaining),
-                                            style: TextStyle(
-                                              fontSize: 12.5,
-                                              fontWeight: FontWeight.w700,
-                                              color: c.accent,
-                                              fontFeatures: const [FontFeature.tabularFigures()],
-                                            ),
-                                          ),
-                                          const SizedBox(width: 6),
-                                          Icon(GymIcons.close, size: 11, color: c.accent),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-                  },
                 ),
-              ),
-            GymButton(
-              label: context.t.finish,
-              height: 38,
-              expand: false,
-              shape: GymButtonShape.pill,
-              onPressed: onFinish,
+              ],
             ),
-          ],
-        ),
+          ),
+          const SizedBox(width: 10),
+          GymButton(label: context.t.finish, height: 40, expand: false, onPressed: onFinish),
+        ],
       ),
     );
   }
@@ -1610,6 +1555,7 @@ class _NotesField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.gym;
+    // Pil catatan: kartu rendah tanpa garis tepi, ikon buku catatan di kiri.
     return TextField(
       controller: controller,
       minLines: 1,
@@ -1619,20 +1565,20 @@ class _NotesField extends StatelessWidget {
       decoration: InputDecoration(
         hintText: context.t.sessionNotes,
         hintStyle: TextStyle(fontSize: 14, color: c.text2),
-        prefixIcon: Icon(GymIcons.note, size: 17, color: c.text2),
+        prefixIcon: Icon(GymIcons.note, size: 18, color: c.text2),
         filled: true,
         fillColor: c.surface,
-        contentPadding: const EdgeInsets.symmetric(vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(vertical: 11),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(GymRadius.card),
-          borderSide: BorderSide(color: c.border),
+          borderRadius: BorderRadius.circular(GymRadius.segTrack),
+          borderSide: BorderSide.none,
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(GymRadius.card),
-          borderSide: BorderSide(color: c.border),
+          borderRadius: BorderRadius.circular(GymRadius.segTrack),
+          borderSide: BorderSide.none,
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(GymRadius.card),
+          borderRadius: BorderRadius.circular(GymRadius.segTrack),
           borderSide: BorderSide(color: c.accent),
         ),
       ),
@@ -1712,19 +1658,29 @@ class _ExerciseCard extends StatelessWidget {
       ),
     );
 
+    // Tombol bulat 32 dp (surface2) untuk buka/tutup dan ⋯, target sentuh
+    // tetap 48 lewat IconButton.
+    final roundStyle = IconButton.styleFrom(
+      backgroundColor: c.surface2,
+      foregroundColor: c.text2,
+      minimumSize: const Size(32, 32),
+      fixedSize: const Size(32, 32),
+      padding: EdgeInsets.zero,
+    );
+
     return GymCard(
-      radius: GymRadius.large,
-      padding: const EdgeInsets.fromLTRB(14, 12, 4, 14),
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
               Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(color: c.surface2, borderRadius: BorderRadius.circular(GymRadius.small)),
-                child: Icon(ex.icon, size: 24, color: c.text2),
+                width: 44,
+                height: 44,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(color: c.surface2, borderRadius: BorderRadius.circular(GymRadius.control)),
+                child: Icon(ex.icon, size: 20, color: c.text),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -1734,8 +1690,29 @@ class _ExerciseCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(ex.name, style: Theme.of(context).textTheme.titleLarge),
-                      const SizedBox(height: 1),
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(ex.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: c.text)),
+                          ),
+                          if (ex.expanded) ...[
+                            const SizedBox(width: 6),
+                            // Info kecil → riwayat gerakan ini.
+                            InkWell(
+                              onTap: () => onAction(_ExerciseAction.history),
+                              customBorder: const CircleBorder(),
+                              child: Padding(
+                                padding: const EdgeInsets.all(3),
+                                child: Icon(GymIcons.info, size: 14, color: c.text3),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 2),
                       Text(
                         ex.expanded
                             ? t.targetLine(
@@ -1745,22 +1722,22 @@ class _ExerciseCard extends StatelessWidget {
                                 context.unitLabel,
                               )
                             : t.setsTarget(ex.workCount, w, firstWork.reps, context.unitLabel),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(fontSize: 12, color: c.text2),
                       ),
                       if (ex.config.superset) ...[
                         const SizedBox(height: 4),
-                        Pill(
-                          color: c.accentSoft,
-                          textColor: c.accent,
-                          child: Text(t.supersetBadge, style: const TextStyle(fontSize: 9.5, letterSpacing: 0.8)),
-                        ),
+                        Pill(color: c.accentSoft, textColor: c.accent, child: Text(t.supersetBadge)),
                       ],
                     ],
                   ),
                 ),
               ),
+              const SizedBox(width: 6),
               IconButton(
                 onPressed: onToggleExpand,
+                style: roundStyle,
                 // Satu chevron yang berputar, bukan dua ikon yang bertukar:
                 // mata mengikuti benda yang bergerak, dan arahnya bilang
                 // "ini akan menutup" sebelum kartunya bergerak.
@@ -1768,14 +1745,15 @@ class _ExerciseCard extends StatelessWidget {
                   turns: ex.expanded ? 0.5 : 0,
                   duration: GymMotion.of(context, GymMotion.normal),
                   curve: GymMotion.curve,
-                  child: Icon(GymIcons.chevronDown, size: 22, color: c.text2),
+                  child: Icon(GymIcons.chevronDown, size: 14, color: c.text2),
                 ),
                 tooltip: ex.expanded ? t.collapse : t.expand,
               ),
               PopupMenuButton<_ExerciseAction>(
-                icon: Icon(GymIcons.moreVertical, size: 20, color: c.text2),
+                icon: Icon(GymIcons.moreVertical, size: 14, color: c.text2),
+                style: roundStyle,
                 tooltip: t.exerciseActions,
-                color: c.surface2,
+                color: c.surface,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(GymRadius.control)),
                 onSelected: onAction,
                 itemBuilder: (context) => [
@@ -1828,26 +1806,49 @@ class _ExerciseCard extends StatelessWidget {
           _SizeChange(
             child: !ex.expanded
                 ? const SizedBox(width: double.infinity)
-                : Padding(
-                    padding: const EdgeInsets.only(right: 10),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const SizedBox(height: 12),
-                        _RestRow(exercise: ex, onEdit: onEditRest, onToggle: onToggleRest, onStart: onStartRest),
-                        if (p != null) ...[const SizedBox(height: 10), _WhyBanner(text: t.why(p.why), kind: p.kind)],
-                        const SizedBox(height: 12),
-                        _SetTable(
-                          exercise: ex,
-                          onToggled: onSetToggled,
-                          onEdited: onEdited,
-                          rirRow: rirRow,
-                          onRir: onRir,
-                        ),
-                        const SizedBox(height: 10),
-                        _DashedAction(icon: GymIcons.plus, label: t.addSet, onTap: onAddSet, compact: true),
-                      ],
-                    ),
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 12),
+                      if (p != null) ...[_WhyBanner(text: t.why(p.why), kind: p.kind), const SizedBox(height: 10)],
+                      _RestRow(exercise: ex, onEdit: onEditRest, onToggle: onToggleRest, onStart: onStartRest),
+                      const SizedBox(height: 10),
+                      _SetTable(
+                        exercise: ex,
+                        onToggled: onSetToggled,
+                        onEdited: onEdited,
+                        rirRow: rirRow,
+                        onRir: onRir,
+                      ),
+                      const SizedBox(height: 4),
+                      _AddSetRow(onTap: onAddSet),
+                      const SizedBox(height: 10),
+                      // Dua aksi yang paling sering dipakai dari menu ⋯,
+                      // ditaruh sebagai tombol kaca bening.
+                      Row(
+                        children: [
+                          Expanded(
+                            child: GymButton(
+                              label: t.exerciseHistoryBtn,
+                              icon: GymIcons.menu,
+                              tone: GymButtonTone.neutral,
+                              height: 42,
+                              onPressed: () => onAction(_ExerciseAction.history),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: GymButton(
+                              label: ex.config.superset ? t.endSupersetBtn : t.supersetBtn,
+                              icon: GymIcons.link,
+                              tone: GymButtonTone.neutral,
+                              height: 42,
+                              onPressed: ex.config.superset || !isLast ? () => onAction(_ExerciseAction.superset) : null,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
           ),
         ],
@@ -1876,63 +1877,61 @@ class _RestRow extends StatelessWidget {
     final text = d.inSeconds % 60 == 0 ? '${d.inMinutes}m' : '${d.inMinutes}m ${d.inSeconds % 60}s';
     final on = exercise.restEnabled;
 
-    return Container(
-      padding: const EdgeInsets.fromLTRB(12, 4, 4, 4),
-      decoration: BoxDecoration(
-        color: c.bgNested,
-        borderRadius: BorderRadius.circular(GymRadius.small),
-        border: Border.all(color: c.border),
-      ),
-      child: Row(
-        children: [
-          Icon(GymIcons.alarm, size: 17, color: on ? c.text2 : c.text3),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Row(
-              children: [
-                Flexible(
-                  child: Text(
-                    context.t.restTimer,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: on ? c.text : c.text3),
-                  ),
-                ),
-                const SizedBox(width: 4),
-                InkWell(
-                  onTap: onEdit,
-                  borderRadius: BorderRadius.circular(GymRadius.pill),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          text,
-                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: on ? c.accent : c.text3),
-                        ),
-                        const SizedBox(width: 4),
-                        Icon(GymIcons.edit, size: 14, color: c.text2),
-                      ],
+    // Baris polos (tanpa kotak): ikon · "Istirahat" · durasi beraksen yang
+    // bisa diketuk · mulai · saklar.
+    return Row(
+      children: [
+        Icon(GymIcons.alarm, size: 16, color: on ? c.text2 : c.text3),
+        const SizedBox(width: 8),
+        Flexible(
+          child: Text(context.t.restWord,
+              maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 13, color: on ? c.text2 : c.text3)),
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: InkWell(
+              onTap: onEdit,
+              borderRadius: BorderRadius.circular(GymRadius.pill),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        text,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: on ? c.accent : c.text3),
+                      ),
                     ),
-                  ),
+                    const SizedBox(width: 4),
+                    Icon(GymIcons.edit, size: 13, color: c.text2),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
-          // Mulai istirahat tanpa harus mencentang set dulu — kadang orang
-          // istirahat di tengah, atau baru ingat menekan setelah mulai.
-          if (on)
-            IconButton(
-              onPressed: onStart,
-              tooltip: context.t.start,
-              visualDensity: VisualDensity.compact,
-              style: IconButton.styleFrom(backgroundColor: c.accentSoft),
-              icon: Icon(GymIcons.play, size: 18, color: c.accent),
+        ),
+        // Mulai istirahat tanpa harus mencentang set dulu — kadang orang
+        // istirahat di tengah, atau baru ingat menekan setelah mulai.
+        if (on)
+          IconButton(
+            onPressed: onStart,
+            tooltip: context.t.start,
+            visualDensity: VisualDensity.compact,
+            style: IconButton.styleFrom(
+              backgroundColor: c.accentSoft,
+              minimumSize: const Size(32, 32),
+              fixedSize: const Size(32, 32),
+              padding: EdgeInsets.zero,
             ),
-          Switch(value: on, onChanged: onToggle, materialTapTargetSize: MaterialTapTargetSize.shrinkWrap),
-        ],
-      ),
+            icon: Icon(GymIcons.play, size: 14, color: c.accent),
+          ),
+        Switch(value: on, onChanged: onToggle, materialTapTargetSize: MaterialTapTargetSize.shrinkWrap),
+      ],
     );
   }
 }
@@ -1948,36 +1947,14 @@ class _WhyBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.gym;
+    // Banner aksen lembut (spec §7.3); deload hangat karena itu berita yang
+    // berbeda. Panah serong untuk naik/turun, bendera untuk target lainnya.
     final (icon, tint) = switch (kind) {
-      // Basic UI tidak punya grafik tren; panah serong dari glyph panah yang
-      // sama menyampaikan naik / turun / tahan tanpa gaya garis kedua.
       PrescriptionKind.up => (GymIcons.arrowUpRight, c.accent),
       PrescriptionKind.deload => (GymIcons.arrowDownRight, c.warn),
-      PrescriptionKind.hold => (GymIcons.arrowRight, c.text2),
-      _ => (GymIcons.flag, c.text2),
+      _ => (GymIcons.flag, c.accent),
     };
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: tint.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(GymRadius.card),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 16, color: tint),
-          const SizedBox(width: 9),
-          Expanded(
-            child: Text(
-              text,
-              style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: tint),
-            ),
-          ),
-        ],
-      ),
-    );
+    return NoteBanner(text: text, icon: icon, tone: tint);
   }
 }
 
@@ -1997,18 +1974,21 @@ class _SetTable extends StatelessWidget {
     final timed = exercise.config.mode == LogMode.time;
     final inc = weightIncrement(exercise.config, context.unitLabel);
     exercise._align();
+    // Baris aktif = set pertama yang belum dicentang: pil angkanya bergaris.
+    final activeIndex = exercise.sets.indexWhere((s) => !s.done);
 
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+          padding: const EdgeInsets.fromLTRB(4, 0, 4, 6),
           child: Row(
             children: [
               SizedBox(width: 34, child: SectionLabel(context.t.setCol)),
-              SizedBox(width: 62, child: SectionLabel(context.t.prevCol)),
-              Expanded(child: Center(child: SectionLabel(context.t.weightCol(context.unitLabel)))),
-              Expanded(child: Center(child: SectionLabel(timed ? context.t.secCol : context.t.repsCol))),
-              const SizedBox(width: 38),
+              SizedBox(width: 70, child: SectionLabel(context.t.prevCol)),
+              Expanded(flex: 5, child: Center(child: SectionLabel(context.t.weightCol(context.unitLabel)))),
+              const SizedBox(width: 8),
+              Expanded(flex: 4, child: Center(child: SectionLabel(timed ? context.t.secCol : context.t.repsCol))),
+              const SizedBox(width: 34),
             ],
           ),
         ),
@@ -2038,6 +2018,9 @@ class _SetTable extends StatelessWidget {
                   child: Column(
                     children: [
                       _SetRowTile(
+                        rowKey: ValueKey('set-row-${exercise.name}-$i'),
+                        cellKey: ValueKey('kg-cell-${exercise.name}-$i'),
+                        active: i == activeIndex,
                         label: label,
                         labelColor: tone,
                         previous: i < exercise.previous.length ? exercise.previous[i] : '—',
@@ -2073,6 +2056,9 @@ class _SetRowTile extends StatelessWidget {
     required this.onReps,
     this.timed = false,
     this.step = 2.5,
+    this.active = false,
+    this.rowKey,
+    this.cellKey,
   });
 
   final String label;
@@ -2082,6 +2068,11 @@ class _SetRowTile extends StatelessWidget {
   final bool bodyweight;
   final bool timed;
   final double step;
+
+  /// Set pertama yang belum dicentang: pil angkanya bergaris tepi.
+  final bool active;
+  final Key? rowKey;
+  final Key? cellKey;
   final ValueChanged<bool> onToggled;
   final void Function(double weight, {bool refresh}) onWeight;
   final ValueChanged<int> onReps;
@@ -2090,46 +2081,61 @@ class _SetRowTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.gym;
     final done = set.done;
+    final labelInk = done || active ? c.text : (set.isWork ? c.text2 : labelColor);
 
     return AnimatedContainer(
+      key: rowKey,
       duration: GymMotion.of(context, GymMotion.quick),
       curve: GymMotion.curve,
-      height: 46,
-      padding: const EdgeInsets.symmetric(horizontal: 4),
+      height: 52,
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
       decoration: BoxDecoration(
-        // Baris selesai jadi hijau gelap, tapi angkanya tetap putih penuh:
+        // Baris selesai berlatar hijau lembut, tapi angkanya tetap penuh:
         // membaca beban dari jarak satu lengan lebih penting daripada
         // menegaskan bahwa baris itu sudah lewat (FR-D3).
-        color: done ? c.doneBg : c.bgNested,
-        borderRadius: BorderRadius.circular(GymRadius.small),
+        color: done ? c.doneBg : Colors.transparent,
+        borderRadius: BorderRadius.circular(GymRadius.input),
       ),
       child: Row(
         children: [
           SizedBox(
-            width: 30,
-            child: Text(
-              label,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: label.length > 1 && label != '${int.tryParse(label)}' ? 11 : 13,
-                fontWeight: FontWeight.w800,
-                color: done || !set.isWork ? labelColor : c.text2,
-              ),
+            width: 34,
+            child: Center(
+              child: set.isWarmup
+                  // Warm-up: lencana api hangat, bukan huruf W.
+                  ? Container(
+                      width: 26,
+                      height: 26,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(color: c.warm.withValues(alpha: 0.13), shape: BoxShape.circle),
+                      child: Icon(GymIcons.fire, size: 14, color: c.warm),
+                    )
+                  : Text(
+                      label,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: label.length > 1 && label != '${int.tryParse(label)}' ? 11 : 14,
+                        fontWeight: FontWeight.w700,
+                        color: labelInk,
+                      ),
+                    ),
             ),
           ),
           SizedBox(
-            width: 56,
+            width: 70,
             child: Text(
               previous,
               maxLines: 1,
               overflow: TextOverflow.fade,
               softWrap: false,
-              style: TextStyle(fontSize: 12, color: c.text2),
+              style: TextStyle(fontSize: 12.5, color: c.text2),
             ),
           ),
           Expanded(
             flex: 5,
             child: _Cell(
+              cellKey: cellKey,
+              active: active,
               text: set.weight == 0 ? '' : formatDelta(set.weight),
               doneText: formatWeight(set.weight),
               hint: bodyweight ? 'BW' : context.unitLabel,
@@ -2141,9 +2147,11 @@ class _SetRowTile extends StatelessWidget {
               onStep: step <= 0 ? null : (dir) => onWeight(stepWeight(set.weight, step, dir), refresh: true),
             ),
           ),
+          const SizedBox(width: 8),
           Expanded(
-            flex: 3,
+            flex: 4,
             child: _Cell(
+              active: active,
               text: timed ? (set.seconds == 0 ? '' : '${set.seconds}') : (set.reps == 0 ? '' : '${set.reps}'),
               doneText: timed ? '${set.seconds}s' : (set.rir == null ? '${set.reps}' : '${set.reps} @${set.rir}'),
               hint: '0',
@@ -2153,10 +2161,10 @@ class _SetRowTile extends StatelessWidget {
             ),
           ),
           SizedBox(
-            // Tinggi dikunci: lingkaran 20 dp saja terlalu kecil untuk
+            // Tinggi dikunci: lingkaran kecil saja terlalu kecil untuk
             // diketuk dengan tangan berkapur.
-            width: 38,
-            height: 38,
+            width: 34,
+            height: 40,
             child: Semantics(
               button: true,
               checked: done,
@@ -2169,25 +2177,25 @@ class _SetRowTile extends StatelessWidget {
                   FocusScope.of(context).unfocus();
                   onToggled(!done);
                 },
-                borderRadius: BorderRadius.circular(GymRadius.pill),
-                child: AnimatedSwitcher(
-                  duration: GymMotion.of(context, GymMotion.quick),
-                  switchInCurve: Curves.easeOutBack,
-                  transitionBuilder: (child, anim) => ScaleTransition(scale: anim, child: child),
-                  // Paket ikon hanya berisi garis, sedangkan "selesai" harus
-                  // terbaca dari ujung mata di tengah set. Jadi lingkarannya
-                  // diisi sendiri dan centangnya diberi warna latar baris —
-                  // hasilnya sama dengan check_circle Material yang dulu.
-                  child: done
-                      ? Container(
-                          key: const ValueKey(true),
-                          width: 20,
-                          height: 20,
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(color: c.doneInk, shape: BoxShape.circle),
-                          child: Icon(GymIcons.check, size: 11, color: c.doneBg),
-                        )
-                      : Icon(GymIcons.circle, key: const ValueKey(false), size: 20, color: c.text3),
+                customBorder: const CircleBorder(),
+                child: Center(
+                  child: AnimatedSwitcher(
+                    duration: GymMotion.of(context, GymMotion.quick),
+                    switchInCurve: Curves.easeOutBack,
+                    transitionBuilder: (child, anim) => ScaleTransition(scale: anim, child: child),
+                    // Selesai = lingkaran hijau penuh dengan centang putih;
+                    // belum = cincin (gelap untuk baris aktif).
+                    child: done
+                        ? Container(
+                            key: const ValueKey(true),
+                            width: 28,
+                            height: 28,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(color: c.doneInk, shape: BoxShape.circle),
+                            child: const Icon(GymIcons.check, size: 15, color: Colors.white),
+                          )
+                        : Icon(GymIcons.circle, key: const ValueKey(false), size: 26, color: active ? c.text : c.text3),
+                  ),
                 ),
               ),
             ),
@@ -2213,6 +2221,8 @@ class _Cell extends StatefulWidget {
     required this.decimal,
     required this.onChanged,
     this.onStep,
+    this.active = false,
+    this.cellKey,
   });
 
   final String text;
@@ -2224,6 +2234,10 @@ class _Cell extends StatefulWidget {
 
   /// −1 atau +1. null = tanpa tombol langkah.
   final ValueChanged<int>? onStep;
+
+  /// Baris aktif: pil bergaris tepi gelap.
+  final bool active;
+  final Key? cellKey;
 
   @override
   State<_Cell> createState() => _CellState();
@@ -2276,9 +2290,11 @@ class _CellState extends State<_Cell> {
         widget.onStep!(dir);
       },
       borderRadius: BorderRadius.circular(GymRadius.input),
-      child: SizedBox(width: 24, height: 36, child: Icon(dir < 0 ? GymIcons.minus : GymIcons.add, size: 15, color: c.text2)),
+      child: SizedBox(width: 26, height: 40, child: Icon(dir < 0 ? GymIcons.minus : GymIcons.add, size: 14, color: c.text2)),
     );
 
+    // Kotaknya pil surface2 (spec §7.3); TextField di dalamnya tanpa garis
+    // sendiri, supaya tepi aktif digambar sekali di pilnya.
     final field = TextField(
       controller: _controller,
       textAlign: TextAlign.center,
@@ -2292,30 +2308,26 @@ class _CellState extends State<_Cell> {
       ],
       decoration: InputDecoration(
         isDense: true,
-        filled: true,
-        fillColor: c.surface2,
+        filled: false,
         hintText: widget.hint,
         hintStyle: style.copyWith(color: c.text3, fontWeight: FontWeight.w600),
-        contentPadding: const EdgeInsets.symmetric(vertical: 8),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(GymRadius.input),
-          borderSide: BorderSide(color: c.border),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(GymRadius.input),
-          borderSide: BorderSide(color: c.border),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(GymRadius.input),
-          borderSide: BorderSide(color: c.accent),
-        ),
+        contentPadding: const EdgeInsets.symmetric(vertical: 10),
+        border: InputBorder.none,
+        enabledBorder: InputBorder.none,
+        focusedBorder: InputBorder.none,
       ),
     );
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 5),
+    return Container(
+      key: widget.cellKey,
+      height: 40,
+      decoration: BoxDecoration(
+        color: c.surface2,
+        borderRadius: BorderRadius.circular(GymRadius.input),
+        border: widget.active ? Border.all(color: c.text, width: 1.5) : null,
+      ),
       child: widget.onStep == null
-          ? field
+          ? Padding(padding: const EdgeInsets.symmetric(horizontal: 6), child: field)
           : Row(
               children: [
                 stepButton(-1),
@@ -2438,46 +2450,68 @@ class _NoteDialogState extends State<_NoteDialog> {
   }
 }
 
+/// "Tambah gerakan": kotak 52 dp bergaris tipis, ikon dan label warna teks.
 class _DashedAction extends StatelessWidget {
-  const _DashedAction({required this.icon, required this.label, required this.onTap, this.compact = false});
+  const _DashedAction({required this.icon, required this.label, required this.onTap});
 
   final IconData icon;
   final String label;
   final VoidCallback onTap;
-  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     final c = context.gym;
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(compact ? GymRadius.small : GymRadius.control),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(GymRadius.tile),
+        side: BorderSide(color: c.text3, width: 1.2),
+      ),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(GymRadius.card),
-        child: Container(
-          height: compact ? 36 : 46,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(compact ? GymRadius.small : GymRadius.control),
-            border: Border.all(color: c.border),
-          ),
+        borderRadius: BorderRadius.circular(GymRadius.tile),
+        child: SizedBox(
+          height: 52,
           child: Row(
-            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 17, color: compact ? c.text2 : c.accent),
+              Icon(icon, size: 17, color: c.text),
               const SizedBox(width: 8),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.6,
-                  color: compact ? c.text2 : c.accent,
-                ),
-              ),
+              Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.text)),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// "Tambah set" di bawah tabel: cincin plus kecil dan label abu.
+class _AddSetRow extends StatelessWidget {
+  const _AddSetRow({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gym;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(GymRadius.small),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+        child: Row(
+          children: [
+            Container(
+              width: 22,
+              height: 22,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: c.text2, width: 1.5)),
+              child: Icon(GymIcons.plus, size: 13, color: c.text2),
+            ),
+            const SizedBox(width: 10),
+            Text(context.t.addSet, style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: c.text2)),
+          ],
         ),
       ),
     );
