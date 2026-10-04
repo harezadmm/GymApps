@@ -17,6 +17,7 @@ import 'package:gymapps/domain/models.dart';
 import 'package:gymapps/features/library/library_screen.dart';
 import 'package:gymapps/features/onboarding/custom_split_screen.dart';
 import 'package:gymapps/features/onboarding/onboarding_screens.dart';
+import 'package:gymapps/features/session/rest_pill.dart';
 import 'package:gymapps/features/session/session_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -114,7 +115,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
     tester.state<NavigatorState>(find.byType(Navigator)).pop();
     await tester.pump(const Duration(milliseconds: 500));
-    expect(find.text('REST'), findsWidgets);
+    expect(find.byType(RestPill), findsOneWidget);
   });
 
   testWidgets('beban yang diketik ikut tersimpan saat set dicentang', (tester) async {

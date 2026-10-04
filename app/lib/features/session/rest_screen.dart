@@ -216,7 +216,7 @@ class _Dial extends StatelessWidget {
           RepaintBoundary(
             child: CustomPaint(
               size: const Size.square(260),
-              painter: _RingPainter(progress: progress, track: c.surface2, ink: c.accent),
+              painter: _RingPainter(progress: progress, track: c.ringTrack, ink: c.accent),
             ),
           ),
           Column(
