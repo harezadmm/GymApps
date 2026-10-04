@@ -11,6 +11,23 @@ import 'dart:math' as math;
 import '../core/format.dart';
 import 'models.dart';
 import 'progression.dart';
+import 'units.dart';
+
+/// Volume rencana sesi berikutnya untuk [routine] — Σ beban × rep dari set
+/// kerja yang akan disusun [planExercise] — dalam satuan [unit]. [history]
+/// sudah dalam satuan yang sama (lihat [historyIn]). Odometer di kartu
+/// rutinitas memakai angka ini, dan kartu Beranda memakai fungsi rencana yang
+/// sama, jadi keduanya tidak akan berselisih.
+double plannedSessionVolume(Routine routine, List<Workout> history, WeightUnit unit) {
+  var volume = 0.0;
+  for (final cfg in routine.exercises) {
+    final plan = planExercise(configIn(cfg, unit), history, routineDefault: routine.policy, unit: unit.label);
+    for (final s in plan.sets) {
+      if (!s.isWarmup) volume += s.weight * s.reps;
+    }
+  }
+  return volume;
+}
 
 /// Satu gerakan yang siap dibuka di layar sesi.
 class PlannedExercise {
