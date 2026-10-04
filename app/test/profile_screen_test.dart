@@ -116,8 +116,8 @@ void main() {
       await tester.pumpWidget(_wrap(store, email: 'a@b.co'));
       await tester.pump();
 
-      expect(find.text('Sync off — local only'), findsOneWidget);
-      expect(find.text('Synced just now'), findsNothing);
+      expect(find.text('No server'), findsOneWidget);
+      expect(find.text('Synced · just now'), findsNothing);
     });
 
     testWidgets('dengan backend tapi belum pernah dorong, disebut belum tersinkron',
@@ -128,8 +128,8 @@ void main() {
       await tester.pumpWidget(_wrap(store, email: 'a@b.co'));
       await tester.pump();
 
-      expect(find.text('Not synced yet'), findsOneWidget);
-      expect(find.text('Synced just now'), findsNothing);
+      expect(find.textContaining('Not synced'), findsOneWidget);
+      expect(find.text('Synced · just now'), findsNothing);
     });
 
     testWidgets('baru menyebut tersinkron setelah dorongan berhasil', (tester) async {
@@ -139,7 +139,7 @@ void main() {
       await tester.pumpWidget(_wrap(store, email: 'a@b.co'));
       await tester.pump();
 
-      expect(find.text('Synced just now'), findsOneWidget);
+      expect(find.text('Synced · just now'), findsOneWidget);
     });
   });
 
@@ -154,7 +154,7 @@ void main() {
     }
 
     Future<void> openForceSync(WidgetTester tester) async {
-      final tile = find.text('Force sync now');
+      final tile = find.text('Force sync');
       await tester.scrollUntilVisible(tile, 200, scrollable: find.byType(Scrollable).first);
       await tester.ensureVisible(tile);
       await tester.pumpAndSettle();
@@ -183,7 +183,7 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.text('Connect to the server'), findsNothing);
       expect(store.syncStatus, SyncStatus.synced);
-      expect(find.text('Synced just now'), findsWidgets);
+      expect(find.text('Synced just now'), findsOneWidget);
     });
 
     testWidgets('kata sandi salah: pesan jelas, tidak tersambung', (tester) async {
