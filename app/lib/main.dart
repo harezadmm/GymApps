@@ -32,7 +32,7 @@ import 'features/profile/profile_screen.dart';
 import 'features/session/session_launcher.dart';
 import 'features/session/start_session_sheet.dart';
 import 'features/stats/stats_screen.dart';
-import 'features/workout/workout_screen.dart';
+import 'features/workout/program_screen.dart';
 
 /// Diisi saat build:
 ///   flutter run --dart-define=SUPABASE_URL=… --dart-define=SUPABASE_ANON_KEY=…
@@ -678,7 +678,7 @@ class _HomeShellState extends State<HomeShell> {
               onOpenTab: (i) => setState(() => _tab = i),
             ),
             _LazyTab(active: _tab == 1, child: const HistoryScreen()),
-            _LazyTab(active: _tab == 2, child: const WorkoutScreen()),
+            _LazyTab(active: _tab == 2, child: const ProgramScreen()),
             _LazyTab(active: _tab == 3, child: const StatsScreen()),
           ],
         ),
