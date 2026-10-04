@@ -199,7 +199,10 @@ class HomeScreen extends StatelessWidget {
     final weekPlanned = program == null
         ? 0
         : (program.mode == ProgramMode.weekday ? program.days.length : program.order.length).clamp(1, 99);
-    final setsDone = thisWeek.fold(0, (a, w) => a + _workingSetsOf(w));
+    // Pembilang dan penyebut dari himpunan yang sama: sesi program minggu ini.
+    // Sesi bebas tidak ada di rencana, jadi tidak boleh membuat "48/36".
+    final setsDone = (program == null ? thisWeek : thisWeek.where((w) => programNames.contains(w.routine)))
+        .fold(0, (a, w) => a + _workingSetsOf(w));
     final setsPlanned = program == null ? 0 : _plannedSets(program, store.routines);
 
     return RefreshIndicator(
@@ -210,7 +213,10 @@ class HomeScreen extends StatelessWidget {
         future: ExerciseCatalog.load(),
         builder: (context, snap) {
           final catalog = snap.data;
-          final insight = _insight(context, catalog, next, program, unit);
+          // Rencana sesi berikutnya dihitung sekali per build dan dipakai
+          // insight maupun kartu — dulu dua kali, dengan historyIn tiga kali.
+          final plans = next == null ? const <(ExerciseConfig, PlannedExercise)>[] : _plans(context, next.routine, unit);
+          final insight = _insight(context, catalog, next, program, plans);
           return Stack(
             children: [
               // Dua wash radial di balik isi — hangat di kiri atas, violet di
@@ -292,7 +298,7 @@ class HomeScreen extends StatelessWidget {
                   else if (program == null || next == null)
                     Reveal(index: 3, child: _NoProgramCard(hasProgram: program != null))
                   else
-                    Reveal(index: 3, child: _nextSession(context, catalog, next, program, unit)),
+                    Reveal(index: 3, child: _nextSession(context, catalog, next, program, unit, plans)),
                   const SizedBox(height: 20),
                   Reveal(
                     index: 4,
@@ -349,8 +355,10 @@ class HomeScreen extends StatelessWidget {
             style: TextStyle(fontSize: 21, fontWeight: FontWeight.w700, letterSpacing: -0.3, color: c.text),
           ),
         ),
-        if (email != null)
-          AvatarCircle(text: initialsOf(email!), tooltip: t.openProfile, onTap: onOpenProfile),
+        // Satu-satunya pintu ke Profil, jadi tampil selama ada tujuannya —
+        // email yang belum terbaca cuma mengosongkan inisialnya.
+        if (onOpenProfile != null)
+          AvatarCircle(text: initialsOf(email ?? ''), tooltip: t.openProfile, onTap: onOpenProfile),
       ],
     );
   }
@@ -367,11 +375,11 @@ class HomeScreen extends StatelessWidget {
     } else {
       programSub = t.rotationCount(programRoutines(program, store.routines).length);
     }
-    final (syncTitle, syncSub, syncIcon, syncBg) = !store.hasBackend
+    final (syncTitle, syncSub, syncIcon, syncTone) = !store.hasBackend
         ? (t.syncNoServerPill, '', GymIcons.cloudOff, c.text3)
         : switch (store.syncStatus) {
             SyncStatus.synced => (t.syncedPill, _ago(t, store.lastSyncedAt), GymIcons.cloudCheck, c.doneInk),
-            SyncStatus.syncing => (t.syncing, '', GymIcons.sync, c.accentFill),
+            SyncStatus.syncing => (t.syncing, '', GymIcons.sync, c.accent),
             SyncStatus.failed => (t.syncNotYet, t.syncFailed, GymIcons.cloudOff, c.warn),
             SyncStatus.noSession => (t.syncNotYet, t.syncNoSession, GymIcons.cloudOff, c.warn),
             SyncStatus.idle => (t.syncNotYet, _ago(t, store.lastSyncedAt), GymIcons.cloud, c.text3),
@@ -383,7 +391,7 @@ class HomeScreen extends StatelessWidget {
           flex: 3,
           child: StatusPill(
             icon: GymIcons.swap,
-            iconBg: c.accentFill,
+            tone: c.accent,
             title: program?.name ?? t.pickProgramPill,
             subtitle: programSub,
             onTap: program == null ? () => chooseProgram(context) : () => onOpenTab?.call(2),
@@ -394,7 +402,7 @@ class HomeScreen extends StatelessWidget {
           flex: 2,
           child: StatusPill(
             icon: syncIcon,
-            iconBg: syncBg,
+            tone: syncTone,
             title: syncTitle,
             subtitle: syncSub,
             spinning: store.hasBackend && store.syncStatus == SyncStatus.syncing,
@@ -415,12 +423,13 @@ class HomeScreen extends StatelessWidget {
     ];
   }
 
-  HomeInsight _insight(BuildContext context, ExerciseCatalog? catalog, NextSession? next, Program? program, WeightUnit unit) {
+  HomeInsight _insight(BuildContext context, ExerciseCatalog? catalog, NextSession? next, Program? program,
+      List<(ExerciseConfig, PlannedExercise)> plans) {
     final t = context.t;
     final store = context.workouts;
     if (next == null) return homeInsight(t: t, next: null, weekdayMode: false, targets: const [], daysSince: null);
     final targets = [
-      for (final (cfg, plan) in _plans(context, next.routine, unit))
+      for (final (cfg, plan) in plans)
         (catalog?.nameOf(cfg.exerciseId) ?? '…', plan.prescription.kind),
     ];
     final last = lastTrainingDay([for (final w in store.workouts) if (w.routine == next.routine.name) w]);
@@ -433,21 +442,21 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _nextSession(BuildContext context, ExerciseCatalog? catalog, NextSession next, Program program, WeightUnit unit) {
+  Widget _nextSession(BuildContext context, ExerciseCatalog? catalog, NextSession next, Program program, WeightUnit unit,
+      List<(ExerciseConfig, PlannedExercise)> plans) {
     final c = context.gym;
     final t = context.t;
     final store = context.workouts;
     final routine = next.routine;
     final unitLabel = context.unitLabel;
     final last = lastTrainingDay([for (final w in store.workouts) if (w.routine == routine.name) w]);
-    final sinceText = last == null ? t.notTrainedYet : t.daysAgoShort(dateOnly(DateTime.now()).difference(last).inDays);
+    final sinceText = last == null ? t.notTrainedYet : t.sinceShort(dateOnly(DateTime.now()).difference(last).inDays);
     final tag = switch (next.daysAway) {
       0 => t.dueToday,
       1 => t.dueTomorrow,
       _ => t.weekdayShort(next.due.weekday),
     };
     const shown = 4;
-    final plans = _plans(context, routine, unit);
     final rows = <NextRow>[];
     for (final (cfg, plan) in plans.take(shown)) {
       final work = plan.sets.firstWhere((s) => !s.isWarmup, orElse: () => const SetRow());

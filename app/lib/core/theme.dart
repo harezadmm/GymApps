@@ -738,7 +738,9 @@ ThemeData buildGymTheme({Color? accent, Brightness brightness = Brightness.dark}
       iconTheme: IconThemeData(size: 16, color: c.text2),
     ),
     switchTheme: SwitchThemeData(
-      thumbColor: const WidgetStatePropertyAll(Colors.white),
+      // OFF memakai text2: thumb putih di lintasan surface2 di atas kartu putih
+      // nyaris tak terlihat di tema terang (≈1,1:1).
+      thumbColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? Colors.white : c.text2),
       trackColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? c.doneInk : c.surface2),
       trackOutlineColor: const WidgetStatePropertyAll(Colors.transparent),
     ),

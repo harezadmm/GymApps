@@ -21,7 +21,7 @@ class StatusPill extends StatelessWidget {
   const StatusPill({
     super.key,
     required this.icon,
-    required this.iconBg,
+    required this.tone,
     required this.title,
     this.subtitle,
     this.onTap,
@@ -29,7 +29,9 @@ class StatusPill extends StatelessWidget {
   });
 
   final IconData icon;
-  final Color iconBg;
+  /// Tinta ikon; latarnya pasangan lembut tinta itu, bukan cakram pekat
+  /// berikon putih — text3/warn/doneInk pekat hanya 1,8–2,4:1 dengan putih.
+  final Color tone;
   final String title;
   final String? subtitle;
   final VoidCallback? onTap;
@@ -54,10 +56,8 @@ class StatusPill extends StatelessWidget {
                 width: 34,
                 height: 34,
                 alignment: Alignment.center,
-                decoration: BoxDecoration(color: iconBg, shape: BoxShape.circle),
-                child: spinning
-                    ? SpinIcon(icon, size: 17, color: Colors.white)
-                    : Icon(icon, size: 17, color: Colors.white),
+                decoration: BoxDecoration(color: c.hues.soft(tone, c), shape: BoxShape.circle),
+                child: spinning ? SpinIcon(icon, size: 17, color: tone) : Icon(icon, size: 17, color: tone),
               ),
               const SizedBox(width: 10),
               Expanded(

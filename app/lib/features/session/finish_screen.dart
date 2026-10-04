@@ -344,7 +344,9 @@ class _StatTile extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 19,
                       fontWeight: FontWeight.w800,
-                      color: tone ?? c.text,
+                      // Hanya ikonnya yang diwarnai; angka oranye di kartu putih
+                      // cuma 2,35:1.
+                      color: c.text,
                       fontFeatures: const [FontFeature.tabularFigures()],
                     )),
                 Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11.5, color: c.text2)),
@@ -679,9 +681,14 @@ class _RoutineSyncBannerState extends State<_RoutineSyncBanner> {
             child: InkWell(
               onTap: _busy ? null : () => _apply(!synced),
               borderRadius: BorderRadius.circular(GymRadius.pill),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-                child: Text(link, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: c.accent)),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 44, minWidth: 44),
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Text(link, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: c.accent)),
+                  ),
+                ),
               ),
             ),
           ),

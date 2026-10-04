@@ -536,7 +536,7 @@ class _StatsScreenState extends State<StatsScreen> {
         else
           GymCard(child: EmptyState(art: GymArt.emptyStats, title: t.noStrengthYet, body: t.noSetsInRange)),
         const BodyweightCard(),
-      ], wide);
+      ], wide, trailing: [_dashboardButton(context)]);
     }
 
     final id = logged.contains(_e1rmId) ? _e1rmId! : logged.first;
@@ -723,17 +723,19 @@ class _StatsScreenState extends State<StatsScreen> {
         const BodyweightCard(),
       ],
       wide,
-      trailing: [
-        GymButton(
-          label: t.openDashboard,
-          icon: GymIcons.chart,
-          tone: GymButtonTone.neutral,
-          height: 46,
-          onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DashboardScreen())),
-        ),
-      ],
+      trailing: [_dashboardButton(context)],
     );
   }
+
+  /// Dashboard selalu bisa dibuka dari sini — juga saat belum ada angkatan,
+  /// karena ubin Dashboard di Beranda sudah tidak ada.
+  Widget _dashboardButton(BuildContext context) => GymButton(
+        label: context.t.openDashboard,
+        icon: GymIcons.chart,
+        tone: GymButtonTone.neutral,
+        height: 46,
+        onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DashboardScreen())),
+      );
 }
 
 /// Judul kartu 15/700 dengan keterangan kecil di kanan atau subjudul di bawah.
