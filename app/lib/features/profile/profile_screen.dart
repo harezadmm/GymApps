@@ -16,6 +16,7 @@ import '../../core/keep_awake.dart';
 import '../../core/rest_alert.dart';
 import '../../core/motion.dart';
 import '../../core/strings.dart';
+import '../../core/strings_v3.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
 import '../../data/synced_account_store.dart';
@@ -37,11 +38,17 @@ class ProfileScreen extends StatefulWidget {
     this.onAccentChanged,
     this.themeMode = ThemeMode.dark,
     this.onThemeModeChanged,
+    this.asPage = false,
   });
 
   final AppLanguage language;
   final ValueChanged<AppLanguage> onLanguageChanged;
   final VoidCallback onSignOut;
+
+  /// Dibuka sebagai halaman dorong dari avatar Beranda (UI v3): membawa
+  /// Scaffold sendiri dengan tombol kembali, dan Keluar menutup halamannya
+  /// lebih dulu supaya tidak ada rute mati di atas layar masuk.
+  final bool asPage;
 
   /// Sambungkan akun ini ke server dengan kata sandinya. null kalau build ini
   /// tidak punya server.
@@ -63,6 +70,15 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   bool _keepAwake = true;
   WebRestPush _restPush = WebRestPush.unavailable;
+
+  /// Tema yang sedang dipilih. Dipegang lokal karena sebagai halaman dorong
+  /// widget ini tidak dibangun ulang saat akar aplikasi berganti tema.
+  late ThemeMode _themeMode = widget.themeMode;
+
+  void _signOut() {
+    if (widget.asPage) Navigator.of(context).pop();
+    widget.onSignOut();
+  }
 
   @override
   void initState() {
@@ -190,8 +206,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       (ThemeMode.dark, t.themeDark),
       (ThemeMode.light, t.themeLight),
       (ThemeMode.system, t.themeSystem),
-    ], widget.themeMode);
-    if (v != null) onChanged(v);
+    ], _themeMode);
+    if (v == null) return;
+    setState(() => _themeMode = v);
+    onChanged(v);
   }
 
   Future<void> _pickAccent() async {
@@ -396,7 +414,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               for (final l in AppLanguage.values)
                 SelectRow(
                   title: appLanguageLabel[l]!,
-                  selected: l == widget.language,
+                  // Dari strings yang aktif, bukan widget.language: sebagai
+                  // halaman dorong, nilai yang dibawa tidak ikut berganti.
+                  selected: l == sheet.t.lang,
                   onTap: () => Navigator.of(sheet).pop(l),
                 ),
             ],
@@ -413,10 +433,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final t = context.t;
     final store = context.workouts;
     final settings = store.settings;
-    return ListView(
+    final list = ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       children: [
-        ScreenHeader(title: t.profile),
+        if (widget.asPage)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(0, 0, 0, 18),
+            child: Row(
+              children: [
+                GlassIconButton(icon: GymIcons.arrowLeft, tooltip: t.back, onPressed: () => Navigator.of(context).maybePop()),
+                Expanded(
+                  child: Text(t.profileNav,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: c.text)),
+                ),
+                const SizedBox(width: 44),
+              ],
+            ),
+          )
+        else
+          ScreenHeader(title: t.profile),
         // Kartu akun dulu, lalu tiap grup setelan menyusul bertingkat —
         // urutan yang sama dengan urutan bacanya.
         Reveal(
@@ -569,7 +605,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 SettingsTile(
                   icon: GymIcons.moon, hue: c.hues.violet,
                   label: t.themeTitle,
-                  value: switch (widget.themeMode) {
+                  value: switch (_themeMode) {
                     ThemeMode.light => t.themeLight,
                     ThemeMode.system => t.themeSystem,
                     ThemeMode.dark => t.themeDark,
@@ -592,7 +628,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               SettingsTile(
                 icon: GymIcons.globe, hue: c.hues.cyan,
                 label: t.language,
-                value: appLanguageLabel[widget.language]!,
+                value: appLanguageLabel[t.lang]!,
                 onTap: _pickLanguage,
               ),
               SettingsTile(
@@ -624,7 +660,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               color: c.danger.withValues(alpha: 0.10),
               borderRadius: BorderRadius.circular(GymRadius.card),
               child: InkWell(
-                onTap: widget.onSignOut,
+                onTap: _signOut,
                 borderRadius: BorderRadius.circular(GymRadius.card),
                 child: Container(
                   height: 52,
@@ -650,6 +686,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
       ],
     );
+    if (!widget.asPage) return list;
+    return Scaffold(backgroundColor: c.bg, body: SafeArea(child: list));
   }
 }
 
