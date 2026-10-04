@@ -210,7 +210,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
                   children: [
                     Row(children: [
-                      SquareIconButton(
+                      GlassIconButton(
                         icon: GymIcons.arrowLeft,
                         tooltip: t.back,
                         onPressed: () => Navigator.of(context).pop(),

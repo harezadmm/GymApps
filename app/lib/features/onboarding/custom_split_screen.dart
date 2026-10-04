@@ -351,24 +351,24 @@ class _AddDayRow extends StatelessWidget {
     final c = context.gym;
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(GymRadius.control),
+      borderRadius: BorderRadius.circular(GymRadius.tile),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(GymRadius.control),
+        borderRadius: BorderRadius.circular(GymRadius.tile),
         child: Container(
           height: 46,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(GymRadius.control),
-            border: Border.all(color: c.border),
+            borderRadius: BorderRadius.circular(GymRadius.tile),
+            border: Border.all(color: c.text3, width: 1.2),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(GymIcons.add, size: 15, color: c.accent),
+              Icon(GymIcons.add, size: 17, color: c.text),
               const SizedBox(width: 8),
               Text(context.t.addDay,
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, letterSpacing: 0.6, color: c.accent)),
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.text)),
             ],
           ),
         ),

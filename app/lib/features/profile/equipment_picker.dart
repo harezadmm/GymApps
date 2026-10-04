@@ -52,7 +52,7 @@ Future<void> editEquipment(BuildContext context) {
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
-    backgroundColor: context.gym.surface,
+    backgroundColor: context.gym.bg,
     showDragHandle: true,
     shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(GymRadius.sheet))),
     builder: (sheet) => StatefulBuilder(

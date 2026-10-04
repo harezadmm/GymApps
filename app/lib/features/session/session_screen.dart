@@ -644,7 +644,7 @@ class _SessionScreenState extends State<SessionScreen> with WidgetsBindingObserv
         .fold(0.0, (a, s) => a + s.weight * s.reps);
     final save = await showModalBottomSheet<bool>(
       context: context,
-      backgroundColor: c.surface,
+      backgroundColor: c.bg,
       showDragHandle: true,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(GymRadius.sheet))),
@@ -1312,67 +1312,6 @@ class _SizeChange extends StatelessWidget {
   }
 }
 
-/// Anak yang tampil seketika saat [show] menyala, dan saat padam pergi dengan
-/// menyusut tingginya sambil memudar — supaya isi di bawahnya naik pelan.
-///
-/// Bukan [AnimatedSize]: ia mulai dari tinggi nol saat anak pertama kali
-/// muncul (dan di dalam ListView, anak setinggi nol dianggap tidak ada
-/// selama satu frame), dan ia tidak menerima durasi nol saat gerak
-/// dikurangi. Saat gerak dikurangi, anak langsung hilang.
-class _ExitCollapse extends StatefulWidget {
-  const _ExitCollapse({required this.show, required this.child});
-
-  final bool show;
-  final Widget child;
-
-  @override
-  State<_ExitCollapse> createState() => _ExitCollapseState();
-}
-
-class _ExitCollapseState extends State<_ExitCollapse> {
-  /// Anak terakhir yang tampil, dipegang selama animasi keluar.
-  Widget? _leaving;
-
-  @override
-  void didUpdateWidget(_ExitCollapse old) {
-    super.didUpdateWidget(old);
-    if (old.show && !widget.show) {
-      _leaving = old.child;
-    } else if (widget.show) {
-      _leaving = null;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final d = GymMotion.of(context, GymMotion.normal);
-    final child = widget.show ? widget.child : _leaving;
-    if (child == null || (!widget.show && d == Duration.zero)) return const SizedBox(width: double.infinity);
-    // Satu susunan untuk dua keadaan. Kalau saat tampil anaknya dipasang
-    // langsung dan baru dibungkus ClipRect/Align/Opacity saat pergi, elemen
-    // anaknya dibuang dan dibuat ulang — Reveal di dalamnya mulai lagi dari
-    // opacity nol, dan yang terlihat hanya kotak kosong yang menyusut.
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 1, end: widget.show ? 1 : 0),
-      // Masuk seketika (lihat dokumentasi kelas), pergi beranimasi.
-      duration: widget.show ? Duration.zero : d,
-      curve: GymMotion.curve,
-      onEnd: () {
-        if (mounted && !widget.show) setState(() => _leaving = null);
-      },
-      child: child,
-      builder: (context, v, child) => ClipRect(
-        child: Align(
-          alignment: Alignment.topCenter,
-          heightFactor: v,
-          child: Opacity(opacity: v, child: child),
-        ),
-      ),
-    );
-  }
-}
-
-/// `42:10`, atau `1:02:10` lewat satu jam.
 String _formatElapsed(Duration e) => e.inHours > 0
     ? '${e.inHours}:${(e.inMinutes % 60).toString().padLeft(2, '0')}:${(e.inSeconds % 60).toString().padLeft(2, '0')}'
     : '${e.inMinutes}:${(e.inSeconds % 60).toString().padLeft(2, '0')}';

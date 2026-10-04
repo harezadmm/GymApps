@@ -224,7 +224,7 @@ class _WorkoutEditScreenState extends State<WorkoutEditScreen> {
     final names = <String?>[null, for (final r in store.routines) r.name];
     final picked = await showModalBottomSheet<(String?,)>(
       context: context,
-      backgroundColor: context.gym.surface,
+      backgroundColor: context.gym.bg,
       showDragHandle: true,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(GymRadius.sheet))),

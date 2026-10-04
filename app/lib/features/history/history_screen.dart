@@ -221,7 +221,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final t = context.t;
     await showModalBottomSheet<void>(
       context: context,
-      backgroundColor: c.surface,
+      backgroundColor: c.bg,
       showDragHandle: true,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(GymRadius.sheet))),
@@ -355,7 +355,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final layout = workoutLayout(workout);
     return showModalBottomSheet<Routine>(
       context: context,
-      backgroundColor: context.gym.surface,
+      backgroundColor: context.gym.bg,
       showDragHandle: true,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(GymRadius.sheet))),
@@ -424,7 +424,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: context.gym.surface,
+      backgroundColor: context.gym.bg,
       showDragHandle: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(GymRadius.sheet))),
       builder: (sheetContext) {
