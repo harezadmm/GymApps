@@ -364,18 +364,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
           const SizedBox(height: 12),
           Row(
             children: [
-              Expanded(child: _Metric(label: t.sessionsKpi, value: sessions.toDouble(), format: (v) => v.round().toString(), color: c.hues.violet)),
+              Expanded(child: _Metric(icon: GymIcons.calendar, label: t.sessionsKpi, value: sessions.toDouble(), format: (v) => v.round().toString(), color: c.hues.violet)),
               const SizedBox(width: 10),
-              Expanded(child: _Metric(label: t.workingSetsKpi, value: sets.toDouble(), format: (v) => v.round().toString(), color: c.hues.cyan)),
+              Expanded(child: _Metric(icon: GymIcons.menu, label: t.workingSetsKpi, value: sets.toDouble(), format: (v) => v.round().toString(), color: c.hues.cyan)),
             ],
           ),
           const SizedBox(height: 10),
           Row(
             children: [
-              Expanded(child: _Metric(label: t.volumeKpi, value: volume, format: (v) => volumeText(v, unit), color: c.hues.orange)),
+              Expanded(child: _Metric(icon: GymIcons.scale, label: t.volumeKpi, value: volume, format: (v) => volumeText(v, unit), color: c.hues.orange)),
               const SizedBox(width: 10),
               Expanded(
                 child: _Metric(
+                  icon: GymIcons.chart,
                   label: '${t.sessionsKpi} ${t.perWeek}',
                   value: sessions / weeks,
                   format: (v) => v.toStringAsFixed(1),
@@ -448,8 +449,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
 /// Satu angka kartu ringkasan: label kecil, angka yang menghitung naik.
 class _Metric extends StatelessWidget {
-  const _Metric({required this.label, required this.value, required this.format, required this.color});
+  const _Metric({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.format,
+    required this.color,
+  });
 
+  final IconData icon;
   final String label;
   final double value;
   final String Function(double) format;
@@ -458,24 +466,36 @@ class _Metric extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.gym;
+    // Ubin di dalam kartu: latar surface2 r18 (bukan kartu bertumpuk kartu),
+    // tile hue 30 di kiri, angka 17/700 dan label 11,5 di kanan.
     return Container(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 11),
-      decoration: BoxDecoration(color: c.hues.soft(color, c), borderRadius: BorderRadius.circular(GymRadius.control)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: c.surface2, borderRadius: BorderRadius.circular(GymRadius.tile)),
+      child: Row(
         children: [
-          Text(label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: c.text2)),
-          const SizedBox(height: 4),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: CountUp(
-              value,
-              format: format,
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
+          HueTile(icon: icon, hue: color, size: 30, radius: 10, iconSize: 15),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: CountUp(
+                    value,
+                    format: format,
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleLarge
+                        ?.copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
+                  ),
+                ),
+                Text(label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 11.5, color: c.text2)),
+              ],
             ),
           ),
         ],
