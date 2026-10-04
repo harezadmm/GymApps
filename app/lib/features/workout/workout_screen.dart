@@ -16,6 +16,7 @@ import '../../domain/program.dart';
 import '../library/library_screen.dart';
 import '../onboarding/program_flow.dart';
 import '../session/session_launcher.dart';
+import 'routine_actions.dart';
 import 'routine_editor_screen.dart';
 
 class WorkoutScreen extends StatefulWidget {
@@ -28,10 +29,7 @@ class WorkoutScreen extends StatefulWidget {
 class _WorkoutScreenState extends State<WorkoutScreen> {
   int _tab = 0;
 
-  Future<String?> _askName(String title, {String initial = ''}) => showDialog<String>(
-        context: context,
-        builder: (_) => _NameDialog(title: title, initial: initial),
-      );
+  Future<String?> _askName(String title, {String initial = ''}) => askRoutineName(context, title, initial: initial);
 
   Future<void> _newRoutine() async {
     final store = context.workouts;
@@ -74,7 +72,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     final store = context.workouts;
     final ok = await showDialog<bool>(
       context: context,
-      builder: (context) => _ConfirmDeleteDialog(name: r.name),
+      builder: (context) => ConfirmDeleteRoutineDialog(name: r.name),
     );
     if (ok != true) return;
     await store.deleteRoutine(r.id);
@@ -519,104 +517,6 @@ class _AddRoutineRow extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _NameDialog extends StatefulWidget {
-  const _NameDialog({required this.title, required this.initial});
-
-  final String title;
-  final String initial;
-
-  @override
-  State<_NameDialog> createState() => _NameDialogState();
-}
-
-class _NameDialogState extends State<_NameDialog> {
-  late final _controller = TextEditingController(text: widget.initial);
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _submit() => Navigator.of(context).pop(_controller.text);
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.gym;
-    OutlineInputBorder border(Color colour) => OutlineInputBorder(
-          borderRadius: BorderRadius.circular(GymRadius.control),
-          borderSide: BorderSide(color: colour),
-        );
-
-    return AlertDialog(
-      backgroundColor: c.surface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(GymRadius.large)),
-      title: Text(widget.title, style: Theme.of(context).textTheme.titleLarge),
-      content: TextField(
-        controller: _controller,
-        autofocus: true,
-        textCapitalization: TextCapitalization.sentences,
-        onSubmitted: (_) => _submit(),
-        style: TextStyle(fontSize: 15, color: c.text),
-        decoration: InputDecoration(
-          hintText: context.t.routineNameHint,
-          hintStyle: TextStyle(fontSize: 15, color: c.text2),
-          filled: true,
-          fillColor: c.bgNested,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-          border: border(c.border),
-          enabledBorder: border(c.border),
-          focusedBorder: border(c.accent),
-        ),
-      ),
-      actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(context.t.cancel, style: TextStyle(fontWeight: FontWeight.w700, color: c.text2)),
-        ),
-        GymButton(label: context.t.save, height: 42, expand: false, onPressed: _submit),
-      ],
-    );
-  }
-}
-
-class _ConfirmDeleteDialog extends StatelessWidget {
-  const _ConfirmDeleteDialog({required this.name});
-
-  final String name;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.gym;
-    return AlertDialog(
-      backgroundColor: c.surface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(GymRadius.large)),
-      title: Text(context.t.deleteRoutineTitle(name), style: Theme.of(context).textTheme.titleLarge),
-      content: Text(
-        // Katakan apa yang hilang dan apa yang tidak. Sesi yang sudah tercatat
-        // adalah fakta dan tidak ikut terhapus bersama rencananya.
-        context.t.deleteRoutineBody,
-        style: TextStyle(fontSize: 13.5, height: 1.45, color: c.text2),
-      ),
-      actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(false),
-          child: Text(context.t.cancel, style: TextStyle(fontWeight: FontWeight.w700, color: c.text2)),
-        ),
-        GymButton(
-          label: context.t.delete,
-          height: 42,
-          expand: false,
-          tone: GymButtonTone.danger,
-          onPressed: () => Navigator.of(context).pop(true),
-        ),
-      ],
     );
   }
 }

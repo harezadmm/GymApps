@@ -27,8 +27,10 @@ import 'features/history/history_screen.dart';
 import 'features/home/home_screen.dart';
 import 'features/onboarding/onboarding_screens.dart';
 import 'features/onboarding/program_flow.dart';
+import 'core/strings_v3.dart';
 import 'features/profile/profile_screen.dart';
 import 'features/session/session_launcher.dart';
+import 'features/session/start_session_sheet.dart';
 import 'features/stats/stats_screen.dart';
 import 'features/workout/workout_screen.dart';
 
@@ -569,8 +571,9 @@ class _AppFlowState extends State<AppFlow> {
   }
 }
 
-/// Lima tab datar sesuai `REFRENSI/04 Home.png`: Workout · Home · Stats ·
-/// History · Profile, dengan Home sebagai tab default (PRD §10).
+/// Empat tab UI v3 — Beranda · Riwayat · [+] · Program · Statistik — dengan
+/// tombol tengah yang membuka lembar Mulai sesi. Profil bukan tab: dibuka
+/// dari avatar Beranda sebagai halaman dorong (spec UI-V3 §5).
 class HomeShell extends StatefulWidget {
   const HomeShell({
     super.key,
@@ -598,7 +601,28 @@ class HomeShell extends StatefulWidget {
 }
 
 class _HomeShellState extends State<HomeShell> {
-  int _tab = 1;
+  int _tab = 0;
+
+  /// Profil adalah halaman di atas shell, bukan tab. Bahasa dan tema dibaca
+  /// layar itu dari context (strings) dan state lokalnya, jadi nilai yang
+  /// dibawa saat dorong tidak jadi basi.
+  void _openProfile() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ProfileScreen(
+          asPage: true,
+          language: widget.language,
+          onLanguageChanged: widget.onLanguageChanged,
+          onSignOut: widget.onSignOut,
+          email: widget.email,
+          onConnect: widget.onConnect,
+          onAccentChanged: widget.onAccentChanged,
+          themeMode: widget.themeMode,
+          onThemeModeChanged: widget.onThemeModeChanged,
+        ),
+      ),
+    );
+  }
 
   @override
   void initState() {
@@ -633,20 +657,6 @@ class _HomeShellState extends State<HomeShell> {
   @override
   Widget build(BuildContext context) {
     final c = context.gym;
-    final t = context.t;
-    // Setiap tab punya pasangan garis/isi: yang aktif "terisi", sisanya
-    // garis. Stats pakai grafik, bukan monitor jantung — ini beban dan
-    // e1RM, bukan detak. Labelnya tidak digambar (referensi memakai nav pil
-    // berisi ikon saja) tapi tetap ada untuk pembaca layar dan tooltip.
-    final tabs = <(IconData, IconData, String)>[
-      (GymIcons.dumbbell, GymIcons.dumbbell, t.workout),
-      (GymIcons.home, GymIcons.home, t.home),
-      (GymIcons.chart, GymIcons.chart, t.stats),
-      (GymIcons.clock, GymIcons.clock, t.history),
-      // Referensi memakai roda gigi untuk tab terakhir; tab Profil di sini
-      // memang berisi setelan.
-      (GymIcons.settings, GymIcons.settings, t.profile),
-    ];
     return Scaffold(
       backgroundColor: c.bg,
       body: SafeArea(
@@ -655,47 +665,32 @@ class _HomeShellState extends State<HomeShell> {
         // di dalam tiap layar bertahan saat berpindah-pindah.
         child: FadeIndexedStack(
           index: _tab,
-          // Tab selain Home baru dibangun saat pertama kali dibuka
+          // Tab selain Beranda baru dibangun saat pertama kali dibuka
           // (_LazyTab): IndexedStack menata semua anaknya sejak awal, jadi
-          // tanpa ini animasi kedatangan kartu di tab Workout/Profil habis
-          // berjalan diam-diam saat aplikasi dibuka, dan yang dilihat orang
-          // saat pindah tab hanya layar yang sudah diam. Sekali dibangun,
-          // tab tetap hidup seperti sebelumnya.
+          // tanpa ini animasi kedatangan kartu di tab lain habis berjalan
+          // diam-diam saat aplikasi dibuka. Sekali dibangun, tab tetap hidup.
           children: [
-            _LazyTab(active: _tab == 0, child: const WorkoutScreen()),
             HomeScreen(
               email: widget.email,
-              onOpenProfile: () => setState(() => _tab = 4),
-              // Blok statistik dan sheet hari di Home membuka tab lain —
-              // angka yang dilihat di sana bisa langsung ditelusuri.
+              onOpenProfile: _openProfile,
+              // Tautan di Beranda membuka tab lain — angka yang dilihat di
+              // sana bisa langsung ditelusuri. 1 = Riwayat, 3 = Statistik.
               onOpenTab: (i) => setState(() => _tab = i),
             ),
-            _LazyTab(active: _tab == 2, child: const StatsScreen()),
-            _LazyTab(active: _tab == 3, child: const HistoryScreen()),
-            _LazyTab(
-              active: _tab == 4,
-              child: ProfileScreen(
-                language: widget.language,
-                onLanguageChanged: widget.onLanguageChanged,
-                onSignOut: widget.onSignOut,
-                email: widget.email,
-                onConnect: widget.onConnect,
-                onAccentChanged: widget.onAccentChanged,
-                themeMode: widget.themeMode,
-                onThemeModeChanged: widget.onThemeModeChanged,
-              ),
-            ),
+            _LazyTab(active: _tab == 1, child: const HistoryScreen()),
+            _LazyTab(active: _tab == 2, child: const WorkoutScreen()),
+            _LazyTab(active: _tab == 3, child: const StatsScreen()),
           ],
         ),
       ),
-      bottomNavigationBar: _FloatingNav(
-        tabs: tabs,
+      bottomNavigationBar: _GlassTabBar(
         index: _tab,
         onChanged: (i) {
           if (i == _tab) return;
           GymHaptics.tap();
           setState(() => _tab = i);
         },
+        onStart: () => showStartSessionSheet(context),
       ),
     );
   }
@@ -724,85 +719,112 @@ class _LazyTabState extends State<_LazyTab> {
   }
 }
 
-/// Nav bawah bergaya referensi: pil abu gelap yang melayang di atas latar,
-/// berisi ikon saja; yang aktif berwarna aksen.
-class _FloatingNav extends StatelessWidget {
-  const _FloatingNav({required this.tabs, required this.index, required this.onChanged});
+/// Tab bar kaca yang mengapung (spec §5): empat tab berlabel dan tombol +
+/// kaca berwarna di tengah. Satu dari tiga permukaan yang boleh memakai
+/// blur latar — ia duduk di atas isi yang bergulir.
+class _GlassTabBar extends StatelessWidget {
+  const _GlassTabBar({required this.index, required this.onChanged, required this.onStart});
 
-  final List<(IconData, IconData, String)> tabs;
   final int index;
   final ValueChanged<int> onChanged;
+  final VoidCallback onStart;
 
   @override
   Widget build(BuildContext context) {
     final c = context.gym;
+    final t = context.t;
+    final tabs = <(IconData, String)>[
+      (GymIcons.home, t.homeTab),
+      (GymIcons.clock, t.historyTab),
+      (GymIcons.dumbbell, t.programTab),
+      (GymIcons.chart, t.statsTab),
+    ];
+    Widget tab(int i) {
+      final (icon, label) = tabs[i];
+      final on = i == index;
+      return Expanded(
+        child: Semantics(
+          button: true,
+          selected: on,
+          label: label,
+          child: Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+              onTap: () => onChanged(i),
+              borderRadius: BorderRadius.circular(GymRadius.nav),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  AnimatedScale(
+                    scale: on ? 1.08 : 1,
+                    duration: GymMotion.of(context, GymMotion.quick),
+                    curve: GymMotion.pop,
+                    child: Icon(icon, size: 22, color: on ? c.accent : c.text2),
+                  ),
+                  const SizedBox(height: 3),
+                  AnimatedDefaultTextStyle(
+                    duration: GymMotion.of(context, GymMotion.quick),
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: on ? FontWeight.w600 : FontWeight.w500,
+                      color: on ? c.accent : c.text2,
+                    ),
+                    child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     return SafeArea(
       top: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 6, 16, 12),
-        child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 6, 16, 14),
+        child: GlassSurface(
+          tone: GlassTone.bar,
+          blur: true,
+          radius: GymRadius.nav,
           height: 66,
-          decoration: BoxDecoration(
-            color: c.surface,
-            borderRadius: BorderRadius.circular(GymRadius.nav),
-            boxShadow: [
-              BoxShadow(color: Colors.black.withValues(alpha: c.isLight ? 0.10 : 0.45), blurRadius: 24, offset: const Offset(0, 8)),
-            ],
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: 8),
           child: Row(
             children: [
-              for (final (i, (icon, activeIcon, label)) in tabs.indexed)
-                Expanded(
-                  child: Semantics(
-                    button: true,
-                    selected: i == index,
-                    label: label,
-                    child: Tooltip(
-                      message: label,
-                      child: Material(
-                        type: MaterialType.transparency,
-                        child: InkWell(
-                          onTap: () => onChanged(i),
-                          borderRadius: BorderRadius.circular(GymRadius.nav),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              // Ikon tab aktif membesar sedikit dengan
-                              // sedikit pantulan: ibu jari yang baru
-                              // memindah tab langsung melihat jawabannya.
-                              AnimatedScale(
-                                scale: i == index ? 1.12 : 1,
-                                duration: GymMotion.of(context, GymMotion.quick),
-                                curve: GymMotion.pop,
-                                child: AnimatedSwitcher(
-                                  duration: GymMotion.of(context, GymMotion.quick),
-                                  child: Icon(
-                                    i == index ? activeIcon : icon,
-                                    key: ValueKey(i == index),
-                                    size: 26,
-                                    color: i == index ? c.accent : c.text2,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 5),
-                              // Paket ikonnya garis saja, tanpa versi terisi;
-                              // tab aktif ditandai warna dan titik kecil.
-                              AnimatedContainer(
-                                duration: GymMotion.of(context, GymMotion.quick),
-                                width: 5,
-                                height: 5,
-                                decoration: BoxDecoration(
-                                  color: i == index ? c.accent : Colors.transparent,
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                            ],
+              tab(0),
+              tab(1),
+              Tooltip(
+                message: t.startSheetTitle,
+                child: Semantics(
+                  button: true,
+                  label: t.startSheetTitle,
+                  child: PressScale(
+                    scale: 0.92,
+                    child: SizedBox(
+                      key: const ValueKey('tab-start'),
+                      width: 50,
+                      height: 50,
+                      child: GlassSurface(
+                        tone: GlassTone.tinted,
+                        radius: 25,
+                        child: Material(
+                          type: MaterialType.transparency,
+                          child: InkWell(
+                            customBorder: const CircleBorder(),
+                            onTap: () {
+                              GymHaptics.tap();
+                              onStart();
+                            },
+                            child: const Center(child: Icon(GymIcons.plus, size: 24, color: Colors.white)),
                           ),
                         ),
                       ),
                     ),
                   ),
                 ),
+              ),
+              tab(2),
+              tab(3),
             ],
           ),
         ),

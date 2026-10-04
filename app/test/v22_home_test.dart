@@ -140,7 +140,7 @@ void main() {
 
     await tester.tap(find.text('View history'));
     await tester.pumpAndSettle();
-    expect(opened, 3);
+    expect(opened, 1);
     expect(find.byType(BottomSheet), findsNothing);
     expect(tester.takeException(), isNull);
   });
@@ -179,15 +179,15 @@ void main() {
 
     await tester.tap(find.text('Volume 7d'));
     await tester.pump();
-    expect(opened, 2);
+    expect(opened, 3);
 
     await tester.tap(find.text('e1RM up'));
     await tester.pump();
-    expect(opened, 2);
+    expect(opened, 3);
 
     await tester.tap(find.text('Since last'));
     await tester.pump();
-    expect(opened, 3);
+    expect(opened, 1);
     expect(tester.takeException(), isNull);
   });
 
