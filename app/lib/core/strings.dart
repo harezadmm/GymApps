@@ -359,8 +359,8 @@ class Strings {
   String get syncFailed =>
       _('Sync failed — saved on this device', 'Sync gagal — tersimpan di HP ini');
   String get syncPending => _('Not synced yet', 'Belum tersinkron');
-  String get syncNoSession => _('Not connected to the server — tap "Force sync now"',
-      'Belum tersambung ke server — ketuk "Paksa sync sekarang"');
+  String get syncNoSession => _('Not connected to the server — tap "Force sync"',
+      'Belum tersambung ke server — ketuk "Paksa sinkron"');
   String get connectTitle => _('Connect to the server', 'Sambungkan ke server');
   String get connectBody => _(
         'Enter your account password once to start syncing this account.',

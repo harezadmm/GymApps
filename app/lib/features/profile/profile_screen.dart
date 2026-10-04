@@ -138,18 +138,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
   /// Pemilih satu nilai dari daftar, dalam sheet. null kalau ditutup.
   Future<T?> _pick<T>(String title, List<(T, String)> options, T current) => showModalBottomSheet<T>(
         context: context,
-        backgroundColor: context.gym.surface,
+        backgroundColor: context.gym.bg,
+        showDragHandle: true,
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(GymRadius.sheet)),
         ),
         builder: (sheet) => SafeArea(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                SectionLabel(title),
+                Text(title, style: Theme.of(sheet).textTheme.titleLarge),
                 const SizedBox(height: 10),
                 for (final (v, label) in options)
                   SelectRow(title: label, selected: v == current, onTap: () => Navigator.of(sheet).pop(v)),
@@ -398,18 +399,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _pickLanguage() async {
     final picked = await showModalBottomSheet<AppLanguage>(
       context: context,
-      backgroundColor: context.gym.surface,
+      backgroundColor: context.gym.bg,
+      showDragHandle: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(GymRadius.sheet)),
       ),
       builder: (sheet) => SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              SectionLabel(sheet.t.language),
+              Text(sheet.t.language, style: Theme.of(sheet).textTheme.titleLarge),
               const SizedBox(height: 10),
               for (final l in AppLanguage.values)
                 SelectRow(
@@ -434,7 +436,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final store = context.workouts;
     final settings = store.settings;
     final list = ListView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
       children: [
         if (widget.asPage)
           Padding(
@@ -455,93 +457,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ScreenHeader(title: t.profile),
         // Kartu akun dulu, lalu tiap grup setelan menyusul bertingkat —
         // urutan yang sama dengan urutan bacanya.
-        Reveal(
-          child: GymCard(
-            radius: GymRadius.large,
-            padding: const EdgeInsets.all(14),
-            child: Row(
-              children: [
-                Reveal(scale: true, slide: false, child: AvatarCircle(text: _initials(widget.email), size: 50)),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(widget.email ?? '…',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(fontSize: 15)),
-                      const SizedBox(height: 3),
-                      // Status sinkron dibaca dari store, bukan dari konstanta
-                      // build. Kredensial yang terpasang tidak sama dengan sinkron
-                      // yang berhasil, dan bedanya baru ketahuan saat ganti HP —
-                      // saat itu sudah terlambat.
-                      Builder(builder: (context) {
-                        final store = context.workouts;
-                        final (label, tone, icon) = switch (store.syncStatus) {
-                          _ when !store.hasBackend => (t.syncOff, c.text2, GymIcons.cloudOff),
-                          // Paket Basic UI tidak punya awan-sinkron; jari-jari
-                          // "loading" yang diputar SpinIcon sudah terbaca
-                          // sebagai proses yang sedang jalan.
-                          SyncStatus.syncing => (t.syncing, c.text2, GymIcons.sync),
-                          SyncStatus.synced => (t.syncedNow, c.doneInk, GymIcons.cloudCheck),
-                          SyncStatus.failed => (t.syncFailed, c.warn, GymIcons.cloudOff),
-                          SyncStatus.idle => (t.syncPending, c.text2, GymIcons.cloud),
-                          SyncStatus.noSession => (t.syncNoSession, c.warn, GymIcons.cloudOff),
-                        };
-                        final syncing = store.hasBackend && store.syncStatus == SyncStatus.syncing;
-                        return FadeSwap(
-                          alignment: Alignment.centerLeft,
-                          child: Row(
-                            key: ValueKey(label),
-                            children: [
-                              if (syncing)
-                                SpinIcon(icon, size: 14, color: tone)
-                              else
-                                Icon(icon, size: 14, color: tone),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: Text(label,
-                                    style: TextStyle(
-                                        fontSize: 12.5, fontWeight: FontWeight.w600, color: tone)),
-                              ),
-                            ],
-                          ),
-                        );
-                      }),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
+        Reveal(child: _AccountCard(email: widget.email, initials: _initials(widget.email))),
         const SizedBox(height: 18),
-        SectionLabel(t.training),
+        SectionLabel(t.groupTraining),
         const SizedBox(height: 8),
         Reveal(
           index: 1,
           child: SettingsGroup(
             children: [
-              SettingsTile(icon: GymIcons.scale, hue: c.hues.violet, label: t.units, value: settings.unit.label, onTap: _pickUnit),
+              SettingsTile(icon: GymIcons.scale, label: t.weightUnitRow, value: settings.unit.label, onTap: _pickUnit),
               SettingsTile(
-                  icon: GymIcons.alarm, hue: c.hues.cyan,
-                  label: t.defaultRest,
-                  value: _restText(settings.defaultRestSeconds),
-                  onTap: _pickDefaultRest),
+                icon: GymIcons.alarm,
+                label: t.defaultRest,
+                value: _restText(settings.defaultRestSeconds),
+                onTap: _pickDefaultRest,
+              ),
               SettingsTile(
-                  icon: GymIcons.chart, hue: c.hues.orange,
-                  label: t.deloadFactor,
-                  value: '${(settings.deloadFactor * 100).round()}%',
-                  onTap: _pickDeload),
+                icon: GymIcons.arrowDownRight,
+                label: t.deloadFactor,
+                value: '${(settings.deloadFactor * 100).round()}%',
+                onTap: _pickDeload,
+              ),
               SettingsTile(
-                icon: GymIcons.menu, hue: c.hues.pink,
-                label: t.logRir,
+                icon: GymIcons.menu,
+                label: t.logRirRow,
                 trailing: Switch(
                   value: settings.logRir,
                   onChanged: (v) => store.updateSettings(settings.copyWith(logRir: v)),
                 ),
               ),
               SettingsTile(
-                icon: GymIcons.eye, hue: c.hues.lime,
+                icon: GymIcons.eye,
                 label: t.keepScreenAwake,
                 trailing: Switch(
                   value: _keepAwake,
@@ -553,8 +499,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               if (kIsWeb && _restPush != WebRestPush.unavailable)
                 SettingsTile(
-                  icon: GymIcons.bell, hue: c.hues.green,
-                  label: t.restPushTitle,
+                  icon: GymIcons.bell,
+                  label: t.restPushRow,
                   value: switch (_restPush) {
                     WebRestPush.on => t.restPushOn,
                     WebRestPush.blocked => t.restPushBlocked,
@@ -564,13 +510,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   onTap: _toggleRestPush,
                 ),
               SettingsTile(
-                  icon: GymIcons.calendar, hue: c.hues.violet,
-                  label: t.weekStartsOn,
-                  value: t.weekdayLong(settings.weekStartsOn),
-                  onTap: _pickWeekStart),
+                icon: GymIcons.calendar,
+                label: t.weekStartsRow,
+                value: t.weekdayLong(settings.weekStartsOn),
+                onTap: _pickWeekStart,
+              ),
               SettingsTile(
-                icon: GymIcons.dumbbell, hue: c.hues.cyan,
-                label: t.myEquipment,
+                icon: GymIcons.dumbbell,
+                label: t.myEquipmentOnly,
                 value: settings.equipment == null ? t.equipmentAll : t.equipmentCount(settings.equipment!.length),
                 onTap: () => editEquipment(context),
               ),
@@ -578,32 +525,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ),
         const SizedBox(height: 18),
-        SectionLabel(t.data),
+        SectionLabel(t.groupAppearance),
         const SizedBox(height: 8),
         Reveal(
           index: 2,
           child: SettingsGroup(
             children: [
-              SettingsTile(icon: GymIcons.download, hue: c.hues.orange, label: t.exportBackup, onTap: _export),
-              SettingsTile(icon: GymIcons.dataTransfer, hue: c.hues.pink, label: t.importBackup, onTap: _import),
-              SettingsTile(
-                icon: GymIcons.sync, hue: c.hues.green,
-                label: t.forceSync,
-                onTap: _forceSync,
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 18),
-        SectionLabel(t.app),
-        const SizedBox(height: 8),
-        Reveal(
-          index: 3,
-          child: SettingsGroup(
-            children: [
               if (widget.onThemeModeChanged != null)
                 SettingsTile(
-                  icon: GymIcons.moon, hue: c.hues.violet,
+                  icon: GymIcons.moon,
                   label: t.themeTitle,
                   value: switch (_themeMode) {
                     ThemeMode.light => t.themeLight,
@@ -613,75 +543,61 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   onTap: _pickTheme,
                 ),
               SettingsTile(
-                icon: GymIcons.settings, hue: c.hues.pink,
+                icon: GymIcons.settings,
                 label: t.accentColour,
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(width: 18, height: 18, decoration: BoxDecoration(color: c.accent, shape: BoxShape.circle)),
-                    const SizedBox(width: 8),
-                    Icon(GymIcons.chevronRight, size: 18, color: c.text3),
-                  ],
-                ),
+                // Lima titik langsung di baris: ketuk titik = pilih. Ketuk
+                // barisnya membuka lembar bernama — untuk pembaca layar dan
+                // untuk yang ingin tahu nama warnanya.
+                trailing: _AccentDots(onPick: widget.onAccentChanged),
                 onTap: widget.onAccentChanged == null ? null : _pickAccent,
               ),
               SettingsTile(
-                icon: GymIcons.globe, hue: c.hues.cyan,
+                icon: GymIcons.globe,
                 label: t.language,
                 value: appLanguageLabel[t.lang]!,
                 onTap: _pickLanguage,
               ),
-              SettingsTile(
-                  icon: GymIcons.info, hue: c.hues.orange,
-                  label: t.aboutApp,
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      FutureBuilder<String>(
-                        future: _version,
-                        // Kosong selagi dibaca, bukan placeholder — angka versi
-                        // yang salah sekejap tetap sempat terbaca dan dilaporkan.
-                        builder: (context, snap) => Text(snap.data ?? '',
-                            style: TextStyle(fontSize: 13.5, color: c.text2)),
-                      ),
-                      const SizedBox(width: 8),
-                      Icon(GymIcons.chevronRight, size: 18, color: c.text3),
-                    ],
-                  ),
-                  onTap: _about),
             ],
           ),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 18),
+        SectionLabel(t.groupDataAccount),
+        const SizedBox(height: 8),
         Reveal(
-          index: 4,
-          child: PressScale(
-            child: Material(
-              color: c.danger.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(GymRadius.card),
-              child: InkWell(
-                onTap: _signOut,
-                borderRadius: BorderRadius.circular(GymRadius.card),
-                child: Container(
-                  height: 52,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(GymRadius.card),
-                    border: Border.all(color: c.danger.withValues(alpha: 0.4)),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(GymIcons.logout, size: 17, color: c.danger),
-                      const SizedBox(width: 9),
-                      Text(t.logOut,
-                          style: TextStyle(
-                              fontSize: 13, fontWeight: FontWeight.w800, letterSpacing: 0.6, color: c.danger)),
-                    ],
-                  ),
+          index: 3,
+          child: SettingsGroup(
+            children: [
+              SettingsTile(icon: GymIcons.sync, label: t.forceSyncRow, onTap: _forceSync),
+              SettingsTile(icon: GymIcons.download, label: t.exportBackup, onTap: _export),
+              SettingsTile(icon: GymIcons.dataTransfer, label: t.importBackup, onTap: _import),
+              SettingsTile(
+                icon: GymIcons.info,
+                label: t.aboutRow,
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    FutureBuilder<String>(
+                      future: _version,
+                      // Kosong selagi dibaca, bukan placeholder — angka versi
+                      // yang salah sekejap tetap sempat terbaca dan dilaporkan.
+                      builder: (context, snap) => Text(snap.data ?? '', style: TextStyle(fontSize: 13.5, color: c.text2)),
+                    ),
+                    const SizedBox(width: 10),
+                    Icon(GymIcons.chevronRight, size: 16, color: c.text3),
+                  ],
                 ),
+                onTap: _about,
               ),
-            ),
+              // Keluar jadi baris terakhir grup ini, bukan tombol besar: ia
+              // tindakan akun seperti yang lain, hanya berwarna peringatan.
+              SettingsTile(
+                icon: GymIcons.logout,
+                label: t.logOutRow,
+                tone: c.danger,
+                trailing: const SizedBox.shrink(),
+                onTap: _signOut,
+              ),
+            ],
           ),
         ),
       ],
@@ -690,6 +606,126 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Scaffold(backgroundColor: c.bg, body: SafeArea(child: list));
   }
 }
+
+/// Kartu akun: avatar inisial, email, dan satu baris status sinkron dengan
+/// titik warna — dibaca dari store, bukan dari konstanta build. Kredensial
+/// yang terpasang tidak sama dengan sinkron yang berhasil, dan bedanya baru
+/// ketahuan saat ganti HP — saat itu sudah terlambat.
+class _AccountCard extends StatelessWidget {
+  const _AccountCard({required this.email, required this.initials});
+
+  final String? email;
+  final String initials;
+
+  /// "2 menit lalu" dari waktu sinkron terakhir; kosong kalau belum pernah.
+  static String _ago(Strings t, DateTime? at) {
+    if (at == null) return '';
+    final d = DateTime.now().difference(at);
+    if (d.inMinutes < 1) return t.justNow;
+    if (d.inHours < 1) return t.minutesAgo(d.inMinutes);
+    if (d.inDays < 1) return t.hoursAgo(d.inHours);
+    return t.daysAgoShort(d.inDays);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gym;
+    final t = context.t;
+    final store = context.workouts;
+    final (title, sub, dot) = switch (store.syncStatus) {
+      _ when !store.hasBackend => (t.syncNoServerPill, '', c.text3),
+      SyncStatus.syncing => (t.syncing, '', c.text3),
+      SyncStatus.synced => (t.syncedPill, _ago(t, store.lastSyncedAt), c.doneInk),
+      SyncStatus.failed => (t.syncNotYet, t.syncFailed, c.warn),
+      SyncStatus.noSession => (t.syncNotYet, t.syncNoSession, c.warn),
+      SyncStatus.idle => (t.syncNotYet, _ago(t, store.lastSyncedAt), c.text3),
+    };
+    final line = sub.isEmpty ? title : '$title · $sub';
+    return GymCard(
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          Reveal(scale: true, slide: false, child: AvatarCircle(text: initials, size: 52)),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(email ?? '…',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: c.text)),
+                const SizedBox(height: 4),
+                FadeSwap(
+                  alignment: Alignment.centerLeft,
+                  child: Row(
+                    key: ValueKey(line),
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(top: 5),
+                        child: Container(width: 7, height: 7, decoration: BoxDecoration(color: dot, shape: BoxShape.circle)),
+                      ),
+                      const SizedBox(width: 7),
+                      Expanded(
+                        child: Text(line,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 12.5, height: 1.35, color: c.text2)),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Lima titik warna aksen 18 dp; yang terpilih bergaris `text` 2 dp. Sasaran
+/// ketuknya 26 dp per titik — titiknya sendiri terlalu kecil untuk jari.
+class _AccentDots extends StatelessWidget {
+  const _AccentDots({required this.onPick});
+
+  final ValueChanged<Color>? onPick;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gym;
+    // Di tema terang aksen yang tampil sudah digelapkan; yang dicocokkan
+    // pilihan aslinya.
+    final current = (c.accentBase ?? c.accent).toARGB32();
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (final (i, color) in accentChoices.indexed) ...[
+          if (i > 0) const SizedBox(width: 2),
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onPick == null ? null : () => onPick!(color),
+            child: Padding(
+              padding: const EdgeInsets.all(4),
+              child: Container(
+                key: ValueKey('accent-dot-$i'),
+                width: 18,
+                height: 18,
+                decoration: BoxDecoration(
+                  color: color,
+                  shape: BoxShape.circle,
+                  border: color.toARGB32() == current ? Border.all(color: c.text, width: 2) : null,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
 
 /// Dialog kata sandi untuk menyambung ke server.
 ///
