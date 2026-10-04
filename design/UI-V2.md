@@ -1,5 +1,9 @@
 # UI v2 — mengikuti referensi "Diet Adviser"
 
+> **Digantikan oleh [`UI-V3.md`](UI-V3.md) (v3.0.0, Oktober 2026).** Dokumen ini
+> dipertahankan sebagai catatan sejarah gaya v2 "Diet Adviser"; token dan komponen
+> yang berlaku sekarang ada di UI-V3.
+
 Referensi: `REFRENSI/NEW REFRENSI/*.png` (17 layar UI kit). Isi dan fitur
 aplikasi tidak berubah; yang diambil dari referensi hanya gayanya. Semua
 token ada di `app/lib/core/theme.dart`, komponennya di `app/lib/core/widgets.dart`.
