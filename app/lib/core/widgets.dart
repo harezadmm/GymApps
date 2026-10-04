@@ -132,6 +132,29 @@ class Pill extends StatelessWidget {
   }
 }
 
+/// Nada pil perubahan di baris gerakan dan target berikutnya.
+enum ChangeTone { up, down, neutral }
+
+/// Pil perubahan: hijau untuk naik ("+1 rep", "+2,5 kg"), hangat untuk turun
+/// ("deload", "−5 kg"), abu untuk netral ("tahan", "baru").
+class ChangePill extends StatelessWidget {
+  const ChangePill(this.text, {super.key, this.tone = ChangeTone.up});
+
+  final String text;
+  final ChangeTone tone;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gym;
+    final (bg, ink) = switch (tone) {
+      ChangeTone.up => (c.doneBg, c.doneInk),
+      ChangeTone.down => (c.warnSoft, c.warn),
+      ChangeTone.neutral => (c.surface2, c.text2),
+    };
+    return Pill(color: bg, textColor: ink, child: Text(text));
+  }
+}
+
 /// Tag kapital kecil di atas latar aksen lembut — "HARI INI", "BESOK".
 class TagPill extends StatelessWidget {
   const TagPill(this.text, {super.key});

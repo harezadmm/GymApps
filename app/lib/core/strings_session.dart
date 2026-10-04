@@ -57,7 +57,7 @@ extension SessionStrings on Strings {
   String get layoutNotSaved =>
       _id ? 'Susunan sesi ini tidak disimpan ke rutinitas' : "This session's layout was not saved to the routine";
   String get saveToRoutine => _id ? 'Simpan ke rutinitas' : 'Save to routine';
-  String get revertUpper => _id ? 'BATALKAN' : 'UNDO';
+  String get revertUpper => _id ? 'Batalkan' : 'Undo';
   String get reverted => _id ? 'Dikembalikan' : 'Reverted';
 
   // ── Ringkasan selisih ───────────────────────────────────────────────────

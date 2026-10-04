@@ -194,9 +194,6 @@ class RingsCard extends StatelessWidget {
   }
 }
 
-/// Nada pil perubahan di baris gerakan dan target berikutnya.
-enum ChangeTone { up, down, neutral }
-
 /// Satu baris gerakan di kartu sesi berikutnya.
 class NextRow {
   const NextRow({required this.name, required this.target, this.change, this.tone = ChangeTone.up});
@@ -207,25 +204,6 @@ class NextRow {
   /// "+1 rep", "+2,5 kg", "deload" — null kalau targetnya tetap.
   final String? change;
   final ChangeTone tone;
-}
-
-/// Pil perubahan: hijau untuk naik, hangat untuk turun, abu untuk netral.
-class ChangePill extends StatelessWidget {
-  const ChangePill(this.text, {super.key, this.tone = ChangeTone.up});
-
-  final String text;
-  final ChangeTone tone;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.gym;
-    final (bg, ink) = switch (tone) {
-      ChangeTone.up => (c.doneBg, c.doneInk),
-      ChangeTone.down => (c.warnSoft, c.warn),
-      ChangeTone.neutral => (c.surface2, c.text2),
-    };
-    return Pill(color: bg, textColor: ink, child: Text(text));
-  }
 }
 
 class NextSessionCard extends StatelessWidget {

@@ -232,7 +232,7 @@ void main() {
       expect(find.byType(FinishScreen), findsOneWidget);
       await tester.scrollUntilVisible(find.text('Routine Push updated'), 200);
       await tester.pump(const Duration(milliseconds: 400));
-      await tester.tap(find.text('UNDO'));
+      await tester.tap(find.text('Undo'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
       expect(store.routineById('r1')!.exercises.map((e) => e.exerciseId), ['0025']);
@@ -268,9 +268,9 @@ void main() {
 
       expect(store.routineById('r1')!.exercises.length, 1);
       expect(store.workouts.length, 1);
-      await tester.scrollUntilVisible(find.text('Save to routine'), 200);
+      await tester.scrollUntilVisible(find.text('Save'), 200);
       await tester.pump(const Duration(milliseconds: 400));
-      await tester.tap(find.text('Save to routine'));
+      await tester.tap(find.text('Save'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
       expect(store.routineById('r1')!.exercises.map((e) => e.exerciseId), ['0025', 'fly']);
