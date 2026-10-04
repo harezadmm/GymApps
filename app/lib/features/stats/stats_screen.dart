@@ -21,6 +21,7 @@ import '../../core/layout.dart';
 import '../../core/motion.dart';
 import '../../core/strings.dart';
 import '../../core/strings_stats.dart';
+import '../../core/strings_v3.dart';
 import '../../core/theme.dart';
 import '../../core/weights.dart';
 import '../../core/widgets.dart';
@@ -207,7 +208,7 @@ class _StatsScreenState extends State<StatsScreen> {
     final t = context.t;
     final summary = periodSummary(context.workouts.workouts, _days);
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
       children: [
         ScreenHeader(title: t.stats),
         FilterChips(
@@ -227,27 +228,30 @@ class _StatsScreenState extends State<StatsScreen> {
             children: [
               Expanded(
                 child: _Kpi(
+                  icon: GymIcons.calendar,
+                  hue: c.hues.violet,
                   label: t.sessionsKpi,
                   value: summary.sessions.toDouble(),
-                  color: c.hues.violet,
                   format: (v) => v.round().toString(),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 10),
               Expanded(
                 child: _Kpi(
+                  icon: GymIcons.menu,
+                  hue: c.hues.cyan,
                   label: t.workingSetsKpi,
                   value: summary.sets.toDouble(),
-                  color: c.hues.cyan,
                   format: (v) => v.round().toString(),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 10),
               Expanded(
                 child: _Kpi(
+                  icon: GymIcons.scale,
+                  hue: c.hues.orange,
                   label: t.volumeKpi,
                   value: summary.volumeKg,
-                  color: c.hues.orange,
                   format: context.volume,
                 ),
               ),
@@ -319,22 +323,16 @@ class _StatsScreenState extends State<StatsScreen> {
     final t = context.t;
     return _layout([
       GymCard(
-        radius: GymRadius.large,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Expanded(child: SectionLabel(t.muscleHeatmap)),
-                Text(t.volumeShare, style: TextStyle(fontSize: 12, color: c.text2)),
-              ],
-            ),
+            _CardTitle(t.muscleHeatmap, trailing: t.volumeShare),
             const SizedBox(height: 12),
             Container(
-              decoration: BoxDecoration(color: c.bgNested, borderRadius: BorderRadius.circular(GymRadius.card)),
-              padding: const EdgeInsets.symmetric(vertical: 14),
+              decoration: BoxDecoration(color: c.bgNested, borderRadius: BorderRadius.circular(GymRadius.tile)),
+              padding: const EdgeInsets.symmetric(vertical: 12),
               child: MuscleMap(
-                height: 240,
+                height: 244,
                 share: _ready ? muscleShare(_now) : null,
                 highlight: _picked,
                 // Ketuk lagi otot yang sama → lepas.
@@ -354,10 +352,7 @@ class _StatsScreenState extends State<StatsScreen> {
                     child: Container(
                       height: 8,
                       margin: const EdgeInsets.symmetric(horizontal: 2),
-                      decoration: BoxDecoration(
-                        color: tone,
-                        borderRadius: BorderRadius.circular(GymRadius.pill),
-                      ),
+                      decoration: BoxDecoration(color: tone, borderRadius: BorderRadius.circular(4)),
                     ),
                   ),
                 ],
@@ -371,15 +366,14 @@ class _StatsScreenState extends State<StatsScreen> {
         ),
       ),
       GymCard(
-        radius: GymRadius.large,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SectionLabel(t.bodyRegionsWorked),
+            _CardTitle(t.bodyRegionsWorked),
             const SizedBox(height: 6),
             Builder(builder: (context) {
               final r = regionShare(_now, _before);
-              return RadarChart(axes: [
+              return RadarChart(size: 236, axes: [
                 for (final name in regionMuscles.keys)
                   RadarAxis(label: t.region(name), value: r.current[name] ?? 0, previous: r.previous[name] ?? 0),
               ]);
@@ -437,7 +431,7 @@ class _StatsScreenState extends State<StatsScreen> {
           tone: c.warn,
         ),
         const SizedBox(height: 8),
-        Text(t.tapMuscleHint, style: TextStyle(fontSize: 11.5, color: c.text3)),
+        Text(t.tapMuscleHint, style: TextStyle(fontSize: 11.5, color: c.text2)),
       ],
     );
   }
@@ -451,23 +445,30 @@ class _StatsScreenState extends State<StatsScreen> {
     return _layout(
       [
         GymCard(
-          radius: GymRadius.large,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SectionLabel(t.weeklySetVolume),
+              _CardTitle(t.weeklySetVolume, subtitle: t.setsPerWeekSub(weeks)),
               const SizedBox(height: 14),
               // Tab Fatigue tidak ada di artboard Pen — grafik ini tambahan,
               // jadi angkanya bukan tinggi batang hasil desain melainkan jumlah
               // set sungguhan, dan butuh baseline supaya bedanya kelihatan.
               Builder(builder: (context) {
                 final weekly = weeklyWorkingSets(history, now, weeks: weeks);
+                // Rata-rata sejak minggu pertama yang punya set: minggu libur
+                // sesudah mulai ikut menarik garisnya (itu memang beban yang
+                // lebih rendah), tapi minggu sebelum sesi pertama bukan "nol
+                // set" — orangnya belum memakai aplikasi.
+                final firstLogged = weekly.indexWhere((v) => v > 0);
+                final since = firstLogged < 0 ? const <double>[] : weekly.sublist(firstLogged);
                 return BarSeries(
                   // Belum ada set sama sekali → biarkan grafik bilang "belum ada
                   // data", bukan delapan batang setinggi nol.
                   values: weekly.every((v) => v == 0) ? const [] : weekly,
                   labels: t.weekLabels(weeks),
                   valueFormat: (v) => t.setsSuffix(v.round()),
+                  average: since.isEmpty ? null : since.fold(0.0, (a, b) => a + b) / since.length,
+                  averageFormat: (v) => t.avgSets(v.round()),
                   // Sumbu dari fungsi yang sama dengan gelembungnya.
                   leftLabel: t.weekAgo(weeks - 1),
                   midLabel: t.weekAgo(weeks ~/ 2),
@@ -479,21 +480,20 @@ class _StatsScreenState extends State<StatsScreen> {
           ),
         ),
         GymCard(
-          radius: GymRadius.large,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SectionLabel(t.daysSinceWorked),
+              _CardTitle(t.daysSinceWorked),
               const SizedBox(height: 12),
               if (_cat == null)
                 Text(t.readingSessions, style: TextStyle(fontSize: 13, color: c.text2))
               else
                 for (final (i, entry) in daysSinceRegion(history, _cat!, now).entries.indexed) ...[
-                  if (i > 0) const SizedBox(height: 10),
+                  if (i > 0) const SizedBox(height: 12),
                   Row(
                     children: [
                       Expanded(child: Text(t.region(entry.key), style: Theme.of(context).textTheme.bodyLarge)),
-                      _DaysBar(days: entry.value),
+                      _DaysBar(key: ValueKey('days-bar-$i'), days: entry.value),
                       const SizedBox(width: 10),
                       SizedBox(
                         width: 34,
@@ -501,11 +501,11 @@ class _StatsScreenState extends State<StatsScreen> {
                           entry.value == null ? '—' : t.daysShort(entry.value!),
                           textAlign: TextAlign.end,
                           style: TextStyle(
-                            fontSize: 13.5,
+                            fontSize: 13,
                             fontWeight: FontWeight.w700,
                             fontFeatures: const [FontFeature.tabularFigures()],
                             // Di atas seminggu bukan lagi pemulihan, itu terlewat.
-                            color: (entry.value ?? 0) >= 7 ? c.warn : c.text2,
+                            color: (entry.value ?? 0) >= 7 ? c.warn : c.text,
                           ),
                         ),
                       ),
@@ -534,10 +534,7 @@ class _StatsScreenState extends State<StatsScreen> {
         if (catalog == null)
           NoteBanner(text: t.readingSessions, icon: GymIcons.info, tone: c.text2)
         else
-          GymCard(
-            radius: GymRadius.large,
-            child: EmptyState(art: GymArt.emptyStats, title: t.noStrengthYet, body: t.noSetsInRange),
-          ),
+          GymCard(child: EmptyState(art: GymArt.emptyStats, title: t.noStrengthYet, body: t.noSetsInRange)),
         const BodyweightCard(),
       ], wide);
     }
@@ -554,38 +551,48 @@ class _StatsScreenState extends State<StatsScreen> {
     return _layout(
       [
         GymCard(
-          radius: GymRadius.large,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
-                  Expanded(child: SectionLabel(t.estimated1RM)),
-                  // Pilih gerakan dari yang benar-benar pernah dicatat.
+                  Expanded(child: Text(t.estimated1RM, style: Theme.of(context).textTheme.titleMedium)),
+                  const SizedBox(width: 8),
+                  // Pilih gerakan dari yang benar-benar pernah dicatat. Tombol
+                  // kaca bening kecil; menunya milik PopupMenuButton (ada).
                   PopupMenuButton<String>(
                     tooltip: t.pickExercise,
-                    color: c.surface2,
+                    color: c.surface,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(GymRadius.tile)),
                     onSelected: (v) => setState(() => _e1rmId = v),
                     itemBuilder: (context) => [
                       for (final x in logged) PopupMenuItem(value: x, child: Text(catalog.nameOf(x))),
                     ],
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 180),
-                          child: Text(catalog.nameOf(id),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: c.text)),
-                        ),
-                        Icon(GymIcons.chevronDown, size: 18, color: c.text2),
-                      ],
+                    child: GlassSurface(
+                      tone: GlassTone.clear,
+                      radius: 16,
+                      height: 32,
+                      shadow: false,
+                      padding: const EdgeInsets.fromLTRB(12, 0, 8, 0),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 150),
+                            child: Text(catalog.nameOf(id),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.text)),
+                          ),
+                          const SizedBox(width: 4),
+                          Icon(GymIcons.chevronDown, size: 16, color: c.text2),
+                        ],
+                      ),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 14),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
@@ -593,9 +600,10 @@ class _StatsScreenState extends State<StatsScreen> {
                     peak,
                     format: (v) => formatDelta(double.parse(v.toStringAsFixed(1))),
                     style: TextStyle(
-                      fontSize: 34,
-                      fontWeight: FontWeight.w700,
+                      fontSize: 36,
+                      fontWeight: FontWeight.w800,
                       height: 1,
+                      letterSpacing: -0.8,
                       color: c.text,
                       fontFeatures: const [FontFeature.tabularFigures()],
                     ),
@@ -603,26 +611,20 @@ class _StatsScreenState extends State<StatsScreen> {
                   const SizedBox(width: 6),
                   Padding(
                     padding: const EdgeInsets.only(bottom: 4),
-                    child: Text(unit, style: TextStyle(fontSize: 13, color: c.text2)),
+                    child: Text(unit, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.text2)),
                   ),
                   const SizedBox(width: 10),
                   // Pil persen mengecil kalau angkanya lebar (e1RM tiga digit
                   // di kolom sempit), bukan mendorong keluar kartu.
                   Flexible(
                     child: Padding(
-                      padding: const EdgeInsets.only(bottom: 4),
+                      padding: const EdgeInsets.only(bottom: 5),
                       child: FittedBox(
                         fit: BoxFit.scaleDown,
                         alignment: Alignment.bottomLeft,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: (pct >= 0 ? c.doneInk : c.danger).withValues(alpha: 0.16),
-                            borderRadius: BorderRadius.circular(GymRadius.pill),
-                          ),
-                          child: Text('${pct >= 0 ? '+' : ''}${pct.toStringAsFixed(1)}% · 12 wk',
-                              style: TextStyle(
-                                  fontSize: 11.5, fontWeight: FontWeight.w700, color: pct >= 0 ? c.doneInk : c.danger)),
+                        child: ChangePill(
+                          t.pctOverWeeks('${pct >= 0 ? '+' : ''}${pct.toStringAsFixed(1)}%', weeks),
+                          tone: pct >= 0 ? ChangeTone.up : ChangeTone.down,
                         ),
                       ),
                     ),
@@ -647,55 +649,74 @@ class _StatsScreenState extends State<StatsScreen> {
           ),
         ),
         GymCard(
-          radius: GymRadius.large,
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  Expanded(child: SectionLabel(t.strengthByMovement)),
-                  Text(t.last12Weeks, style: TextStyle(fontSize: 11, color: c.text3)),
-                ],
-              ),
-              const SizedBox(height: 12),
-              for (final (i, m) in movements.indexed) ...[
-                if (i > 0) const SizedBox(height: 3),
+              _CardTitle(t.strengthByMovement, trailing: t.last12Weeks),
+              const SizedBox(height: 2),
+              for (final (i, m) in movements.indexed)
                 // Ketuk untuk riwayat dan rekor gerakan itu.
                 Reveal(
                   index: i,
                   child: InkWell(
                     onTap: () => showExerciseHistory(context, exerciseId: m.exerciseId, name: catalog.nameOf(m.exerciseId)),
                     borderRadius: BorderRadius.circular(GymRadius.small),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      decoration: i < movements.length - 1
+                          ? BoxDecoration(border: Border(bottom: BorderSide(color: c.border)))
+                          : null,
                       child: Row(
                         children: [
                           Expanded(
-                            child: Text(catalog.nameOf(m.exerciseId),
-                                maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodyLarge),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(catalog.nameOf(m.exerciseId),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.text)),
+                                const SizedBox(height: 2),
+                                Text(t.oneRmShort('${formatDelta(double.parse(m.best.toStringAsFixed(1)))} $unit'),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                        fontSize: 12, color: c.text2, fontFeatures: const [FontFeature.tabularFigures()])),
+                              ],
+                            ),
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 10),
                           // Sama dengan tabel Dashboard: minggu kosong membawa
                           // nilai sebelumnya, minggu sebelum sesi pertama
                           // dibuang. weeklyE1rm mengisinya dengan nol, dan garis
                           // yang naik dari nol adalah tebing, bukan tren.
-                          Sparkline(values: carried(weeklyBest(history, m.exerciseId, now)), width: 56, height: 20),
+                          Sparkline(values: carried(weeklyBest(history, m.exerciseId, now))),
                           const SizedBox(width: 10),
-                          Text('${m.best.toStringAsFixed(1)} $unit',
-                              style: TextStyle(
-                                fontSize: 13.5,
-                                fontWeight: FontWeight.w700,
-                                color: c.text,
-                                fontFeatures: const [FontFeature.tabularFigures()],
-                              )),
-                          const SizedBox(width: 8),
-                          _Change(delta: double.parse(m.delta.toStringAsFixed(1))),
+                          // Pil selisih selebar tetap supaya kolomnya rata; isinya
+                          // tanpa satuan — baris di kirinya sudah menyebut kg.
+                          SizedBox(
+                            width: 58,
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Builder(builder: (context) {
+                                final delta = double.parse(m.delta.toStringAsFixed(1));
+                                return ChangePill(
+                                  delta > 0 ? '+${formatDelta(delta)}' : formatDelta(delta),
+                                  tone: delta > 0
+                                      ? ChangeTone.up
+                                      : delta < 0
+                                          ? ChangeTone.down
+                                          : ChangeTone.neutral,
+                                );
+                              }),
+                            ),
+                          ),
                         ],
                       ),
                     ),
                   ),
                 ),
-              ],
             ],
           ),
         ),
@@ -707,7 +728,7 @@ class _StatsScreenState extends State<StatsScreen> {
           label: t.openDashboard,
           icon: GymIcons.chart,
           tone: GymButtonTone.neutral,
-          height: 44,
+          height: 46,
           onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DashboardScreen())),
         ),
       ],
@@ -715,49 +736,101 @@ class _StatsScreenState extends State<StatsScreen> {
   }
 }
 
-/// Ubin KPI kecil: label di atas, angka yang menghitung naik di bawah.
-/// Dibangun lokal karena [StatBlock] menerima teks, bukan widget angka.
-class _Kpi extends StatelessWidget {
-  const _Kpi({required this.label, required this.value, required this.color, required this.format});
+/// Judul kartu 15/700 dengan keterangan kecil di kanan atau subjudul di bawah.
+class _CardTitle extends StatelessWidget {
+  const _CardTitle(this.title, {this.trailing, this.subtitle});
 
+  final String title;
+  final String? trailing;
+  final String? subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gym;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Expanded(child: Text(title, style: Theme.of(context).textTheme.titleMedium)),
+            if (trailing != null) ...[
+              const SizedBox(width: 8),
+              Text(trailing!, style: TextStyle(fontSize: 12, color: c.text2)),
+            ],
+          ],
+        ),
+        if (subtitle != null) ...[
+          const SizedBox(height: 2),
+          Text(subtitle!, style: TextStyle(fontSize: 12, color: c.text2)),
+        ],
+      ],
+    );
+  }
+}
+
+/// Ubin KPI: tile hue 30 di atas, angka 20/800 yang menghitung naik, label.
+class _Kpi extends StatelessWidget {
+  const _Kpi({
+    required this.icon,
+    required this.hue,
+    required this.label,
+    required this.value,
+    required this.format,
+  });
+
+  final IconData icon;
+  final Color hue;
   final String label;
   final double value;
-  final Color color;
   final String Function(double) format;
 
   @override
   Widget build(BuildContext context) {
     final c = context.gym;
     // Tinggi minimum, bukan tetap: dengan teks diperbesar (1,5× di HP 360 dp)
-    // isinya lebih tinggi dari 104 dan ubin tetap meluber. Labelnya satu baris
+    // isinya lebih tinggi dari 108 dan ubin tetap meluber. Labelnya satu baris
     // yang mengecil, bukan dua baris — ketiga ubin punya isi setinggi sama,
     // jadi tetap sama tinggi walau salah satu labelnya panjang.
     return Container(
-      constraints: const BoxConstraints(minHeight: 104),
-      padding: const EdgeInsets.fromLTRB(12, 11, 12, 12),
-      decoration: BoxDecoration(color: c.hues.soft(color, c), borderRadius: BorderRadius.circular(GymRadius.card)),
+      constraints: const BoxConstraints(minHeight: 108),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(GymRadius.tile),
+        boxShadow: [c.cardShadow],
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(label,
-                maxLines: 1,
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, height: 1.2, color: c.text)),
-          ),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: CountUp(
-              value,
-              format: format,
-              style: Theme.of(context)
-                  .textTheme
-                  .headlineMedium
-                  ?.copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
-            ),
+          HueTile(icon: icon, hue: hue, size: 30, radius: 10, iconSize: 15),
+          const SizedBox(height: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: CountUp(
+                  value,
+                  format: format,
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    height: 1.15,
+                    color: c.text,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 2),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(label, maxLines: 1, style: TextStyle(fontSize: 11.5, height: 1.2, color: c.text2)),
+              ),
+            ],
           ),
         ],
       ),
@@ -765,10 +838,10 @@ class _Kpi extends StatelessWidget {
   }
 }
 
-/// Bilah kecil "hari sejak dilatih": penuh di 14 hari. Oranye begitu lewat
+/// Bilah "hari sejak dilatih" 110×8: penuh di 14 hari. Oranye begitu lewat
 /// seminggu — itu bukan pemulihan lagi.
 class _DaysBar extends StatelessWidget {
-  const _DaysBar({required this.days});
+  const _DaysBar({super.key, required this.days});
 
   final int? days;
 
@@ -779,8 +852,8 @@ class _DaysBar extends StatelessWidget {
     final fraction = d == null ? 0.0 : math.min(d, 14) / 14;
     final tone = (d ?? 0) >= 7 ? c.warn : c.accent;
     return SizedBox(
-      width: 64,
-      height: 6,
+      width: 110,
+      height: 8,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(GymRadius.pill),
         child: Stack(
@@ -814,41 +887,14 @@ class _Legend extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Container(
-          width: 10,
-          height: 10,
-          decoration: BoxDecoration(color: colour, borderRadius: BorderRadius.circular(3)),
-        ),
+        Container(width: 9, height: 9, decoration: BoxDecoration(color: colour, shape: BoxShape.circle)),
         const SizedBox(width: 6),
-        Text(label, style: TextStyle(fontSize: 12, color: c.text2)),
+        // Flexible: di Wrap, baris ini mendapat lebar kartu sebagai batas, dan
+        // label yang diperbesar 1,5× harus memotong, bukan meluber.
+        Flexible(
+          child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: c.text2)),
+        ),
       ],
-    );
-  }
-}
-
-class _Change extends StatelessWidget {
-  const _Change({required this.delta});
-
-  final double delta;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.gym;
-    final tone = delta > 0 ? c.doneInk : (delta < 0 ? c.danger : c.text2);
-    final text = delta > 0 ? '+${formatDelta(delta)}' : formatDelta(delta);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: tone.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(GymRadius.pill),
-      ),
-      child: Text(text,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            color: tone,
-            fontFeatures: const [FontFeature.tabularFigures()],
-          )),
     );
   }
 }

@@ -251,11 +251,11 @@ void main() {
 
       await tester.tap(find.text('Fatigue'));
       await tester.pumpAndSettle();
-      expect(find.text('WEEKLY SET VOLUME'), findsOneWidget);
+      expect(find.text('Weekly set volume'), findsOneWidget);
 
       await tester.tap(find.text('Strength'));
       await tester.pumpAndSettle();
-      expect(find.text('ESTIMATED 1RM'), findsOneWidget);
+      expect(find.text('Estimated 1RM'), findsOneWidget);
       expect(find.byType(Sparkline), findsWidgets);
     });
 
@@ -269,7 +269,7 @@ void main() {
 
       await tester.tap(find.text('Strength'));
       await tester.pumpAndSettle();
-      expect(find.text('ESTIMATED 1RM'), findsOneWidget);
+      expect(find.text('Estimated 1RM'), findsOneWidget);
     });
 
     testWidgets('ketuk otot di peta menampilkan porsinya, ketuk lagi melepas', (tester) async {

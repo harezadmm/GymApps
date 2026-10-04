@@ -1,19 +1,22 @@
-/// Berat badan: catat, lihat trennya (FR-F4).
+/// Berat badan: catat, lihat trennya (FR-F4). Bentuk v3 (spec UI-V3 §7.6):
+/// label kecil, angka 24/800, selisih "−0,6 kg / 30 hari", tombol Catat
+/// tinted 34, dan sparkline selebar kartu dari 12 catatan terakhir.
 library;
 
 import 'package:flutter/material.dart';
-import '../../core/gym_icons.dart';
-import '../../core/weights.dart';
-import '../../domain/units.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/charts.dart';
 import '../../core/format.dart';
+import '../../core/gym_icons.dart';
 import '../../core/strings.dart';
+import '../../core/strings_v3.dart';
 import '../../core/theme.dart';
+import '../../core/weights.dart';
 import '../../core/widgets.dart';
 import '../../data/workout_store.dart';
 import '../../domain/program.dart';
+import '../../domain/units.dart';
 
 class BodyweightCard extends StatelessWidget {
   const BodyweightCard({super.key});
@@ -37,7 +40,6 @@ class BodyweightCard extends StatelessWidget {
     final log = context.workouts.bodyweightLog;
     final last = log.isEmpty ? null : log.last;
     final recent = log.length <= 12 ? log : log.sublist(log.length - 12);
-    final low = recent.isEmpty ? 0.0 : recent.map((e) => e.kg).reduce((a, b) => a < b ? a : b);
     String? change;
     if (log.length >= 2) {
       final first = log.first;
@@ -45,57 +47,64 @@ class BodyweightCard extends StatelessWidget {
       final days = (DateTime.tryParse(last.date) ?? DateTime.now())
           .difference(DateTime.tryParse(first.date) ?? DateTime.now())
           .inDays;
-      change = t.bodyweightChange(
-          '${d >= 0 ? '+' : ''}${formatDelta(double.parse(d.toStringAsFixed(1)))}', days, context.unitLabel);
+      change = t.bwDelta(
+        '${d >= 0 ? '+' : ''}${formatDelta(double.parse(d.toStringAsFixed(1)))} ${context.unitLabel}',
+        days,
+      );
     }
     return GymCard(
-      radius: GymRadius.large,
-      color: c.hues.soft(c.hues.pink, c),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              IconDisc(GymIcons.scale, color: c.hues.pink, size: 34, iconSize: 18),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(t.bodyweightTitle, style: TextStyle(fontSize: 12.5, color: c.text2)),
+                    const SizedBox(height: 2),
+                    Text(
+                      last == null ? '—' : context.wUnit(last.kg),
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.4,
+                        height: 1.15,
+                        color: c.text,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(change ?? (last == null ? t.bodyweightNone : last.date),
+                        style: TextStyle(fontSize: 12, height: 1.35, color: c.text2)),
+                  ],
+                ),
+              ),
               const SizedBox(width: 10),
-              Expanded(child: SectionLabel(t.bodyweightTitle)),
-              if (last != null)
-                Text(context.wUnit(last.kg),
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w800,
-                      color: c.text,
-                      fontFeatures: const [FontFeature.tabularFigures()],
-                    )),
+              GymButton(
+                label: t.logShort,
+                icon: GymIcons.plus,
+                height: 34,
+                expand: false,
+                onPressed: () => _log(context),
+              ),
             ],
           ),
-          const SizedBox(height: 6),
-          Text(change ?? (last == null ? t.bodyweightNone : last.date), style: TextStyle(fontSize: 12.5, color: c.text2)),
           if (recent.length >= 2) ...[
-            const SizedBox(height: 12),
-            BarSeries(
-              highlightColor: c.hues.pink,
-              // Batang dimulai sedikit di bawah berat terendah, supaya
-              // selisih 0,5 kg tetap terlihat.
-              values: [for (final e in recent) e.kg - low + 1],
-              // Gelembung menampilkan berat sesungguhnya, bukan tinggi batang
-              // yang sudah digeser — angka itulah yang ditanyakan.
-              labels: [for (final e in recent) e.date.substring(5)],
-              valueFormat: (v) => context.wUnit(v + low - 1),
-              leftLabel: recent.first.date.substring(5),
-              midLabel: '',
-              rightLabel: recent.last.date.substring(5),
-              height: 90,
+            const SizedBox(height: 14),
+            // Garis, bukan batang: berat badan bergerak sepersepuluh kilo, dan
+            // batang yang digeser dari berat terendah hanya menyamarkan arahnya.
+            LayoutBuilder(
+              builder: (context, box) => Sparkline(
+                values: [for (final e in recent) e.kg],
+                width: box.maxWidth,
+                height: 36,
+                color: c.hues.pink,
+              ),
             ),
           ],
-          const SizedBox(height: 12),
-          GymButton(
-            label: t.logBodyweight,
-            icon: GymIcons.scale,
-            tone: GymButtonTone.neutral,
-            height: 42,
-            onPressed: () => _log(context),
-          ),
         ],
       ),
     );
