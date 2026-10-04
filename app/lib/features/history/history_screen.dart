@@ -21,12 +21,14 @@ import '../../core/illustration.dart';
 import '../../core/motion.dart';
 import '../../core/strings.dart';
 import '../../core/strings_history.dart';
+import '../../core/strings_v3.dart';
 import '../../core/theme.dart';
 import '../../core/weights.dart';
 import '../../core/widgets.dart';
 import '../../data/exercise_catalog.dart';
 import '../../data/workout_store.dart';
 import '../../domain/models.dart';
+import '../../domain/program.dart';
 import '../../domain/routine_sync.dart';
 import '../session/session_launcher.dart';
 import 'workout_edit_screen.dart';
@@ -81,7 +83,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     ];
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
       children: [
         Reveal(
           child: ScreenHeader(
@@ -90,9 +92,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
               // Kalender bulanan belum ada — kotak aktivitas di bawah sudah
               // menjawab "kapan saja aku latihan". Tombol + menawarkan sesi
               // baru: dijalankan sekarang, atau dicatat dari yang sudah lewat.
-              SquareIconButton(
+              GlassIconButton(
                 icon: GymIcons.plus,
-                tone: c.accent,
                 tooltip: t.newSessionTitle,
                 onPressed: _showAddSheet,
               ),
@@ -102,17 +103,17 @@ class _HistoryScreenState extends State<HistoryScreen> {
         Reveal(
           index: 1,
           child: GymCard(
-            radius: GymRadius.large,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Expanded(child: SectionLabel(t.activity)),
-                    Text(t.sessionsThisYear(_thisYear(all)), style: TextStyle(fontSize: 12, color: c.text2)),
+                    Expanded(child: Text(t.activity, style: Theme.of(context).textTheme.titleMedium)),
+                    Text(t.sessionsThisYearV3(_thisYear(all)), style: TextStyle(fontSize: 12.5, color: c.text2)),
                   ],
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 12),
                 Builder(builder: (context) {
                   final (levels, months) = _heatmap(all);
                   return ActivityHeatmap(levels: levels, monthLabels: months);
@@ -201,6 +202,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
           padding: const EdgeInsets.only(bottom: 10),
           child: _SessionRow(
             workout: w,
+            look: _lookOf(w),
             onTap: () => _showDetail(w),
             confirmDelete: () => _confirmDelete(w),
             onDismissed: () => _deleteWithUndo(w),
@@ -375,7 +377,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       icon: GymIcons.dumbbell,
                       // Warna yang sama dengan baris sesi rutinitas itu di
                       // daftar riwayat.
-                      hue: c.hues.at(r.name.hashCode.abs()),
+                      hue: c.hues.at(_hueIndexOf(r.name)),
                       label: r.name,
                       value: diffRoutine(r, layout).isEmpty
                           ? t.sameAsThisSession
@@ -441,7 +443,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
               Text(
                 [
                   workout.date,
-                  if (workout.durationSeconds != null) '${workout.durationSeconds! ~/ 60} min',
+                  if (workout.durationSeconds != null) t.minutesShort(workout.durationSeconds! ~/ 60),
                 ].join(' · '),
                 style: TextStyle(fontSize: 13, color: c.text2),
               ),
@@ -590,6 +592,26 @@ class _HistoryScreenState extends State<HistoryScreen> {
     );
   }
 
+  /// Warna dan ikon identitas satu sesi: rutinitas memakai hue sesuai urutan
+  /// di program (sama dengan Beranda, Program, dan lembar Mulai), rutinitas di
+  /// luar program memakai urutan daftar rutinitas, dan sesi bebas selalu
+  /// oranye dengan alarm — "latihan tanpa rencana" terbaca tanpa dibaca.
+  (Color, IconData) _lookOf(Workout w) {
+    final c = context.gym;
+    final name = w.routine;
+    if (name == null || name.isEmpty) return (c.hues.orange, GymIcons.alarm);
+    return (c.hues.at(_hueIndexOf(name)), GymIcons.dumbbell);
+  }
+
+  int _hueIndexOf(String name) {
+    final store = WorkoutScope.read(context);
+    final program = store.program;
+    final order = program == null ? const <Routine>[] : programRoutines(program, store.routines);
+    var i = order.indexWhere((r) => r.name == name);
+    if (i < 0) i = store.routines.indexWhere((r) => r.name == name);
+    return i < 0 ? name.hashCode.abs() : i;
+  }
+
   static int _thisYear(List<Workout> all) {
     final year = DateTime.now().year.toString();
     return all.where((w) => w.date.startsWith(year)).length;
@@ -658,12 +680,16 @@ class _EmptyHistory extends StatelessWidget {
 class _SessionRow extends StatelessWidget {
   const _SessionRow({
     required this.workout,
+    required this.look,
     required this.onTap,
     required this.confirmDelete,
     required this.onDismissed,
   });
 
   final Workout workout;
+
+  /// Hue tile dan ikonnya — dari [_HistoryScreenState._lookOf].
+  final (Color, IconData) look;
   final VoidCallback onTap;
   final Future<bool> Function() confirmDelete;
   final VoidCallback onDismissed;
@@ -678,12 +704,17 @@ class _SessionRow extends StatelessWidget {
     final c = context.gym;
     final t = context.t;
     final date = DateTime.tryParse(workout.date);
-    final volume = _workingSets.fold(0.0, (a, s) => a + s.weight * s.reps);
+    final working = _workingSets.toList();
+    final volume = working.fold(0.0, (a, s) => a + s.weight * s.reps);
+    final (hue, icon) = look;
+    // "Sab, 3 Okt · 48 mnt · 6,1 t": harinya dulu, karena label bulan di atas
+    // sudah menjawab bulannya dan angka tanggal sendirian kehilangan harinya.
+    final meta = [
+      if (date != null) '${t.weekdayShort(date.weekday)}, ${date.day} ${t.monthShort(date.month)}',
+      if (workout.durationSeconds != null) t.minutesShort((workout.durationSeconds! / 60).round()),
+      context.volume(volume),
+    ].join(' · ');
 
-    // Warna identitas per rutinitas (dari namanya), sebagai garis di tepi
-    // kiri — seperti kartu "Water / Breakfast" di referensi. Pemindai cepat
-    // membedakan Push dari Pull tanpa membaca.
-    final hue = c.hues.at((workout.routine ?? '').hashCode.abs());
     return Dismissible(
       // Identitas objek, bukan sidik jari isi: menghitung sha1 tiap baris
       // setiap build terlalu mahal untuk daftar setahun, dan objek sesi tetap
@@ -699,70 +730,57 @@ class _SessionRow extends StatelessWidget {
       background: Container(
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 22),
-        decoration: BoxDecoration(color: c.danger, borderRadius: BorderRadius.circular(GymRadius.card)),
-        child: Icon(GymIcons.trash, size: 22, color: c.accentInk),
+        decoration: BoxDecoration(color: c.danger, borderRadius: BorderRadius.circular(GymRadius.tile)),
+        child: const Icon(GymIcons.trash, size: 22, color: Colors.white),
       ),
       child: PressScale(
-        child: Material(
-          color: c.surface,
-          borderRadius: BorderRadius.circular(GymRadius.card),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(GymRadius.card),
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
-              decoration: BoxDecoration(border: Border(left: BorderSide(color: hue, width: 4))),
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: 42,
-                    child: Column(
-                      children: [
-                        Text(date == null ? '--' : _HistoryScreenState._two(date.day),
-                            style: TextStyle(
-                                fontSize: 19,
-                                fontWeight: FontWeight.w700,
-                                color: c.text,
-                                fontFeatures: const [FontFeature.tabularFigures()])),
-                        const SizedBox(height: 1),
-                        Text(date == null ? '' : t.weekdayShort(date.weekday).toUpperCase(),
-                            style: TextStyle(
-                                fontSize: 9.5,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: 0.6,
-                                color: c.text3)),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(workout.routine ?? t.freestyleSession,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 17)),
-                        const SizedBox(height: 3),
-                        Text(
-                          [
-                            if (workout.durationSeconds != null) _clock(workout.durationSeconds!),
-                            context.volume(volume),
-                            t.setsSuffix(_workingSets.length),
-                          ].join(' · '),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                              fontSize: 12.5, color: c.text2, fontFeatures: const [FontFeature.tabularFigures()]),
+        child: Container(
+          decoration: BoxDecoration(
+            color: c.surface,
+            borderRadius: BorderRadius.circular(GymRadius.tile),
+            boxShadow: [c.cardShadow],
+          ),
+          child: Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(GymRadius.tile),
+              child: SizedBox(
+                height: 72,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 12, 14, 12),
+                  child: Row(
+                    children: [
+                      _TileWithBadge(
+                        icon: icon,
+                        hue: hue,
+                        count: working.length,
+                        badgeKey: ValueKey('session-badge-${workout.date}'),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(workout.routine ?? t.freestyleSession,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: c.text)),
+                            const SizedBox(height: 3),
+                            Text(meta,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                    fontSize: 12.5, color: c.text2, fontFeatures: const [FontFeature.tabularFigures()])),
+                          ],
                         ),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(width: 6),
+                      Icon(GymIcons.chevronRight, size: 18, color: c.text2),
+                    ],
                   ),
-                  // Tidak ada glyph chevron di paket ikon; yang Material dipakai
-                  // karena bentuknya netral dan sudah dipakai SettingsTile.
-                  Icon(GymIcons.chevronRight, size: 18, color: c.text3),
-                ],
+                ),
               ),
             ),
           ),
@@ -770,13 +788,55 @@ class _SessionRow extends StatelessWidget {
       ),
     );
   }
+}
 
-  static String _clock(int seconds) {
-    final h = seconds ~/ 3600;
-    final m = (seconds % 3600) ~/ 60;
-    final s = seconds % 60;
-    final mm = m.toString().padLeft(2, '0');
-    final ss = s.toString().padLeft(2, '0');
-    return h > 0 ? '$h:$mm:$ss' : '$m:$ss';
+/// Tile hue 44 dengan lencana jumlah set kerja menggantung di pojok kanan
+/// bawah — jawaban cepat untuk "sesi ini seberapa penuh" tanpa membuka
+/// detailnya. Kotaknya 48 supaya lencana yang menjorok 4 dp tetap di dalam
+/// baris dan tidak terpotong Material-nya.
+class _TileWithBadge extends StatelessWidget {
+  const _TileWithBadge({required this.icon, required this.hue, required this.count, required this.badgeKey});
+
+  final IconData icon;
+  final Color hue;
+  final int count;
+  final Key badgeKey;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gym;
+    return SizedBox(
+      width: 48,
+      height: 48,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          HueTile(icon: icon, hue: hue, iconSize: 20),
+          Positioned(
+            right: 0,
+            bottom: 0,
+            child: Container(
+              key: badgeKey,
+              constraints: const BoxConstraints(minWidth: 18),
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+              decoration: BoxDecoration(
+                color: c.surface,
+                borderRadius: BorderRadius.circular(7),
+                border: Border.all(color: c.accent),
+              ),
+              child: Text('$count',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    height: 1.2,
+                    color: c.accent,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  )),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
