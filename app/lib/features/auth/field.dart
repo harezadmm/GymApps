@@ -44,7 +44,7 @@ class GymField extends StatelessWidget {
     final invalid = error != null;
 
     OutlineInputBorder border(Color colour) => OutlineInputBorder(
-          borderRadius: BorderRadius.circular(GymRadius.card),
+          borderRadius: BorderRadius.circular(GymRadius.control),
           borderSide: BorderSide(color: colour),
         );
 

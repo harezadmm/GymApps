@@ -569,14 +569,14 @@ void main() {
       ));
       await tester.pump();
 
-      final button = find.text('Other session');
+      final button = find.text('Pick another');
       await tester.scrollUntilVisible(button, 200, scrollable: find.byType(Scrollable).first);
       await tester.tap(button);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
 
-      expect(find.text('WHAT ARE YOU TRAINING TODAY?'), findsOneWidget);
-      expect(find.text('Up next'), findsOneWidget);
+      expect(find.text('What are you training today?'), findsOneWidget);
+      expect(find.text('Next'), findsOneWidget);
       await tester.tap(find.descendant(of: find.byType(BottomSheet), matching: find.text('Legs')));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));

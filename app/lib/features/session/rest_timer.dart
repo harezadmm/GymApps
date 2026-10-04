@@ -8,7 +8,6 @@ import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/gym_icons.dart';
-import '../../core/motion.dart';
 import '../../core/strings.dart';
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
@@ -179,164 +178,6 @@ class RestTimer extends ChangeNotifier {
   }
 }
 
-/// Kartu istirahat biru di atas daftar gerakan.
-class RestTimerCard extends StatelessWidget {
-  const RestTimerCard({
-    super.key,
-    required this.timer,
-    required this.nextLabel,
-    required this.onEditDuration,
-    this.onOpen,
-  });
-
-  final RestTimer timer;
-
-  /// "Next: set 3 · 72.5 kg × 8" — supaya tidak perlu menggulir saat menunggu.
-  final String nextLabel;
-  final VoidCallback onEditDuration;
-
-  /// Ketuk kartunya untuk membuka hitung mundur satu layar penuh.
-  final VoidCallback? onOpen;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.gym;
-    return AnimatedBuilder(
-      animation: timer,
-      builder: (context, _) {
-        final card = GymCard(
-          radius: GymRadius.large,
-          color: c.selected,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  SizedBox(
-                    width: 56,
-                    height: 56,
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        CircularProgressIndicator(
-                          value: timer.progress,
-                          strokeWidth: 3,
-                          backgroundColor: c.accent.withValues(alpha: 0.18),
-                          valueColor: AlwaysStoppedAnimation(c.accent),
-                        ),
-                        Text(
-                          'REST',
-                          style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, letterSpacing: 0.8, color: c.accent),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            // Menyusut kalau ruangnya kurang — HP 360 dp dengan
-                            // ukuran huruf sistem diperbesar membuat baris ini
-                            // meluber keluar kartu.
-                            Flexible(
-                              child: FittedBox(
-                                fit: BoxFit.scaleDown,
-                                alignment: Alignment.bottomLeft,
-                                child: Text(
-                                  formatRestWide(timer.remaining),
-                                  style: TextStyle(
-                                    fontSize: 34,
-                                    fontWeight: FontWeight.w700,
-                                    height: 1.1,
-                                    color: c.text,
-                                    fontFeatures: const [FontFeature.tabularFigures()],
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 5),
-                              child: Text('/ ${formatRest(timer.total)}',
-                                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.text2)),
-                            ),
-                            const SizedBox(width: 4),
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 3),
-                              child: InkWell(
-                                onTap: onEditDuration,
-                                borderRadius: BorderRadius.circular(GymRadius.pill),
-                                child: Padding(
-                                  padding: const EdgeInsets.all(4),
-                                  child: Icon(GymIcons.edit, size: 15, color: c.text2),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 2),
-                        Text(nextLabel,
-                            maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: c.text2)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              Row(
-                children: [
-                  Expanded(
-                    child: GymButton(
-                      label: '−15s',
-                      height: 46,
-                      shape: GymButtonShape.rounded,
-                      tone: GymButtonTone.neutral,
-                      onPressed: () => timer.adjust(const Duration(seconds: -15)),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: GymButton(
-                      label: '+15s',
-                      height: 46,
-                      tone: GymButtonTone.neutral,
-                      onPressed: () => timer.adjust(const Duration(seconds: 15)),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: GymButton(
-                      label: context.t.skip,
-                      height: 46,
-                      onPressed: () {
-                        // Getar kecil: kapsul timer di atas melakukan hal yang
-                        // sama, dan keduanya harus terasa seperti satu aksi.
-                        GymHaptics.tap();
-                        timer.skip();
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        );
-
-        if (onOpen == null) return card;
-        return InkWell(
-          onTap: onOpen,
-          borderRadius: BorderRadius.circular(GymRadius.large),
-          child: card,
-        );
-      },
-    );
-  }
-}
-
 /// Hasil dari sheet durasi: berapa lama, dan apakah dijadikan default gerakan.
 class RestChoice {
   const RestChoice({required this.duration, required this.saveAsDefault});
@@ -408,7 +249,7 @@ class _RestDurationSheetState extends State<_RestDurationSheet> {
     final c = context.gym;
     return Container(
       decoration: BoxDecoration(
-        color: c.surface,
+        color: c.bg,
         border: Border(top: BorderSide(color: c.border)),
         borderRadius: const BorderRadius.vertical(top: Radius.circular(GymRadius.sheet)),
       ),

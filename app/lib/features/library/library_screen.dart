@@ -116,9 +116,9 @@ class _ExerciseLibraryScreenState extends State<ExerciseLibraryScreen> {
     final created = await showModalBottomSheet<Exercise>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: context.gym.surface,
+      backgroundColor: context.gym.bg,
       showDragHandle: true,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(GymRadius.large))),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(GymRadius.sheet))),
       builder: (_) => CustomExerciseSheet(initialName: name),
     );
     if (created == null || !mounted) return;
@@ -136,9 +136,9 @@ class _ExerciseLibraryScreenState extends State<ExerciseLibraryScreen> {
     final t = context.t;
     showModalBottomSheet<void>(
       context: context,
-      backgroundColor: c.surface,
+      backgroundColor: c.bg,
       showDragHandle: true,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(GymRadius.large))),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(GymRadius.sheet))),
       builder: (context) => SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
@@ -370,7 +370,7 @@ class _SearchField extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.gym;
     OutlineInputBorder border(Color colour) => OutlineInputBorder(
-          borderRadius: BorderRadius.circular(GymRadius.control),
+          borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide(color: colour),
         );
 
@@ -396,8 +396,8 @@ class _SearchField extends StatelessWidget {
           fillColor: c.surface,
           isDense: true,
           contentPadding: EdgeInsets.zero,
-          border: border(Colors.transparent),
-          enabledBorder: border(Colors.transparent),
+          border: border(c.border),
+          enabledBorder: border(c.border),
           focusedBorder: border(c.accent),
         ),
       ),
@@ -426,7 +426,7 @@ class _CategoryDisc extends StatelessWidget {
             width: 50,
             height: 50,
             alignment: Alignment.center,
-            decoration: BoxDecoration(color: selected ? c.accentFill : c.tint(c.accent), shape: BoxShape.circle),
+            decoration: BoxDecoration(color: selected ? c.accentFill : c.accentSoft, shape: BoxShape.circle),
             child: MuscleGlyph(
               groups: groups ?? const [],
               size: 36,

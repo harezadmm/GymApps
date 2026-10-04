@@ -333,24 +333,24 @@ class _OutlinedAction extends StatelessWidget {
     final c = context.gym;
     return Material(
       color: c.surface,
-      borderRadius: BorderRadius.circular(GymRadius.card),
+      borderRadius: BorderRadius.circular(GymRadius.tile),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(GymRadius.card),
+        borderRadius: BorderRadius.circular(GymRadius.tile),
         child: Container(
           height: 52,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(GymRadius.card),
-            border: Border.all(color: c.border),
+            borderRadius: BorderRadius.circular(GymRadius.tile),
+            border: Border.all(color: c.text3, width: 1.2),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 17, color: c.text2),
+              Icon(icon, size: 17, color: c.text),
               const SizedBox(width: 8),
               Text(label,
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, letterSpacing: 0.6, color: c.text2)),
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.text)),
             ],
           ),
         ),

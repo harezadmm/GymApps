@@ -151,7 +151,8 @@ void main() {
   group('tema terang', () {
     test('tema gelap tetap bawaan dan tidak berubah', () {
       final c = buildGymTheme().extension<GymColors>()!;
-      expect(c.bg, const Color(0xFF0C0C0F));
+      // v3: latar gelap #0D0D10 (spec UI-V3 §1); bawaan tetap gelap.
+      expect(c.bg, const Color(0xFF0D0D10));
       expect(c.isLight, isFalse);
     });
 
