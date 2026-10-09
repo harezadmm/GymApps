@@ -268,6 +268,7 @@ class _WeekDots extends StatelessWidget {
             final d = DateTime(range.start.year, range.start.month, range.start.day + i);
             final done = trained.contains(isoDate(d));
             final isToday = d == now;
+            final future = d.isAfter(now);
             return Expanded(
               child: Column(
                 children: [
@@ -282,13 +283,19 @@ class _WeekDots extends StatelessWidget {
                     height: 30,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      color: done ? c.accentFill : c.surface2,
+                      color: done ? c.accentFill : (future ? null : c.surface2),
                       shape: BoxShape.circle,
-                      border: isToday && !done ? Border.all(color: c.accent, width: 1.5) : null,
+                      border: isToday && !done
+                          ? Border.all(color: c.accent, width: 1.5)
+                          : future
+                              ? Border.all(color: c.border)
+                              : null,
                     ),
                     child: done
                         ? const Icon(GymIcons.check, size: 14, color: Colors.white)
-                        : Text('${d.day}', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: c.text2)),
+                        : Text('${d.day}',
+                            style: TextStyle(
+                                fontSize: 11, fontWeight: FontWeight.w600, color: future ? c.text3 : c.text2)),
                   ),
                 ],
               ),
@@ -393,6 +400,9 @@ class RecapVolumeCard extends StatelessWidget {
           '${s.day}–${i == recap.bucketStarts.length - 1 ? end.day : recap.bucketStarts[i + 1].day - 1}',
     ];
     final values = recap.volumeBuckets;
+    // Gelembung awal di ember terakhir yang berisi — bukan ember terakhir
+    // periode, yang di tengah minggu adalah hari yang belum terjadi (0 kg).
+    final lastFilled = values.lastIndexWhere((v) => v > 0);
     return GymCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -403,6 +413,7 @@ class RecapVolumeCard extends StatelessWidget {
             values: values.every((v) => v <= 0) ? const [] : values,
             labels: labels,
             valueFormat: (v) => context.volume(v),
+            selected: lastFilled < 0 ? null : lastFilled,
             leftLabel: labels.first,
             midLabel: labels[labels.length ~/ 2],
             rightLabel: labels.last,
@@ -608,12 +619,12 @@ class RecapMusclesCard extends StatelessWidget {
             Row(
               children: [
                 Expanded(
-                  flex: 3,
+                  flex: 5,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(t.muscle(muscleGroupLabel[e.key]!),
-                          maxLines: 1,
+                          maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(fontSize: 13.5, color: c.text)),
                       if (recap.period == RecapPeriod.month)
