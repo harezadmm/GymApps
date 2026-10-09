@@ -6,12 +6,17 @@
 /// ke satuan tampilan.
 library;
 
+import 'dart:convert';
+
+import 'package:crypto/crypto.dart';
+
 import '../data/exercise_catalog.dart';
 import 'models.dart';
 import 'muscle_volume.dart';
 import 'onerm.dart';
 import 'program.dart';
 import 'settings.dart';
+import 'units.dart';
 
 enum RecapPeriod { week, month }
 
@@ -106,6 +111,7 @@ class ExerciseRecap {
     required this.volume,
     required this.reps,
     required this.mode,
+    this.volumeBefore = 0,
     required this.bodyweight,
     this.topSet,
     this.topSetBefore,
@@ -124,6 +130,9 @@ class ExerciseRecap {
   final int reps;
   final LogMode mode;
   final bool bodyweight;
+
+  /// Volume gerakan ini di periode sebelumnya (0 kalau tidak dilatih).
+  final double volumeBefore;
 
   /// Set kerja terberat periode ini (beban dulu, lalu rep; gerakan waktu:
   /// detik terlama).
@@ -369,6 +378,19 @@ Recap buildRecap({
     return b;
   }
 
+  double volumeIn(List<Workout> ws, String id) {
+    var v = 0.0;
+    for (final w in ws) {
+      for (final e in w.entries) {
+        if (e.exerciseId != id) continue;
+        for (final s in e.sets) {
+          if (_isWorking(s) && s.weight > 0 && s.reps > 0) v += s.weight * s.reps;
+        }
+      }
+    }
+    return v;
+  }
+
   bool seen(String id) =>
       beforeRange.any((w) => w.entries.any((e) => e.exerciseId == id && e.sets.any(_isWorking)));
 
@@ -379,6 +401,7 @@ Recap buildRecap({
         sessions: sessions[id]!,
         workingSets: sets[id]!,
         volume: volume[id]!,
+        volumeBefore: volumeIn(inPrev, id),
         reps: reps[id]!,
         mode: mode[id]!,
         bodyweight: target[id]?.bodyweight ?? false,
@@ -440,3 +463,124 @@ Recap buildRecap({
     bodyweightEnd: bwEnd,
   );
 }
+
+/// Program aktif, sejauh yang perlu diketahui analisis: nama, mode, dan
+/// berapa sesi yang direncanakan dalam periode itu.
+class RecapProgram {
+  const RecapProgram({required this.name, required this.mode, required this.plannedSessions});
+
+  final String name;
+
+  /// `rotation` atau `weekday`.
+  final String mode;
+  final int plannedSessions;
+
+  Map<String, dynamic> toJson() => {'name': name, 'mode': mode, 'plannedSessions': plannedSessions};
+}
+
+/// Sesi yang direncanakan program dalam [range]. Hari tetap: jumlah hari
+/// latihan yang jatuh di rentang itu. Rotasi: satu putaran penuh per minggu
+/// (anggapan yang sama dengan cincin Beranda), diskalakan ke panjang rentang.
+int plannedSessionsIn(Program program, RecapRange range) {
+  if (program.mode == ProgramMode.weekday) {
+    var n = 0;
+    for (var d = range.start; d.isBefore(range.end); d = DateTime(d.year, d.month, d.day + 1)) {
+      if (program.days.contains(d.weekday)) n++;
+    }
+    return n;
+  }
+  return (program.order.length * range.days / 7).round();
+}
+
+/// Batas isi payload: cukup untuk analisis yang tajam, kecil untuk dikirim.
+const recapPayloadMaxExercises = 15;
+const recapPayloadMaxRecords = 10;
+
+String _num(double v) => v == v.roundToDouble() ? v.toInt().toString() : v.toString();
+
+double _round1(double v) => (v * 10).round() / 10;
+
+/// "62.5x8", "BWx12", atau "45s" — dalam satuan tampilan.
+String _setText(SetRow s, LogMode mode, WeightUnit unit) {
+  if (mode != LogMode.reps) return '${s.seconds}s';
+  if (s.weight <= 0) return 'BWx${s.reps}';
+  return '${_num(shown(s.weight, unit))}x${s.reps}';
+}
+
+/// Ringkasan angka [r] untuk analisis AI, dalam satuan [unit]. Tidak memuat
+/// email, catatan bebas, atau riwayat mentah — hanya angka periode ini dan
+/// pembandingnya. Kontraknya divalidasi `web-api/api/_lib/recap-ai.js`.
+Map<String, dynamic> recapPayload(
+  Recap r, {
+  required String lang,
+  required WeightUnit unit,
+  required String Function(String exerciseId) nameOf,
+  RecapProgram? program,
+}) {
+  final lastDay = DateTime(r.range.end.year, r.range.end.month, r.range.end.day - 1);
+  final exercises = r.exercises.take(recapPayloadMaxExercises).map((e) {
+    final top = e.topSet, before = e.topSetBefore;
+    return <String, dynamic>{
+      'name': nameOf(e.exerciseId),
+      'sessions': e.sessions,
+      'sets': e.workingSets,
+      if (e.mode != LogMode.reps) 'mode': 'time',
+      if (e.repRange != null) 'repRange': e.repRange,
+      if (top != null) 'topSet': _setText(top, e.mode, unit),
+      if (before != null) 'topSetBefore': _setText(before, e.mode, unit),
+      if (e.e1rm != null) 'e1rm': shown(e.e1rm!, unit),
+      if (e.e1rmBefore != null) 'e1rmBefore': shown(e.e1rmBefore!, unit),
+      'lastSession': [for (final s in e.lastSets) _setText(s, e.mode, unit)].join(', '),
+      'volume': kgTo(e.volume, unit).round(),
+      if (before != null || e.volumeBefore > 0) 'volumeBefore': kgTo(e.volumeBefore, unit).round(),
+      'record': e.isRecord,
+      'new': e.isNew,
+    };
+  }).toList();
+  final records = r.records.take(recapPayloadMaxRecords).map((e) => <String, dynamic>{
+        'name': nameOf(e.exerciseId),
+        'e1rm': shown(e.e1rm!, unit),
+        'previous': shown(e.bestBeforeRange!, unit),
+      }).toList();
+  final muscles = r.muscleSets.entries.where((m) => m.value > 0).toList()
+    ..sort((a, b) => b.value.compareTo(a.value));
+  final weeks = r.range.days / 7;
+  final avg = r.avgSessionMinutes;
+  return {
+    'v': 1,
+    'period': r.period.name,
+    'lang': lang,
+    'unit': unit.label,
+    'range': {'start': isoDate(r.range.start), 'end': isoDate(lastDay), 'days': r.range.days},
+    'totals': {
+      'sessions': r.now.sessions,
+      'sessionsBefore': r.before.sessions,
+      'workingSets': r.now.workingSets,
+      'workingSetsBefore': r.before.workingSets,
+      'volume': kgTo(r.now.volume, unit).round(),
+      'volumeBefore': kgTo(r.before.volume, unit).round(),
+      'reps': r.now.reps,
+      'repsBefore': r.before.reps,
+      'trainingMinutes': r.now.minutes,
+      'trainingMinutesBefore': r.before.minutes,
+      if (avg != null) 'avgSessionMinutes': avg,
+      'trainingDays': r.trainedDays.length,
+      'longestRestDays': r.longestRestDays,
+    },
+    if (program != null) 'program': program.toJson(),
+    'exercises': exercises,
+    'records': records,
+    'muscleSets': {for (final m in muscles) m.key.name: m.value},
+    if (r.period == RecapPeriod.month && muscles.isNotEmpty)
+      'muscleSetsPerWeek': {for (final m in muscles) m.key.name: _round1(m.value / weeks)},
+    if (r.bodyweightEnd != null)
+      'bodyweight': {
+        if (r.bodyweightStart != null) 'start': shown(r.bodyweightStart!, unit),
+        'end': shown(r.bodyweightEnd!, unit),
+      },
+  };
+}
+
+/// Sidik jari payload — kunci cache hasil analisis. Payload dibangun dengan
+/// urutan kunci yang tetap, jadi JSON-nya stabil untuk data yang sama.
+String payloadFingerprint(Map<String, dynamic> payload) => sha1.convert(utf8.encode(jsonEncode(payload))).toString();

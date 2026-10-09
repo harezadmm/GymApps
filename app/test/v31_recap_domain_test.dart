@@ -3,6 +3,8 @@
 /// dan berat badan. Semua dihitung dari set yang benar-benar tercatat.
 library;
 
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gymapps/data/exercise_catalog.dart';
 import 'package:gymapps/domain/models.dart';
@@ -10,6 +12,7 @@ import 'package:gymapps/domain/muscle_volume.dart';
 import 'package:gymapps/domain/onerm.dart';
 import 'package:gymapps/domain/recap.dart';
 import 'package:gymapps/domain/settings.dart';
+import 'package:gymapps/domain/units.dart';
 
 const _bench = Exercise(
   id: 'bench',
@@ -243,6 +246,127 @@ void main() {
       expect(r.exercises, isEmpty);
       expect(r.avgSessionMinutes, isNull);
       expect(r.longestRestDays, 0);
+    });
+  });
+
+
+  group('payload AI', () {
+    Recap week() => buildRecap(
+          history: _history,
+          period: RecapPeriod.week,
+          range: recapRangeFor(RecapPeriod.week, _d(2026, 10, 9)),
+          catalog: _catalog,
+          bodyweight: _bw,
+        );
+    String name(String id) => _catalog.nameOf(id);
+
+    test('kunci sesuai kontrak server, angka dalam kg', () {
+      final p = recapPayload(week(), lang: 'id', unit: WeightUnit.kg, nameOf: name,
+          program: const RecapProgram(name: 'PPL', mode: 'rotation', plannedSessions: 3));
+      expect(p.keys.toSet(), {
+        'v', 'period', 'lang', 'unit', 'range', 'totals', 'program', 'exercises', 'records', 'muscleSets', 'bodyweight',
+      });
+      expect(p['v'], 1);
+      expect(p['period'], 'week');
+      expect(p['range'], {'start': '2026-10-05', 'end': '2026-10-11', 'days': 7});
+      final totals = p['totals'] as Map;
+      expect(totals['sessions'], 3);
+      expect(totals['sessionsBefore'], 2);
+      expect(totals['workingSets'], 13);
+      expect(totals['trainingMinutes'], 145);
+      expect(totals['trainingMinutesBefore'], 95);
+      expect(totals['avgSessionMinutes'], 48);
+      expect(totals['trainingDays'], 3);
+      expect(totals['longestRestDays'], 1);
+      expect(totals['volume'], (62.5 * 23 + 80 * 18 + 62.5 * 24 + 55 * 33).round());
+      expect(p['program'], {'name': 'PPL', 'mode': 'rotation', 'plannedSessions': 3});
+      final bench = (p['exercises'] as List).first as Map;
+      expect(bench['name'], 'Barbell Bench Press');
+      expect(bench['sessions'], 2);
+      expect(bench['sets'], 6);
+      expect(bench['repRange'], '6-10');
+      expect(bench['topSet'], '62.5x8');
+      expect(bench['topSetBefore'], '60x8');
+      expect(bench['e1rm'], estimate1RM(62.5, 8));
+      expect(bench['lastSession'], '62.5x8, 62.5x8, 62.5x8');
+      expect(bench['volumeBefore'], 60 * 24);
+      expect(bench['record'], isTrue);
+      expect(bench['new'], isFalse);
+      final pulldown = (p['exercises'] as List)[1] as Map;
+      expect(pulldown['new'], isTrue);
+      expect(pulldown.containsKey('topSetBefore'), isFalse);
+      expect((p['records'] as List).single['name'], 'Barbell Bench Press');
+      expect(p['muscleSets'], {'chest': 6, 'lats': 3, 'quads': 4});
+      expect(p['bodyweight'], {'start': 73.0, 'end': 72.4});
+    });
+
+    test('satuan lb dikonversi, berat badan juga', () {
+      final p = recapPayload(week(), lang: 'en', unit: WeightUnit.lb, nameOf: name);
+      expect(p['unit'], 'lb');
+      expect(p.containsKey('program'), isFalse);
+      final bench = (p['exercises'] as List).first as Map;
+      expect(bench['topSet'], '${shown(62.5, WeightUnit.lb)}x8');
+      expect((p['bodyweight'] as Map)['end'], shown(72.4, WeightUnit.lb));
+    });
+
+    test('bulan: set per otot per minggu ikut dikirim', () {
+      final r = buildRecap(
+        history: _history,
+        period: RecapPeriod.month,
+        range: recapRangeFor(RecapPeriod.month, _d(2026, 10, 9)),
+        catalog: _catalog,
+      );
+      final p = recapPayload(r, lang: 'id', unit: WeightUnit.kg, nameOf: name);
+      expect(p['period'], 'month');
+      expect((p['muscleSetsPerWeek'] as Map)['chest'], (6 / (31 / 7) * 10).round() / 10);
+      expect(p.containsKey('bodyweight'), isFalse);
+    });
+
+    test('batas 15 gerakan dan 10 rekor; ukuran < 24 KB', () {
+      final many = <Workout>[
+        for (var i = 0; i < 60; i++)
+          _w('2026-10-0${5 + i % 5}', [
+            _e('custom-$i', [_s(20.0 + i, 10), _s(20.0 + i, 10)]),
+          ], dur: 3600),
+        for (var i = 0; i < 60; i++)
+          _w('2026-09-1${i % 9}', [
+            _e('custom-$i', [_s(10.0 + i, 10)]),
+          ]),
+      ];
+      final r = buildRecap(history: many, period: RecapPeriod.week, range: recapRangeFor(RecapPeriod.week, _d(2026, 10, 9)));
+      final p = recapPayload(r, lang: 'id', unit: WeightUnit.kg,
+          nameOf: (id) => 'Exercise with a rather long descriptive name number $id');
+      expect((p['exercises'] as List).length, 15);
+      expect((p['records'] as List).length, 10);
+      expect(utf8.encode(jsonEncode(p)).length, lessThan(24 * 1024));
+    });
+
+    test('sidik jari stabil dan berubah saat data berubah', () {
+      final a = recapPayload(week(), lang: 'id', unit: WeightUnit.kg, nameOf: name);
+      final b = recapPayload(week(), lang: 'id', unit: WeightUnit.kg, nameOf: name);
+      expect(payloadFingerprint(a), payloadFingerprint(b));
+      final changed = buildRecap(
+        history: [
+          _w('2026-10-10', [_e('bench', [_s(65, 5)])]),
+          ..._history,
+        ],
+        period: RecapPeriod.week,
+        range: recapRangeFor(RecapPeriod.week, _d(2026, 10, 9)),
+        catalog: _catalog,
+        bodyweight: _bw,
+      );
+      final c = recapPayload(changed, lang: 'id', unit: WeightUnit.kg, nameOf: name);
+      expect(payloadFingerprint(c), isNot(payloadFingerprint(a)));
+      expect(payloadFingerprint(a), matches(RegExp(r'^[0-9a-f]{40}$')));
+    });
+
+    test('sesi rencana: hari tetap menghitung hari latihan di rentang, rotasi per minggu', () {
+      final oct = recapRangeFor(RecapPeriod.month, _d(2026, 10, 9));
+      const weekday = Program(name: 'UL', mode: ProgramMode.weekday, days: [1, 3, 5]);
+      expect(plannedSessionsIn(weekday, oct), 13);
+      const rotation = Program(name: 'PPL', order: ['a', 'b', 'c']);
+      expect(plannedSessionsIn(rotation, recapRangeFor(RecapPeriod.week, _d(2026, 10, 9))), 3);
+      expect(plannedSessionsIn(rotation, oct), 13);
     });
   });
 }
