@@ -11,6 +11,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/layout.dart';
 import 'core/motion.dart';
 import 'core/rest_alert.dart';
+import 'core/server_api.dart';
 import 'core/safe_area_stub.dart' if (dart.library.js_interop) 'core/safe_area_web.dart';
 import 'core/strings.dart';
 import 'core/theme.dart';
@@ -66,8 +67,9 @@ Future<void> main() async {
         authFlowType: AuthFlowType.pkce,
       ),
     );
-    // Server alarm istirahat (web) hanya melayani akun yang sedang masuk.
-    RestAlert.webAccessToken = () async {
+    // Fungsi server (alarm istirahat web, analisis AI recap) hanya melayani
+    // akun yang sedang masuk. Token diperbarui kalau sudah kedaluwarsa.
+    Future<String?> accessToken() async {
       final auth = Supabase.instance.client.auth;
       final session = auth.currentSession;
       if (session == null) return null;
@@ -75,10 +77,13 @@ Future<void> main() async {
       try {
         return (await auth.refreshSession()).session?.accessToken;
       } catch (e) {
-        debugPrint('refresh sesi untuk alarm: $e');
+        debugPrint('refresh sesi untuk server: $e');
         return null;
       }
-    };
+    }
+
+    RestAlert.webAccessToken = accessToken;
+    ServerApi.accessToken = accessToken;
   }
 
   // Setelan perangkat dibaca sebelum bingkai pertama, supaya aplikasi tidak
