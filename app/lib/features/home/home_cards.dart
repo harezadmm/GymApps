@@ -322,6 +322,61 @@ class NextSessionCard extends StatelessWidget {
   }
 }
 
+/// Kartu pintu masuk Recap: "Recap minggu ini · 3 sesi · 2 j 25 mnt · volume +8%".
+class RecapEntryCard extends StatelessWidget {
+  const RecapEntryCard({super.key, required this.title, required this.subtitle, required this.onTap});
+
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.gym;
+    return Container(
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(GymRadius.tile),
+        boxShadow: [c.cardShadow],
+      ),
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(GymRadius.tile),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 14, 12),
+            child: Row(
+              children: [
+                HueTile(icon: GymIcons.calendar, hue: c.hues.violet, iconSize: 20),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: c.text)),
+                      const SizedBox(height: 2),
+                      Text(subtitle,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 12.5, color: c.text2)),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Icon(GymIcons.chevronRight, size: 18, color: c.text2),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Satu baris di kartu progres kekuatan.
 class StrengthRow {
   const StrengthRow({
