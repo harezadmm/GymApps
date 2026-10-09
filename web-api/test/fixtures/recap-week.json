@@ -1,0 +1,69 @@
+{
+  "v": 1,
+  "period": "week",
+  "lang": "id",
+  "unit": "kg",
+  "range": { "start": "2026-10-05", "end": "2026-10-11", "days": 7 },
+  "totals": {
+    "sessions": 3,
+    "sessionsBefore": 2,
+    "workingSets": 13,
+    "workingSetsBefore": 7,
+    "volume": 6193,
+    "volumeBefore": 3040,
+    "reps": 98,
+    "repsBefore": 44,
+    "trainingMinutes": 145,
+    "trainingMinutesBefore": 95,
+    "avgSessionMinutes": 48,
+    "trainingDays": 3,
+    "longestRestDays": 1
+  },
+  "program": { "name": "Push Pull Legs", "mode": "rotation", "plannedSessions": 3 },
+  "exercises": [
+    {
+      "name": "Barbell Bench Press",
+      "sessions": 2,
+      "sets": 6,
+      "repRange": "6-10",
+      "topSet": "62.5x8",
+      "topSetBefore": "60x8",
+      "e1rm": 79.2,
+      "e1rmBefore": 76,
+      "lastSession": "62.5x8, 62.5x8, 62.5x8",
+      "volume": 2938,
+      "volumeBefore": 1440,
+      "record": true,
+      "new": false
+    },
+    {
+      "name": "Lat Pulldown",
+      "sessions": 1,
+      "sets": 3,
+      "topSet": "55x12",
+      "e1rm": 77,
+      "lastSession": "55x12, 55x11, 55x10",
+      "volume": 1815,
+      "record": false,
+      "new": true
+    },
+    {
+      "name": "Barbell Squat",
+      "sessions": 1,
+      "sets": 4,
+      "repRange": "5-8",
+      "topSet": "80x5",
+      "topSetBefore": "80x5",
+      "e1rm": 93.3,
+      "e1rmBefore": 93.3,
+      "lastSession": "80x5, 80x5, 80x4, 80x4",
+      "volume": 1440,
+      "volumeBefore": 1600,
+      "record": false,
+      "new": false
+    }
+  ],
+  "records": [{ "name": "Barbell Bench Press", "e1rm": 79.2, "previous": 76 }],
+  "muscleSets": { "chest": 6, "quads": 4, "lats": 3 },
+  "bodyweight": { "start": 73, "end": 72.4 }
+}
