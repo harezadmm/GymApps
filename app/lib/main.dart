@@ -769,11 +769,13 @@ class _GlassTabBar extends StatelessWidget {
                   const SizedBox(height: 3),
                   AnimatedDefaultTextStyle(
                     duration: GymMotion.of(context, GymMotion.quick),
-                    style: TextStyle(
-                      fontSize: 10.5,
-                      fontWeight: on ? FontWeight.w600 : FontWeight.w500,
-                      color: on ? c.accent : c.text2,
-                    ),
+                    // Dari tema supaya tetap Inter — gaya polos di sini jatuh ke
+                    // font sistem.
+                    style: Theme.of(context).textTheme.bodyMedium!.copyWith(
+                          fontSize: 10.5,
+                          fontWeight: on ? FontWeight.w600 : FontWeight.w500,
+                          color: on ? c.accent : c.text2,
+                        ),
                     child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
                   ),
                 ],

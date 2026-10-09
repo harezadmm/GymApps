@@ -134,11 +134,13 @@ class ExerciseRecap {
   /// Volume gerakan ini di periode sebelumnya (0 kalau tidak dilatih).
   final double volumeBefore;
 
-  /// Set kerja terberat periode ini (beban dulu, lalu rep; gerakan waktu:
-  /// detik terlama).
+  /// Set kerja terbaik periode ini: perkiraan 1RM tertinggi (seri → beban
+  /// lebih berat). Tanpa perkiraan (bodyweight): beban lalu rep; gerakan
+  /// waktu: detik terlama. Dibandingkan dengan perkiraan 1RM supaya "60 × 8 →
+  /// 62,5 × 8" dan pil 1RM di sebelahnya bercerita sama.
   final SetRow? topSet;
 
-  /// Set terberat periode sebelumnya, null kalau tidak dilatih saat itu.
+  /// Set terbaik periode sebelumnya, null kalau tidak dilatih saat itu.
   final SetRow? topSetBefore;
 
   /// e1RM terbaik periode ini dan periode sebelumnya.
@@ -261,10 +263,17 @@ double _volumeOf(Workout w) {
   return v;
 }
 
-/// Set yang "lebih berat": beban dulu, lalu rep; gerakan waktu memakai detik.
-bool _heavier(SetRow a, SetRow? b, LogMode mode) {
+/// Set yang lebih baik: perkiraan 1RM lebih tinggi (seri → beban lebih
+/// berat). Set tanpa perkiraan (bodyweight, rep di luar batas rumus) kalah
+/// dari set yang punya perkiraan, dan antar sesamanya dibandingkan beban lalu
+/// rep. Gerakan waktu memakai detik.
+bool _better(SetRow a, SetRow? b, LogMode mode) {
   if (b == null) return true;
   if (mode != LogMode.reps) return a.seconds > b.seconds;
+  final ea = estimate1RM(a.weight, a.reps), eb = estimate1RM(b.weight, b.reps);
+  if (ea != null && eb != null && ea != eb) return ea > eb;
+  if (ea != null && eb == null) return true;
+  if (ea == null && eb != null) return false;
   if (a.weight != b.weight) return a.weight > b.weight;
   return a.reps > b.reps;
 }
@@ -344,7 +353,7 @@ Recap buildRecap({
       volume[id] = (volume[id] ?? 0) +
           working.fold(0.0, (a, s) => a + (s.weight > 0 && s.reps > 0 ? s.weight * s.reps : 0));
       for (final s in working) {
-        if (_heavier(s, top[id], m)) top[id] = s;
+        if (_better(s, top[id], m)) top[id] = s;
       }
       final b = bestSetOf(e)?.est;
       if (b != null && (best[id] == null || b > best[id]!)) best[id] = b;
@@ -359,7 +368,7 @@ Recap buildRecap({
       for (final e in w.entries) {
         if (e.exerciseId != id) continue;
         for (final s in e.sets) {
-          if (_isWorking(s) && _heavier(s, t, m)) t = s;
+          if (_isWorking(s) && _better(s, t, m)) t = s;
         }
       }
     }

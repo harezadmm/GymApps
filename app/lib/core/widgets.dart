@@ -451,11 +451,14 @@ class SegmentedTabs extends StatelessWidget {
                           child: AnimatedDefaultTextStyle(
                             duration: GymMotion.of(context, GymMotion.normal),
                             curve: GymMotion.curve,
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: i == index ? FontWeight.w700 : FontWeight.w600,
-                              color: i == index ? c.text : c.text2,
-                            ),
+                            // Dari tema, bukan TextStyle polos: AnimatedDefaultTextStyle
+                            // mengganti gaya teks seluruhnya, dan tanpa fontFamily label
+                            // jatuh ke font sistem, bukan Inter.
+                            style: Theme.of(context).textTheme.bodyMedium!.copyWith(
+                                  fontSize: 13,
+                                  fontWeight: i == index ? FontWeight.w700 : FontWeight.w600,
+                                  color: i == index ? c.text : c.text2,
+                                ),
                             child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
                           ),
                         ),

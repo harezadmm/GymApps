@@ -189,6 +189,21 @@ void main() {
       expect(pulldown.isRecord, isFalse, reason: 'gerakan pertama kali bukan rekor');
     });
 
+    test('top set = perkiraan 1RM terbaik, bukan sekadar beban terberat', () {
+      final r = buildRecap(
+        history: [
+          _w('2026-10-06', [_e('bench', [_s(100, 1), _s(90, 8)])]),
+          _w('2026-09-30', [_e('bench', [_s(95, 1), _s(85, 8)])]),
+        ],
+        period: RecapPeriod.week,
+        range: recapRangeFor(RecapPeriod.week, _d(2026, 10, 9)),
+      );
+      final bench = r.exercises.single;
+      expect([bench.topSet!.weight, bench.topSet!.reps], [90, 8]);
+      expect([bench.topSetBefore!.weight, bench.topSetBefore!.reps], [85, 8]);
+      expect(bench.e1rm, estimate1RM(90, 8));
+    });
+
     test('rekor hanya bila mengalahkan semua catatan sebelum periode', () {
       final bench = r.exercises.firstWhere((e) => e.exerciseId == 'bench');
       final best = [estimate1RM(60, 8)!, estimate1RM(65, 5)!].reduce((a, b) => a > b ? a : b);

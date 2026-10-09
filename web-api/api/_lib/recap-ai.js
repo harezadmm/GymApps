@@ -102,7 +102,7 @@ function systemPrompt(p) {
     '',
     'The user message contains the summary as JSON. Field guide:',
     `- totals: this ${span} vs the previous ${span} (fields ending in "Before").`,
-    '- exercises: sessions, working sets, repRange (target reps), topSet (heaviest working set as weight x reps; "BW" = bodyweight; "s" = seconds), topSetBefore (previous period), e1rm / e1rmBefore (estimated 1-rep max), lastSession (sets of the most recent session), volume (weight x reps), record (new all-time best estimated 1RM), new (first time logged).',
+    '- exercises: sessions, working sets, repRange (target reps), topSet (best working set by estimated 1RM, as weight x reps; "BW" = bodyweight; "s" = seconds), topSetBefore (previous period), e1rm / e1rmBefore (estimated 1-rep max), lastSession (sets of the most recent session), volume (weight x reps), record (new all-time best estimated 1RM), new (first time logged).',
     `- muscleSets: working sets per primary muscle this ${span}${perWeek}.`,
     '- program (optional): planned sessions for the period. bodyweight (optional): start and end.',
     `Weights are in ${p.unit}.`,
