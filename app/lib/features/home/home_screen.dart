@@ -355,7 +355,7 @@ class HomeScreen extends StatelessWidget {
     final t = context.t;
     final store = context.workouts;
     final current = recapRangeFor(RecapPeriod.week, now, weekStartsOn: store.settings.weekStartsOn);
-    var recap = buildRecap(history: store.workouts, period: RecapPeriod.week, range: current);
+    var recap = buildRecap(history: store.workouts, period: RecapPeriod.week, range: current, today: now);
     var title = t.recapThisWeekCard;
     if (recap.isEmpty) {
       recap = buildRecap(

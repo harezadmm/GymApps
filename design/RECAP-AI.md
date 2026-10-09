@@ -25,8 +25,18 @@ HP / web ──(ringkasan angka + token Supabase)──▶ Vercel /api/recap-ana
   otomatis `gemini-2.5-flash` saat 429/5xx/timeout. Bisa diganti lewat env
   `GEMINI_MODELS` (daftar dipisah koma). Keluaran JSON terstruktur
   (`responseSchema`), divalidasi dan dipotong di server.
-- Batas: 20 analisis/akun/hari (Runtime Cache, env `AI_DAILY_LIMIT`), payload
-  ≤ 24 KB, timeout per model 35 dtk, fungsi `maxDuration` 60.
+- **Payload disusun ulang di server** (`sanitizePayload`): hanya field yang
+  dikenal, nama dipotong 80 karakter, set harus berbentuk `62.5x8` / `BWx12` /
+  `45s`. Field bebas dibuang — endpoint tidak bisa dipakai sebagai proksi LLM.
+- **Kuota atomik** lewat RPC Supabase `consume_ai_quota()`
+  (`supabase/migrations/0004_ai_quota.sql`, dijalankan manual di SQL Editor):
+  20 analisis/akun/hari dan 200/hari global, batasnya tertanam di fungsi SQL,
+  tanpa fungsi "kembalikan kuota". Selama migrasi belum dijalankan, cadangannya
+  Runtime Cache (best effort): satu analisis berjalan per akun, batas per akun
+  (`AI_DAILY_LIMIT`) + global (`AI_GLOBAL_DAILY_LIMIT`), dan kuota hanya
+  dikembalikan untuk galat sementara dari Google (429/5xx/batas waktu).
+- Payload ≤ 24 KB, timeout per model 25 dtk dalam anggaran total 50 dtk,
+  fungsi `maxDuration` 60. Supabase yang tak bisa dihubungi → 503, bukan 401.
 - Hasil disimpan lokal per akun + periode bersama sidik jari payload. Membuka
   recap yang sama tidak memanggil AI lagi; kalau datanya berubah, hasil lama
   tetap tampil dengan tanda "data berubah" dan tombol analisis ulang.
@@ -35,17 +45,25 @@ HP / web ──(ringkasan angka + token Supabase)──▶ Vercel /api/recap-ana
 
 - `RecapPeriod { week, month }`; `RecapRange [start, end)`; minggu mengikuti
   `settings.weekStartsOn`, bulan = bulan kalender.
-- `buildRecap(history, period, range, catalog?, bodyweight)` menghitung untuk
-  periode dan periode sebelumnya: sesi, set kerja, volume (kg·rep), total rep,
+- `buildRecap(history, period, range, catalog?, bodyweight, today?)` menghitung
+  untuk periode dan periode sebelumnya. **Periode yang masih berjalan**
+  (`today` di dalamnya, bukan hari terakhir) dibandingkan dengan bagian yang
+  sama dari periode lalu (`elapsedDays` hari pertamanya) untuk total dan volume
+  gerakan; top set dan perkiraan 1RM tetap dibandingkan dengan seluruh periode
+  lalu. Payload membawa `elapsedDays`, dan prompt menilai laju "sejauh ini".
+  Yang dihitung: sesi, set kerja, volume (kg·rep), total rep,
   menit latihan (dari `durationSeconds`), rata-rata menit per sesi, hari latihan,
   jeda terpanjang antar hari latihan, volume per hari (minggu) / per minggu
-  (bulan), per gerakan (sesi, set, volume, top set = beban terberat lalu rep,
+  (bulan), per gerakan (sesi, set, volume, top set = set kerja biasa dengan perkiraan 1RM terbaik,
+  atau beban lalu rep bila salah satu tanpa perkiraan,
   e1RM terbaik, pembanding periode sebelumnya, rentang rep target, set sesi
   terakhir), rekor (e1RM periode > semua sebelum periode), set kerja per otot
   utama, berat badan awal → akhir.
 - Set kerja = tercentang dan bukan pemanasan (sama dengan seluruh aplikasi).
 - `recapPayload(...)` → JSON ringkas dalam satuan tampilan; maksimal 15 gerakan,
-  10 rekor; untuk bulan ada `muscleSetsPerWeek`. `payloadFingerprint` = sha1.
+  10 rekor, nama ≤ 80 karakter; untuk bulan ada `muscleSetsPerWeek` (dibagi
+  minggu yang sudah lewat, minimal satu). Berat badan awal hanya dari catatan
+  ≤ 14 hari sebelum periode. `payloadFingerprint` = sha1.
 
 ## 3. Layar
 

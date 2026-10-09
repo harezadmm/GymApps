@@ -53,6 +53,12 @@ extension RecapStrings on Strings {
   // ── Progres beban & rep ──
   String get loadRepsTitle => _r('Load & reps', 'Progres beban & rep');
   String get vsPrevious => _r('vs previous', 'vs periode lalu');
+  String repsDelta(int n) => _r('${n > 0 ? '+' : '−'}${n.abs()} ${n.abs() == 1 ? 'rep' : 'reps'}', '${n > 0 ? '+' : '−'}${n.abs()} rep');
+  String secondsDelta(int n) => _r('${n > 0 ? '+' : '−'}${n.abs()} s', '${n > 0 ? '+' : '−'}${n.abs()} dtk');
+  String comparedFirstDays(int n, {required bool week}) => _r(
+        'Compared with the first $n days of last ${week ? 'week' : 'month'}',
+        'Dibanding $n hari pertama ${week ? 'minggu' : 'bulan'} lalu',
+      );
   String firstTime(String set) => _r('First time · $set', 'Pertama kali · $set');
   String secondsShort(int s) => _r('$s s', '$s dtk');
 
@@ -78,8 +84,8 @@ extension RecapStrings on Strings {
         'Gemini membaca beban, rep, dan waktu latihanmu periode ini, lalu memberi kritik dan saran.',
       );
   String get aiDataNote => _r(
-        'A summary of this period\'s numbers is sent to Google Gemini — no email or notes.',
-        'Ringkasan angka latihan periode ini dikirim ke Google Gemini, tanpa email atau catatan.',
+        'This period\'s numbers and exercise names are sent to Google Gemini — no email or notes.',
+        'Angka latihan dan nama gerakan periode ini dikirim ke Google Gemini, tanpa email atau catatan.',
       );
   String get aiAnalyze => _r('Analyze now', 'Analisis sekarang');
   String get aiAnalyzing => _r('Analyzing your training…', 'Menganalisis latihanmu…');

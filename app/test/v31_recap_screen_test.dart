@@ -149,6 +149,7 @@ void main() {
       expect(find.widgetWithText(ChangePill, '+50 mnt'), findsOneWidget);
       expect(find.widgetWithText(ChangePill, '+6'), findsOneWidget);
       expect(find.widgetWithText(ChangePill, '+104%'), findsOneWidget);
+      expect(find.text('Dibanding 5 hari pertama minggu lalu'), findsOneWidget);
 
       expect(find.text('Analisis AI'), findsOneWidget);
       expect(find.widgetWithText(GymButton, 'Analisis sekarang'), findsOneWidget);
@@ -187,7 +188,8 @@ void main() {
     expect(find.text('5 – 11 Okt'), findsOneWidget);
   });
 
-  testWidgets('bulanan: Oktober 2026, 4 sesi vs 2, volume per minggu', (tester) async {
+  testWidgets('bulanan: Oktober 2026 berjalan, 4 sesi vs 9 hari pertama September (0), volume per minggu',
+      (tester) async {
     _phone(tester);
     final store = await _store(tester);
     await tester.pumpWidget(_wrap(store, _screen(_FakeAnalyzer())));
@@ -196,7 +198,8 @@ void main() {
     await _settle(tester);
     expect(find.text('Oktober 2026'), findsOneWidget);
     expect(find.text('Bulan ini'), findsOneWidget);
-    expect(find.widgetWithText(ChangePill, '+2'), findsOneWidget);
+    expect(find.widgetWithText(ChangePill, '+4'), findsOneWidget);
+    expect(find.text('Dibanding 9 hari pertama bulan lalu'), findsOneWidget);
     await tester.scrollUntilVisible(find.text('Volume per minggu'), 200, scrollable: _scroll());
     expect(find.text('Volume per minggu'), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -344,5 +347,46 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
     }
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Mingguan → Bulanan dari minggu yang melintasi dua bulan: bulan berjalan, bukan bulan awal minggu',
+      (tester) async {
+    _phone(tester);
+    final store = await _store(tester);
+    await tester.pumpWidget(_wrap(
+      store,
+      RecapScreen(analyzer: _FakeAnalyzer(), today: () => DateTime(2026, 10, 1, 12)),
+    ));
+    await _settle(tester);
+    expect(find.text('28 Sep – 4 Okt'), findsOneWidget);
+    await tester.tap(find.text('Bulanan'));
+    await _settle(tester);
+    expect(find.text('Oktober 2026'), findsOneWidget);
+    expect(find.text('Bulan ini'), findsOneWidget);
+  });
+
+  testWidgets('analisis yang masih berjalan tetap terlacak saat kartu dibuat ulang (pindah tab bolak-balik)',
+      (tester) async {
+    _phone(tester);
+    final store = await _store(tester);
+    final ai = _FakeAnalyzer();
+    await tester.pumpWidget(_wrap(store, _screen(ai)));
+    await _settle(tester);
+    await tester.tap(find.widgetWithText(GymButton, 'Analisis sekarang'));
+    await tester.pump();
+    expect(ai.calls, 1);
+    await tester.tap(find.text('Bulanan'));
+    await _settle(tester);
+    await tester.tap(find.text('Mingguan'));
+    await _settle(tester);
+    expect(find.text('Menganalisis latihanmu…'), findsOneWidget, reason: 'kartu baru menunggu permintaan yang sama');
+    expect(find.widgetWithText(GymButton, 'Analisis sekarang'), findsNothing);
+    await tester.runAsync(() async {
+      ai.pending!.complete(_analysis);
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+    });
+    await _settle(tester);
+    expect(find.text('Bench naik, kaki perlu dikejar'), findsOneWidget);
+    expect(ai.calls, 1, reason: 'tidak ada panggilan kedua');
   });
 }

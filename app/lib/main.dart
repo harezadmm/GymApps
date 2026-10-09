@@ -83,7 +83,15 @@ Future<void> main() async {
     }
 
     RestAlert.webAccessToken = accessToken;
-    ServerApi.accessToken = accessToken;
+    // Analisis AI perlu membedakan "offline" dari "belum tersambung": galat
+    // saat memperbarui token diteruskan, bukan ditelan menjadi null.
+    ServerApi.accessToken = () async {
+      final auth = Supabase.instance.client.auth;
+      final session = auth.currentSession;
+      if (session == null) return null;
+      if (!session.isExpired) return session.accessToken;
+      return (await auth.refreshSession()).session?.accessToken;
+    };
   }
 
   // Setelan perangkat dibaca sebelum bingkai pertama, supaya aplikasi tidak
