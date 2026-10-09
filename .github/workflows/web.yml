@@ -38,6 +38,13 @@ jobs:
       - name: Test
         working-directory: app
         run: flutter test
+      # Fungsi server (analisis AI recap): node:test dengan fetch tiruan,
+      # tanpa kunci Gemini dan tanpa memasang dependensi.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test fungsi server
+        run: node --test "web-api/test/*.test.mjs"
       # Secret yang kosong menghasilkan build yang jalan tapi tanpa server.
       # Di main itu tidak boleh lolos; di PR (tanpa secret) build tetap dicek.
       - name: Pastikan kredensial Supabase ada

@@ -3,6 +3,9 @@
   "functions": {
     "api/rest-alarm.js": {
       "maxDuration": 300
+    },
+    "api/recap-analyze.js": {
+      "maxDuration": 60
     }
   },
   "headers": [

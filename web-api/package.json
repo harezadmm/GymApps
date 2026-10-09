@@ -2,7 +2,7 @@
   "name": "gymapps-web-api",
   "private": true,
   "type": "module",
-  "description": "Fungsi Vercel di samping build web Flutter: push tanda istirahat selesai.",
+  "description": "Fungsi Vercel di samping build web Flutter: push tanda istirahat selesai dan analisis AI recap.",
   "dependencies": {
     "@vercel/functions": "^3.1.0",
     "web-push": "^3.6.7"
