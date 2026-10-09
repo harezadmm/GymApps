@@ -20,6 +20,7 @@ import '../../core/illustration.dart';
 import '../../core/layout.dart';
 import '../../core/motion.dart';
 import '../../core/strings.dart';
+import '../../core/strings_recap.dart';
 import '../../core/strings_stats.dart';
 import '../../core/strings_v3.dart';
 import '../../core/theme.dart';
@@ -32,6 +33,7 @@ import '../../domain/muscle_volume.dart';
 import '../../domain/stats.dart';
 import '../../domain/units.dart';
 import '../session/exercise_history_sheet.dart';
+import '../recap/recap_screen.dart';
 import 'bodyweight_card.dart';
 import 'dashboard_screen.dart';
 
@@ -210,7 +212,19 @@ class _StatsScreenState extends State<StatsScreen> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
       children: [
-        ScreenHeader(title: t.stats),
+        ScreenHeader(
+          title: t.stats,
+          actions: [
+            GymButton(
+              label: t.recapButton,
+              icon: GymIcons.calendar,
+              tone: GymButtonTone.neutral,
+              height: 34,
+              expand: false,
+              onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const RecapScreen())),
+            ),
+          ],
+        ),
         FilterChips(
           labels: [for (final d in _ranges) t.rangeChip(d)],
           index: math.max(0, _ranges.indexOf(_days)),

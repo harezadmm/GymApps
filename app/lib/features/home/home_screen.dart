@@ -15,6 +15,7 @@ import '../../core/motion.dart';
 import '../../core/strings.dart';
 import '../../core/strings_history.dart';
 import '../../core/strings_home.dart';
+import '../../core/strings_recap.dart';
 import '../../core/strings_v3.dart';
 import '../../core/theme.dart';
 import '../../core/weights.dart';
@@ -24,10 +25,12 @@ import '../../data/workout_store.dart';
 import '../../domain/models.dart';
 import '../../domain/program.dart';
 import '../../domain/progression.dart';
+import '../../domain/recap.dart';
 import '../../domain/session_plan.dart';
 import '../../domain/stats.dart';
 import '../../domain/units.dart';
 import '../onboarding/program_flow.dart';
+import '../recap/recap_screen.dart';
 import '../session/exercise_history_sheet.dart';
 import '../session/session_launcher.dart';
 import '../stats/dashboard_screen.dart' show carried, weeklyBest;
@@ -322,9 +325,13 @@ class HomeScreen extends StatelessWidget {
                       onViewHistory: onOpenTab == null ? null : () => onOpenTab!(1),
                     ),
                   ),
+                  ...switch (_recapEntry(context, now)) {
+                    final Widget card => [const SizedBox(height: 12), Reveal(index: 6, child: card)],
+                    null => const <Widget>[],
+                  },
                   const SizedBox(height: 20),
                   Reveal(
-                    index: 6,
+                    index: 7,
                     child: SectionTitle(
                       t.strengthProgress,
                       action: t.seeAllShort,
@@ -332,13 +339,47 @@ class HomeScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 10),
-                  Reveal(index: 7, child: _strength(context, catalog, unit)),
+                  Reveal(index: 8, child: _strength(context, catalog, unit)),
                 ],
               ),
             ],
           );
         },
       ),
+    );
+  }
+
+  /// Kartu Recap: minggu ini kalau sudah ada sesi, selain itu minggu lalu,
+  /// dan tidak tampil kalau keduanya kosong.
+  Widget? _recapEntry(BuildContext context, DateTime now) {
+    final t = context.t;
+    final store = context.workouts;
+    final current = recapRangeFor(RecapPeriod.week, now, weekStartsOn: store.settings.weekStartsOn);
+    var recap = buildRecap(history: store.workouts, period: RecapPeriod.week, range: current);
+    var title = t.recapThisWeekCard;
+    if (recap.isEmpty) {
+      recap = buildRecap(
+        history: store.workouts,
+        period: RecapPeriod.week,
+        range: shiftRecapRange(RecapPeriod.week, current, -1),
+      );
+      title = t.recapLastWeekCard;
+      if (recap.isEmpty) return null;
+    }
+    final parts = [
+      t.sessionsShort(recap.now.sessions),
+      if (recap.now.minutes > 0) t.hoursMinutes(recap.now.minutes),
+    ];
+    if (recap.before.volume > 0) {
+      final pct = ((recap.now.volume - recap.before.volume) / recap.before.volume * 100).round();
+      if (pct != 0) parts.add(t.volumeChange('${pct > 0 ? '+' : '−'}${pct.abs()}%'));
+    }
+    final anchor = recap.range.start;
+    return RecapEntryCard(
+      key: const ValueKey('home-recap'),
+      title: title,
+      subtitle: parts.join(' · '),
+      onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => RecapScreen(anchor: anchor))),
     );
   }
 
