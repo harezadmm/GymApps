@@ -563,7 +563,7 @@ Map<String, dynamic> recapPayload(
       'repsBefore': r.before.reps,
       'trainingMinutes': r.now.minutes,
       'trainingMinutesBefore': r.before.minutes,
-      if (avg != null) 'avgSessionMinutes': avg,
+      'avgSessionMinutes': ?avg,
       'trainingDays': r.trainedDays.length,
       'longestRestDays': r.longestRestDays,
     },
