@@ -46,6 +46,13 @@ class RecapAiCard extends StatefulWidget {
 }
 
 class _RecapAiCardState extends State<RecapAiCard> {
+  /// Analisis yang sedang berjalan, per akun + periode. Kartu dibangun ulang
+  /// saat pindah Mingguan ↔ Bulanan atau keluar-masuk layar; tanpa peta ini
+  /// kartu baru tampil "siap" dan ketukan berikutnya memakai kuota dua kali.
+  static final _inflight = <String, Future<RecapAnalysis>>{};
+
+  String get _key => '${widget.account}|${widget.period.name}|${widget.start.toIso8601String()}';
+
   late final RecapAiCache _cache = widget.cache ?? RecapAiCache();
   _Phase _phase = _Phase.idle;
   RecapAnalysis? _result;
@@ -55,7 +62,39 @@ class _RecapAiCardState extends State<RecapAiCard> {
   @override
   void initState() {
     super.initState();
-    _loadCached();
+    final running = _inflight[_key];
+    if (running != null) {
+      _phase = _Phase.loading;
+      _follow(running, payloadFingerprintOrNull(widget.payload));
+    } else {
+      _loadCached();
+    }
+  }
+
+  static String? payloadFingerprintOrNull(Map<String, dynamic>? p) => p == null ? null : payloadFingerprint(p);
+
+  Future<void> _follow(Future<RecapAnalysis> running, String? fingerprint) async {
+    try {
+      final a = await running;
+      if (!mounted) return;
+      setState(() {
+        _result = a;
+        _resultFingerprint = fingerprint;
+        _phase = _Phase.done;
+      });
+    } on RecapAiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.kind;
+        _phase = _Phase.error;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _error = RecapAiFailure.failed;
+        _phase = _Phase.error;
+      });
+    }
   }
 
   Future<void> _loadCached() async {
@@ -76,28 +115,16 @@ class _RecapAiCardState extends State<RecapAiCard> {
       _phase = _Phase.loading;
       _error = null;
     });
-    try {
-      final a = await widget.analyzer.analyze(payload);
-      await _cache.save(widget.account, widget.period, widget.start, fingerprint, a);
-      if (!mounted) return;
-      setState(() {
-        _result = a;
-        _resultFingerprint = fingerprint;
-        _phase = _Phase.done;
-      });
-    } on RecapAiException catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _error = e.kind;
-        _phase = _Phase.error;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _error = RecapAiFailure.failed;
-        _phase = _Phase.error;
-      });
-    }
+    final key = _key, cache = _cache, account = widget.account, period = widget.period, start = widget.start;
+    // Disimpan ke cache oleh permintaannya sendiri, bukan oleh kartu: kartu
+    // bisa sudah dibuang saat jawabannya tiba.
+    final running = widget.analyzer.analyze(payload).then((a) async {
+      await cache.save(account, period, start, fingerprint, a);
+      return a;
+    });
+    _inflight[key] = running;
+    running.whenComplete(() => _inflight.remove(key)).ignore();
+    await _follow(running, fingerprint);
   }
 
   String _message(Strings t, RecapAiFailure kind) => switch (kind) {
@@ -143,7 +170,7 @@ class _RecapAiCardState extends State<RecapAiCard> {
                   onPressed: payload == null ? null : _analyze,
                 ),
                 const SizedBox(height: 8),
-                Text(t.aiDataNote, style: TextStyle(fontSize: 11.5, height: 1.4, color: c.text3)),
+                Text(t.aiDataNote, style: TextStyle(fontSize: 11.5, height: 1.4, color: c.text2)),
               ],
             _Phase.loading => [
                 Padding(
@@ -189,7 +216,7 @@ class _RecapAiCardState extends State<RecapAiCard> {
                         t.aiAnalyzedAt(_when(t, _result!.createdAt), _result!.model),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 11.5, color: c.text3),
+                        style: TextStyle(fontSize: 11.5, color: c.text2),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -220,7 +247,7 @@ class _RecapAiCardState extends State<RecapAiCard> {
                     ),
                   ],
                 ),
-                Text(t.aiDisclaimer, style: TextStyle(fontSize: 11, color: c.text3)),
+                Text(t.aiDisclaimer, style: TextStyle(fontSize: 11, color: c.text2)),
               ],
           },
         ],

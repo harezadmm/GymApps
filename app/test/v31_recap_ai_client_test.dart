@@ -90,7 +90,24 @@ void main() {
     expect(await run(400, {'error': 'bad_payload'}), RecapAiFailure.failed);
     expect(await run(502, {'error': 'failed'}), RecapAiFailure.failed);
     expect(await run(404), RecapAiFailure.unavailable, reason: 'server lama tanpa fungsi ini');
+    expect(await run(504), RecapAiFailure.busy, reason: 'batas waktu Vercel');
+    expect(await run(503, {'error': 'auth_unavailable'}), RecapAiFailure.busy, reason: 'Supabase sedang bermasalah');
+    expect(await run(429, {'error': 'in_progress'}), RecapAiFailure.busy, reason: 'analisis sebelumnya masih berjalan');
     expect(await run(200, {'nothing': true}), RecapAiFailure.failed, reason: 'jawaban tanpa analisis');
+  });
+
+  test('token gagal diperbarui (offline dengan token kedaluwarsa) → offline, bukan tidak tersambung', () async {
+    var called = false;
+    final analyzer = ServerRecapAnalyzer(
+      client: MockClient((r) async {
+        called = true;
+        return http.Response('{}', 200);
+      }),
+      endpoint: _endpoint,
+      token: () async => throw Exception('Failed host lookup'),
+    );
+    expect(await _failureOf(analyzer.analyze(_payload)), RecapAiFailure.offline);
+    expect(called, isFalse);
   });
 
   test('jaringan putus → offline', () async {

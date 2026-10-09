@@ -164,6 +164,38 @@ class ExerciseRecap {
   bool get isRecord => e1rm != null && bestBeforeRange != null && e1rm! > bestBeforeRange! + 1e-9;
 
   double? get e1rmDelta => e1rm == null || e1rmBefore == null ? null : e1rm! - e1rmBefore!;
+
+  /// Perubahan top set dibanding periode lalu, dengan ukuran yang sama
+  /// dengan yang dipakai memilih top set: perkiraan 1RM bila keduanya punya,
+  /// selain itu beban lalu rep; gerakan waktu memakai detik. null kalau tidak
+  /// dilatih di periode lalu.
+  TopSetChange? get topChange {
+    final a = topSetBefore, b = topSet;
+    if (a == null || b == null) return null;
+    TopSetTrend trend(num d) => d > 0 ? TopSetTrend.up : (d < 0 ? TopSetTrend.down : TopSetTrend.same);
+    if (mode != LogMode.reps) return TopSetChange(trend(b.seconds - a.seconds), seconds: b.seconds - a.seconds);
+    final ea = estimate1RM(a.weight, a.reps), eb = estimate1RM(b.weight, b.reps);
+    if (ea != null && eb != null) {
+      final d = eb - ea;
+      return TopSetChange(d.abs() < 0.05 ? TopSetTrend.same : trend(d), e1rm: d);
+    }
+    if (b.weight != a.weight) return TopSetChange(trend(b.weight - a.weight), weight: b.weight - a.weight);
+    return TopSetChange(trend(b.reps - a.reps), reps: b.reps - a.reps);
+  }
+}
+
+enum TopSetTrend { up, same, down }
+
+/// Satu ukuran perubahan top set — tepat satu dari [e1rm], [weight], [reps],
+/// [seconds] terisi (kg / kg / rep / detik).
+class TopSetChange {
+  const TopSetChange(this.trend, {this.e1rm, this.weight, this.reps, this.seconds});
+
+  final TopSetTrend trend;
+  final double? e1rm;
+  final double? weight;
+  final int? reps;
+  final int? seconds;
 }
 
 class Recap {
@@ -179,6 +211,8 @@ class Recap {
     required this.bucketStarts,
     required this.exercises,
     required this.muscleSets,
+    required this.beforeSpan,
+    this.elapsedDays,
     this.bodyweightStart,
     this.bodyweightEnd,
   });
@@ -187,7 +221,16 @@ class Recap {
   final RecapRange range;
   final RecapRange previous;
   final RecapTotals now;
+
+  /// Total pembanding. Periode yang masih berjalan dibandingkan dengan
+  /// bagian yang sama dari periode lalu ([beforeSpan]) — Selasa dengan satu
+  /// sesi bukan "turun" dari minggu lalu yang sudah penuh.
   final RecapTotals before;
+  final RecapRange beforeSpan;
+
+  /// Hari periode yang sudah lewat (termasuk hari ini) selama periode masih
+  /// berjalan; null untuk periode yang sudah selesai.
+  final int? elapsedDays;
 
   /// Tanggal ISO hari yang berisi sesi, urut.
   final List<String> trainedDays;
@@ -263,17 +306,17 @@ double _volumeOf(Workout w) {
   return v;
 }
 
-/// Set yang lebih baik: perkiraan 1RM lebih tinggi (seri → beban lebih
-/// berat). Set tanpa perkiraan (bodyweight, rep di luar batas rumus) kalah
-/// dari set yang punya perkiraan, dan antar sesamanya dibandingkan beban lalu
-/// rep. Gerakan waktu memakai detik.
+/// Set yang lebih baik: perkiraan 1RM lebih tinggi bila keduanya punya
+/// (seri → beban lebih berat); selain itu beban lalu rep. Gerakan waktu
+/// memakai detik.
 bool _better(SetRow a, SetRow? b, LogMode mode) {
   if (b == null) return true;
   if (mode != LogMode.reps) return a.seconds > b.seconds;
   final ea = estimate1RM(a.weight, a.reps), eb = estimate1RM(b.weight, b.reps);
   if (ea != null && eb != null && ea != eb) return ea > eb;
-  if (ea != null && eb == null) return true;
-  if (ea == null && eb != null) return false;
+  // Salah satu tanpa perkiraan (rep di atas batas rumus, bodyweight): beban
+  // lalu rep. 12 kg × 15 lebih baik dari 10 kg × 12 walau hanya yang kedua
+  // punya perkiraan 1RM.
   if (a.weight != b.weight) return a.weight > b.weight;
   return a.reps > b.reps;
 }
@@ -290,8 +333,22 @@ Recap buildRecap({
   required RecapRange range,
   ExerciseCatalog? catalog,
   List<BodyweightEntry> bodyweight = const [],
+  DateTime? today,
 }) {
   final previous = shiftRecapRange(period, range, -1);
+  int? elapsed;
+  if (today != null && range.contains(today)) {
+    final t = dateOnly(today);
+    final e = DateTime.utc(t.year, t.month, t.day)
+            .difference(DateTime.utc(range.start.year, range.start.month, range.start.day))
+            .inDays +
+        1;
+    if (e < range.days) elapsed = e;
+  }
+  final spanEnd = elapsed == null
+      ? previous.end
+      : DateTime(previous.start.year, previous.start.month, previous.start.day + elapsed);
+  final beforeSpan = RecapRange(previous.start, spanEnd.isAfter(previous.end) ? previous.end : spanEnd);
   // Kronologis (terlama dulu) apa pun urutan masukannya, supaya "sesi
   // terakhir" dan rentang rep terakhir benar.
   final dated = [
@@ -301,6 +358,7 @@ Recap buildRecap({
 
   final inRange = [for (final (w, d) in dated) if (range.contains(d)) w];
   final inPrev = [for (final (w, d) in dated) if (previous.contains(d)) w];
+  final inSpan = [for (final (w, d) in dated) if (beforeSpan.contains(d)) w];
   final beforeRange = [for (final (w, d) in dated) if (d.isBefore(range.start)) w];
 
   // Hari latihan dan istirahat terpanjang.
@@ -353,7 +411,7 @@ Recap buildRecap({
       volume[id] = (volume[id] ?? 0) +
           working.fold(0.0, (a, s) => a + (s.weight > 0 && s.reps > 0 ? s.weight * s.reps : 0));
       for (final s in working) {
-        if (_better(s, top[id], m)) top[id] = s;
+        if (s.isWork && _better(s, top[id], m)) top[id] = s;
       }
       final b = bestSetOf(e)?.est;
       if (b != null && (best[id] == null || b > best[id]!)) best[id] = b;
@@ -368,7 +426,7 @@ Recap buildRecap({
       for (final e in w.entries) {
         if (e.exerciseId != id) continue;
         for (final s in e.sets) {
-          if (_isWorking(s) && _better(s, t, m)) t = s;
+          if (_isWorking(s) && s.isWork && _better(s, t, m)) t = s;
         }
       }
     }
@@ -410,7 +468,7 @@ Recap buildRecap({
         sessions: sessions[id]!,
         workingSets: sets[id]!,
         volume: volume[id]!,
-        volumeBefore: volumeIn(inPrev, id),
+        volumeBefore: volumeIn(inSpan, id),
         reps: reps[id]!,
         mode: mode[id]!,
         bodyweight: target[id]?.bodyweight ?? false,
@@ -448,7 +506,13 @@ Recap buildRecap({
       if (DateTime.tryParse(b.date) != null) (b, dateOnly(DateTime.parse(b.date))),
   ]..sort((a, b) => a.$2.compareTo(b.$2));
   final bwIn = [for (final (b, d) in bw) if (range.contains(d)) b];
-  final bwBefore = [for (final (b, d) in bw) if (d.isBefore(range.start)) b];
+  // Titik awal dari catatan paling lama 14 hari sebelum periode: catatan
+  // enam bulan lalu bukan "berat badan awal minggu ini".
+  final lookback = DateTime(range.start.year, range.start.month, range.start.day - 14);
+  final bwBefore = [
+    for (final (b, d) in bw)
+      if (d.isBefore(range.start) && !d.isBefore(lookback)) b,
+  ];
   final double? bwEnd = bwIn.isEmpty ? null : bwIn.last.kg;
   final double? bwStart = bwEnd == null
       ? null
@@ -461,7 +525,9 @@ Recap buildRecap({
     range: range,
     previous: previous,
     now: _totals(inRange),
-    before: _totals(inPrev),
+    before: _totals(inSpan),
+    beforeSpan: beforeSpan,
+    elapsedDays: elapsed,
     trainedDays: days,
     longestRestDays: longestRest,
     volumeBuckets: buckets,
@@ -505,6 +571,11 @@ int plannedSessionsIn(Program program, RecapRange range) {
 const recapPayloadMaxExercises = 15;
 const recapPayloadMaxRecords = 10;
 
+String _clip(String v, int n) {
+  final t = v.trim();
+  return t.length <= n ? t : t.substring(0, n).trim();
+}
+
 String _num(double v) => v == v.roundToDouble() ? v.toInt().toString() : v.toString();
 
 double _round1(double v) => (v * 10).round() / 10;
@@ -530,7 +601,7 @@ Map<String, dynamic> recapPayload(
   final exercises = r.exercises.take(recapPayloadMaxExercises).map((e) {
     final top = e.topSet, before = e.topSetBefore;
     return <String, dynamic>{
-      'name': nameOf(e.exerciseId),
+      'name': _clip(nameOf(e.exerciseId), 80),
       'sessions': e.sessions,
       'sets': e.workingSets,
       if (e.mode != LogMode.reps) 'mode': 'time',
@@ -547,13 +618,15 @@ Map<String, dynamic> recapPayload(
     };
   }).toList();
   final records = r.records.take(recapPayloadMaxRecords).map((e) => <String, dynamic>{
-        'name': nameOf(e.exerciseId),
+        'name': _clip(nameOf(e.exerciseId), 80),
         'e1rm': shown(e.e1rm!, unit),
         'previous': shown(e.bestBeforeRange!, unit),
       }).toList();
   final muscles = r.muscleSets.entries.where((m) => m.value > 0).toList()
     ..sort((a, b) => b.value.compareTo(a.value));
-  final weeks = r.range.days / 7;
+  // Rata-rata per minggu dari hari yang sudah lewat (minimal seminggu supaya
+  // tiga hari pertama bulan tidak dilipatgandakan).
+  final weeks = ((r.elapsedDays ?? r.range.days) < 7 ? 7 : (r.elapsedDays ?? r.range.days)) / 7;
   final avg = r.avgSessionMinutes;
   return {
     'v': 1,
@@ -561,6 +634,7 @@ Map<String, dynamic> recapPayload(
     'lang': lang,
     'unit': unit.label,
     'range': {'start': isoDate(r.range.start), 'end': isoDate(lastDay), 'days': r.range.days},
+    'elapsedDays': ?r.elapsedDays,
     'totals': {
       'sessions': r.now.sessions,
       'sessionsBefore': r.before.sessions,
@@ -576,7 +650,12 @@ Map<String, dynamic> recapPayload(
       'trainingDays': r.trainedDays.length,
       'longestRestDays': r.longestRestDays,
     },
-    if (program != null) 'program': program.toJson(),
+    if (program != null)
+      'program': {
+        'name': _clip(program.name, 60),
+        'mode': program.mode,
+        'plannedSessions': program.plannedSessions,
+      },
     'exercises': exercises,
     'records': records,
     'muscleSets': {for (final m in muscles) m.key.name: m.value},

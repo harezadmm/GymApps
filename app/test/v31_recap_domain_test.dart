@@ -384,4 +384,163 @@ void main() {
       expect(plannedSessionsIn(rotation, oct), 13);
     });
   });
+  group('periode berjalan (review v3.1)', () {
+    test('dibanding bagian yang sama dari periode lalu; top set lalu tetap dari seluruh periode lalu', () {
+      final history = [
+        _w('2026-10-05', [_e('bench', [_s(62.5, 8)])], dur: 3000),
+        _w('2026-10-01', [_e('bench', [_s(65, 8)])], dur: 3000),
+        _w('2026-09-28', [_e('bench', [_s(60, 8)])], dur: 3000),
+      ];
+      final r = buildRecap(
+        history: history,
+        period: RecapPeriod.week,
+        range: recapRangeFor(RecapPeriod.week, _d(2026, 10, 6)),
+        today: DateTime(2026, 10, 6, 20),
+      );
+      expect(r.elapsedDays, 2);
+      expect(r.beforeSpan, RecapRange(_d(2026, 9, 28), _d(2026, 9, 30)));
+      expect(r.before.sessions, 1, reason: 'hanya Senin–Selasa minggu lalu');
+      expect(r.before.volume, 60 * 8);
+      final bench = r.exercises.single;
+      expect(bench.topSetBefore!.weight, 65, reason: 'kekuatan dibanding seluruh minggu lalu');
+      expect(bench.volumeBefore, 60 * 8, reason: 'volume dibanding bagian yang sama');
+    });
+
+    test('hari terakhir periode atau periode lampau: pembanding penuh, tanpa elapsedDays', () {
+      final r = buildRecap(
+        history: _history,
+        period: RecapPeriod.week,
+        range: recapRangeFor(RecapPeriod.week, _d(2026, 10, 11)),
+        today: DateTime(2026, 10, 11, 9),
+      );
+      expect(r.elapsedDays, isNull);
+      expect(r.beforeSpan, r.previous);
+      final past = buildRecap(
+        history: _history,
+        period: RecapPeriod.week,
+        range: recapRangeFor(RecapPeriod.week, _d(2026, 9, 30)),
+        today: DateTime(2026, 10, 9),
+      );
+      expect(past.elapsedDays, isNull);
+    });
+
+    test('bulan lebih panjang dari bulan lalu: rentang pembanding dipotong di akhir bulan lalu', () {
+      final r = buildRecap(
+        history: const [],
+        period: RecapPeriod.month,
+        range: recapRangeFor(RecapPeriod.month, _d(2027, 3, 30)),
+        today: DateTime(2027, 3, 30),
+      );
+      expect(r.elapsedDays, 30);
+      expect(r.beforeSpan.end, _d(2027, 3, 1));
+    });
+
+    test('payload: elapsedDays dikirim, set per minggu bulanan dihitung dari hari yang sudah lewat', () {
+      final r = buildRecap(
+        history: _history,
+        period: RecapPeriod.month,
+        range: recapRangeFor(RecapPeriod.month, _d(2026, 10, 9)),
+        catalog: _catalog,
+        today: DateTime(2026, 10, 9, 18),
+      );
+      final p = recapPayload(r, lang: 'id', unit: WeightUnit.kg, nameOf: _catalog.nameOf);
+      expect(p['elapsedDays'], 9);
+      expect((p['muscleSetsPerWeek'] as Map)['chest'], (6 / (9 / 7) * 10).round() / 10);
+      final full = recapPayload(
+        buildRecap(
+          history: _history,
+          period: RecapPeriod.month,
+          range: recapRangeFor(RecapPeriod.month, _d(2026, 10, 9)),
+          catalog: _catalog,
+        ),
+        lang: 'id',
+        unit: WeightUnit.kg,
+        nameOf: _catalog.nameOf,
+      );
+      expect(full.containsKey('elapsedDays'), isFalse);
+    });
+  });
+
+  group('top set dan perubahan (review v3.1)', () {
+    test('rep di atas batas rumus: bandingkan beban lalu rep, bukan otomatis kalah', () {
+      final r = buildRecap(
+        history: [
+          _w('2026-10-06', [
+            _e('bench', [_s(12, 15), _s(12, 15), _s(12, 15), _s(10, 12), _s(6, 10, phase: SetPhase.drop)]),
+          ]),
+          _w('2026-09-30', [_e('bench', [_s(10, 12)])]),
+        ],
+        period: RecapPeriod.week,
+        range: recapRangeFor(RecapPeriod.week, _d(2026, 10, 9)),
+      );
+      final bench = r.exercises.single;
+      expect([bench.topSet!.weight, bench.topSet!.reps], [12, 15]);
+      final change = bench.topChange!;
+      expect(change.trend, TopSetTrend.up);
+      expect(change.weight, 2, reason: 'tanpa perkiraan 1RM di salah satu sisi → selisih beban');
+    });
+
+    test('drop set tidak pernah jadi top set', () {
+      final r = buildRecap(
+        history: [
+          _w('2026-10-06', [_e('bench', [_s(20, 15), _s(20, 8, phase: SetPhase.drop)])]),
+        ],
+        period: RecapPeriod.week,
+        range: recapRangeFor(RecapPeriod.week, _d(2026, 10, 9)),
+      );
+      expect([r.exercises.single.topSet!.weight, r.exercises.single.topSet!.reps], [20, 15]);
+    });
+
+    test('perubahan: perkiraan 1RM bila keduanya ada, rep bila beban sama, sama = tahan', () {
+      Recap one(List<SetRow> now, List<SetRow> before) => buildRecap(
+            history: [
+              _w('2026-10-06', [_e('bench', now)]),
+              _w('2026-09-30', [_e('bench', before)]),
+            ],
+            period: RecapPeriod.week,
+            range: recapRangeFor(RecapPeriod.week, _d(2026, 10, 9)),
+          );
+      final e1 = one([_s(62.5, 8)], [_s(60, 8)]).exercises.single.topChange!;
+      expect(e1.trend, TopSetTrend.up);
+      expect(e1.e1rm, closeTo(estimate1RM(62.5, 8)! - estimate1RM(60, 8)!, 1e-9));
+      final reps = one([_s(20, 15)], [_s(20, 13)]).exercises.single.topChange!;
+      expect(reps.trend, TopSetTrend.up);
+      expect(reps.reps, 2);
+      final same = one([_s(80, 5)], [_s(80, 5)]).exercises.single.topChange!;
+      expect(same.trend, TopSetTrend.same);
+      final down = one([_s(57.5, 8)], [_s(60, 8)]).exercises.single.topChange!;
+      expect(down.trend, TopSetTrend.down);
+    });
+  });
+
+  test('berat badan awal: hanya catatan ≤ 14 hari sebelum periode', () {
+    final r = buildRecap(
+      history: _history,
+      period: RecapPeriod.week,
+      range: recapRangeFor(RecapPeriod.week, _d(2026, 10, 9)),
+      bodyweight: const [
+        BodyweightEntry(date: '2026-04-01', kg: 80.0),
+        BodyweightEntry(date: '2026-10-10', kg: 75.0),
+      ],
+    );
+    expect(r.bodyweightStart, isNull, reason: 'catatan enam bulan lalu bukan titik awal minggu ini');
+    expect(r.bodyweightEnd, 75.0);
+  });
+
+  test('payload: nama panjang dipotong ke 80 karakter, program ke 60', () {
+    final r = buildRecap(
+      history: _history,
+      period: RecapPeriod.week,
+      range: recapRangeFor(RecapPeriod.week, _d(2026, 10, 9)),
+    );
+    final p = recapPayload(r,
+        lang: 'id',
+        unit: WeightUnit.kg,
+        nameOf: (id) => 'N' * 200,
+        program: RecapProgram(name: 'P' * 200, mode: 'rotation', plannedSessions: 3));
+    for (final e in p['exercises'] as List) {
+      expect((e as Map)['name'].length, 80);
+    }
+    expect((p['program'] as Map)['name'].length, 60);
+  });
 }

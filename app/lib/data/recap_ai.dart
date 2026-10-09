@@ -143,7 +143,14 @@ class ServerRecapAnalyzer implements RecapAnalyzer {
   @override
   Future<RecapAnalysis> analyze(Map<String, dynamic> payload) async {
     final tokenFn = _token ?? ServerApi.accessToken;
-    final token = tokenFn == null ? null : await tokenFn();
+    String? token;
+    try {
+      token = tokenFn == null ? null : await tokenFn();
+    } catch (_) {
+      // Memperbarui token yang kedaluwarsa butuh jaringan; gagal di sini
+      // hampir selalu berarti offline, bukan akun yang terputus.
+      throw const RecapAiException(RecapAiFailure.offline);
+    }
     if (token == null || token.isEmpty) throw const RecapAiException(RecapAiFailure.notConnected);
 
     final client = _client ?? http.Client();
@@ -191,13 +198,16 @@ class ServerRecapAnalyzer implements RecapAnalyzer {
       case 401:
         throw const RecapAiException(RecapAiFailure.notConnected);
       case 429:
-        throw const RecapAiException(RecapAiFailure.limit);
+        // "in_progress": analisis sebelumnya untuk akun ini masih berjalan.
+        throw RecapAiException(error == 'in_progress' ? RecapAiFailure.busy : RecapAiFailure.limit);
       case 404:
         throw const RecapAiException(RecapAiFailure.unavailable);
       case 400 when error == 'empty':
         throw const RecapAiException(RecapAiFailure.empty);
       case 503:
-        throw RecapAiException(error == 'busy' ? RecapAiFailure.busy : RecapAiFailure.unavailable);
+        throw RecapAiException(error == 'not_configured' ? RecapAiFailure.unavailable : RecapAiFailure.busy);
+      case 504:
+        throw const RecapAiException(RecapAiFailure.busy);
       default:
         throw const RecapAiException(RecapAiFailure.failed);
     }

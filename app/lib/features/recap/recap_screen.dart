@@ -64,7 +64,8 @@ class _RecapScreenState extends State<RecapScreen> {
     // Minggu → bulan: bulan tempat minggu itu dimulai. Bulan → minggu: minggu
     // ini kalau bulannya bulan ini, selain itu minggu terakhir bulan itu.
     final anchor = p == RecapPeriod.month
-        ? r.start
+        // Minggu yang berjalan melintasi dua bulan → bulan hari ini.
+        ? (r.contains(_now) ? _now : r.start)
         : r.contains(_now)
             ? _now
             : DateTime(r.end.year, r.end.month, r.end.day - 1);
@@ -120,6 +121,7 @@ class _RecapScreenState extends State<RecapScreen> {
               range: range,
               catalog: catalog,
               bodyweight: store.bodyweightLog,
+              today: _now,
             );
             return ListView(
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
@@ -235,8 +237,17 @@ class _RecapScreenState extends State<RecapScreen> {
                 ? null
                 : RecapProgram(name: program.name, mode: program.mode.name, plannedSessions: planned),
           );
+    final elapsed = recap.elapsedDays;
     return [
       Reveal(child: RecapKpiGrid(recap: recap)),
+      if (elapsed != null) ...[
+        const SizedBox(height: 8),
+        Text(
+          t.comparedFirstDays(elapsed, week: recap.period == RecapPeriod.week),
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 12, color: context.gym.text2),
+        ),
+      ],
       const SizedBox(height: 16),
       Reveal(
         index: 1,

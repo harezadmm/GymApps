@@ -295,7 +295,7 @@ class _WeekDots extends StatelessWidget {
                         ? const Icon(GymIcons.check, size: 14, color: Colors.white)
                         : Text('${d.day}',
                             style: TextStyle(
-                                fontSize: 11, fontWeight: FontWeight.w600, color: future ? c.text3 : c.text2)),
+                                fontSize: 11, fontWeight: FontWeight.w600, color: c.text2)),
                   ),
                 ],
               ),
@@ -364,7 +364,7 @@ class _MonthGrid extends StatelessWidget {
                   child: FittedBox(
                     fit: BoxFit.scaleDown,
                     child: Text(t.weekdayShort((weekStartsOn - 1 + i) % 7 + 1),
-                        style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: c.text3)),
+                        style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: c.text2)),
                   ),
                 ),
               ),
@@ -424,6 +424,16 @@ class RecapVolumeCard extends StatelessWidget {
   }
 }
 
+/// "+3.2 kg" (perkiraan 1RM atau beban), "+2 rep", "+5 dtk".
+String _changeText(BuildContext context, TopSetChange c) {
+  final t = context.t;
+  String sign(num v) => v > 0 ? '+' : '−';
+  if (c.e1rm != null) return '${sign(c.e1rm!)}${context.wDelta(c.e1rm!.abs())} ${context.unitLabel}';
+  if (c.weight != null) return '${sign(c.weight!)}${context.wDelta(c.weight!.abs())} ${context.unitLabel}';
+  if (c.reps != null) return t.repsDelta(c.reps!);
+  return t.secondsDelta(c.seconds ?? 0);
+}
+
 String _setText(BuildContext context, SetRow s, LogMode mode) {
   final t = context.t;
   if (mode != LogMode.reps) return t.secondsShort(s.seconds);
@@ -477,16 +487,16 @@ class RecapExercisesCard extends StatelessWidget {
                       : before != null
                           ? '${_setText(context, before, e.mode)} → ${_setText(context, top, e.mode)}'
                           : _setText(context, top, e.mode);
-              final delta = e.e1rmDelta;
+              final change = e.topChange;
               final ChangePill? pill = e.isNew
                   ? ChangePill(t.newTag, tone: ChangeTone.neutral)
-                  : delta == null
+                  : change == null
                       ? null
-                      : delta.abs() < 0.05
+                      : change.trend == TopSetTrend.same
                           ? ChangePill(t.holdTag, tone: ChangeTone.neutral)
                           : ChangePill(
-                              '${delta > 0 ? '+' : '−'}${context.wDelta(delta.abs())} ${context.unitLabel}',
-                              tone: delta > 0 ? ChangeTone.up : ChangeTone.down,
+                              _changeText(context, change),
+                              tone: change.trend == TopSetTrend.up ? ChangeTone.up : ChangeTone.down,
                             );
               return InkWell(
                 onTap: catalog == null ? null : () => showExerciseHistory(context, exerciseId: e.exerciseId, name: name),
@@ -534,7 +544,7 @@ class RecapExercisesCard extends StatelessWidget {
           if (hidden > 0)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 10),
-              child: Text(t.moreExercises(hidden), style: TextStyle(fontSize: 12, color: c.text3)),
+              child: Text(t.moreExercises(hidden), style: TextStyle(fontSize: 12, color: c.text2)),
             ),
         ],
       ),
@@ -631,7 +641,7 @@ class RecapMusclesCard extends StatelessWidget {
                         Text(t.perWeekAvg(_oneDecimal(e.value / weeks)),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: TextStyle(fontSize: 11, color: c.text3)),
+                            style: TextStyle(fontSize: 11, color: c.text2)),
                     ],
                   ),
                 ),
